@@ -2,19 +2,19 @@
 # USRP tests makefile
 #
 
-LDFLAGS	= -lusrp
+LDFLAGS	= -lusrp -lliquid
 
-sources	:= src/usrp_init_test.cc
+sources	:= src/usrp_init_test.cc src/gr_usrp_rx_test.cc
 
 objects		= $(patsubst %.cc,%.cc.o,$(sources))
 programs	= $(patsubst %.cc,%,$(sources))
 
 all: $(programs)
 
-$(objects): $(sources)
+$(objects): %.cc.o : %.cc
 	g++ -Wall -g -O2 -c $< -o $@
 
-$(programs): $(objects)
+$(programs): % : %.cc.o
 	g++ -Wall -g -O2 $(LDFLAGS) $< -o $@
 
 clean:

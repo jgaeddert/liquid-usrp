@@ -3,14 +3,17 @@
 //
 
 #include <iostream>
+#include <liquid/liquid.h>
 
 #include "usrp_standard.h"
 #include "usrp_prims.h"
 #include "usrp_dbid.h"
 
+#define USRP_CHANNEL    0
+
 int main() {
     // initialize rx
-    usrp_standard_rx * usrp_rx = usrp_standard_rx::make(0,256);
+    usrp_standard_rx * usrp_rx = usrp_standard_rx::make(USRP_CHANNEL,256);
 
     if (!usrp_rx) {
         std::cerr << "could not create usrp rx" << std::endl;
@@ -24,12 +27,22 @@ int main() {
     std::cout << "rx db slot 0 : " << usrp_dbid_to_string(rx_db0) << std::endl;
     std::cout << "rx db slot 1 : " << usrp_dbid_to_string(rx_db1) << std::endl;
 
-    if (rx_db0 == USRP_DBID_FLEX_400_RX_MIMO_B)
+    if (rx_db0 == USRP_DBID_FLEX_400_RX_MIMO_B) {
         printf("ok!!!\n");
+    } else {
+        printf("use usrp db flex 400 rx MIMO B\n");
+        return 0;
+    }
 
     unsigned int buffer_len = 1024;
     short int rx_buffer[buffer_len];
     bool overrun=false;
+
+    // set the ddc frequency
+    usrp_rx->set_rx_freq(USRP_CHANNEL, 0.0);
+
+    // set the daughterboard frequency
+    //rx_db0->xxx;
 
     // start
     usrp_rx->start();
