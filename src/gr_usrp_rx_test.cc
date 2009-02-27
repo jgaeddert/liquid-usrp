@@ -35,13 +35,16 @@
  Each buffer element, for example buffer[0] contains 4 bytes 
  2 bytes For (I) and 2 bytes for (Q). 
  */
-     /*
-     unsigned int i;
-     for (i=0; i<4; i++) {
-         printf("%6d ", buffer[i]);
-     }
-     printf("\n");
-     */
+ 
+    unsigned int i;
+    short I,Q;
+    for (i=0; i<4; i++) {
+        I =  buffer[i] & 0x0000ffff;
+        Q = (buffer[i] & 0xffff0000) >> 16;
+        printf("(%5d+j%5d), ", I, Q);
+    }
+    printf("\n");
+
  }
  
  #define SAMPELS_PER_READ   (512)       // Must be a multiple of 128
@@ -59,7 +62,7 @@ int main (int argc, char **argv)
     bool   counting_p = false;
     bool   width_8_p = false;
     int    which_board = 0;
-    int    decim = 8;            // 8 -> 32 MB/sec
+    int    decim = 256;            // 8 -> 32 MB/sec
     double center_freq = 0;
     int    fusb_block_size = 0;
     int    fusb_nblocks = 0;
@@ -102,7 +105,7 @@ int main (int argc, char **argv)
     urx->set_rx_freq (0, center_freq);
  
      // Set Number of channels
-    urx->set_nchannels(1);
+    urx->set_nchannels(nchannels);
  
     // Set ADC PGA gain
     urx->set_pga(0,gain);
