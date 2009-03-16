@@ -10,10 +10,12 @@ local_src	:=		\
 	dbsrx.cc		\
 	flex.cc			\
 	lf.cc			\
-	tvrx.cc
+	tvrx.cc			\
+	usrp_io.cc
 
 local_progs	:=		\
 	src/usrp_init_test.cc	\
+	src/usrp_io_test.cc	\
 	src/gr_usrp_rx_test.cc	\
 	src/test_usrp_standard_tx.cc
 
