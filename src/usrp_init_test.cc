@@ -3,7 +3,6 @@
 //
 
 #include <iostream>
-#include <liquid/liquid.h>
 
 #include "usrp_standard.h"
 #include "usrp_prims.h"
