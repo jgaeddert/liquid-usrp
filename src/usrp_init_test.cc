@@ -56,7 +56,13 @@ int main() {
     usrp_rx->set_rx_freq(USRP_CHANNEL, 0.0);
 
     // set the daughterboard frequency
-    //rx_db0->xxx;
+    float frequency = 485e6;
+    float db_lo_offset = -8e6;
+    float db_lo_freq = 0.0f;
+    float db_lo_freq_set = frequency + db_lo_offset;
+    rx_db0_control->set_db_freq(db_lo_freq_set, db_lo_freq);
+    float ddc_freq = frequency - db_lo_freq;
+    usrp_rx->set_rx_freq(USRP_CHANNEL, ddc_freq);
 
     // start
     usrp_rx->start();
