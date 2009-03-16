@@ -14,7 +14,8 @@ local_src	:=		\
 
 local_progs	:=		\
 	src/usrp_init_test.cc	\
-	src/gr_usrp_rx_test.cc
+	src/gr_usrp_rx_test.cc	\
+	src/test_usrp_standard_tx.cc
 
 sources		= $(addprefix src/,$(local_src))
 objects		= $(patsubst %.cc,%.cc.o,$(sources))
