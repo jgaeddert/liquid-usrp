@@ -34,6 +34,12 @@
 #include "usrp_dbid.h"
 #include "flex.h"
  
+/*
+ SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
+ 2 bytes for Q. Since the reading length from USRP should be multiple of 512 
+ bytes see "usrp_basic.h", then we have to read multiple of 128 samples each 
+ time (4 bytes * 128 sample = 512 bytes)  
+ */
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
  
@@ -60,13 +66,6 @@ Each buffer element, for example buffer[0] contains 4 bytes
 
 }
  
- /*
- SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
- 2 bytes for Q. Since the reading length from USRP should be multiple of 512 
- bytes see "usrp_basic.h", then we have to read multiple of 128 samples each 
- time (4 bytes * 128 sample = 512 bytes)  
- */
-
 int main (int argc, char **argv)
 {
     bool   loopback_p = false;
@@ -176,7 +175,7 @@ int main (int argc, char **argv)
  
  
     urx->stop();  // Stop data transfer
-    printf("USRP Transfer Stoped\n");
+    printf("USRP Transfer Stopped\n");
     delete urx;
     return 0;
 }
