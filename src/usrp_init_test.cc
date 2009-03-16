@@ -9,6 +9,15 @@
 #include "usrp_prims.h"
 #include "usrp_dbid.h"
 
+
+//#include "USRP.h"
+#include "flex.h"
+#include "basic.h"
+#include "lf.h"
+#include "dbsrx.h"
+#include "tvrx.h"
+
+
 #define USRP_CHANNEL    0
 
 int main() {
@@ -24,11 +33,16 @@ int main() {
     int rx_db0 = usrp_rx->daughterboard_id(0);
     int rx_db1 = usrp_rx->daughterboard_id(1);
 
+    // from ossie
+    db_base * rx_db0_control;
+    db_base * rx_db1_control;
+
     std::cout << "rx db slot 0 : " << usrp_dbid_to_string(rx_db0) << std::endl;
     std::cout << "rx db slot 1 : " << usrp_dbid_to_string(rx_db1) << std::endl;
 
     if (rx_db0 == USRP_DBID_FLEX_400_RX_MIMO_B) {
-        printf("ok!!!\n");
+        printf("usrp daughterboard: USRP_DBID_FLEX_400_RX_MIMO_B\n");
+        rx_db0_control = new db_flex400_rx_mimo_b(usrp_rx,0);
     } else {
         printf("use usrp db flex 400 rx MIMO B\n");
         return 0;
