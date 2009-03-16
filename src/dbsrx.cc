@@ -28,7 +28,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <math.h>
 #include <unistd.h>
 
-#include "ossie/debug.h"
+//#include "ossie/debug.h"
+#define DEBUG(V,N,S) std::cout << S << std::endl;
 
 #include "db_base.h"
 #include "dbsrx.h"

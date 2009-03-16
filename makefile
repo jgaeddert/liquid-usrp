@@ -26,7 +26,7 @@ $(objects): %.cc.o : %.cc
 	g++ -Wall -g -O2 -c $< -o $@
 
 $(programs): % : %.cc $(objects)
-	g++ -Wall -g -O2 $(LDFLAGS) $< -o $@
+	g++ -Wall -g -O2 $(objects) $(LDFLAGS) $< -o $@
 
 clean:
 	$(RM) $(objects)
