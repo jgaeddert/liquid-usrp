@@ -28,31 +28,29 @@ usrp_io::~usrp_io()
     // TODO: delete usrp_rx and usrp_tx objects
 }
 
-#if 0
 // start/stop
-void usrp_io::usrp_io_start_rx();
-void usrp_io::usrp_io_start_tx();
-void usrp_io::usrp_io_stop_rx();
-void usrp_io::usrp_io_stop_tx();
+void usrp_io::start_rx(int _channel) {}
+void usrp_io::start_tx(int _channel) {}
+void usrp_io::stop_rx(int _channel) {}
+void usrp_io::stop_tx(int _channel) {}
 
 // gain
-void usrp_io::get_tx_gain(int _channel, float &_gain);
-void usrp_io::get_rx_gain(int _channel, float &_gain);
-void usrp_io::set_tx_gain(int _channel, float _gain);
-void usrp_io::set_rx_gain(int _channel, float _gain);
+void usrp_io::get_tx_gain(int _channel, float &_gain) {}
+void usrp_io::get_rx_gain(int _channel, float &_gain) {}
+void usrp_io::set_tx_gain(int _channel, float _gain) {}
+void usrp_io::set_rx_gain(int _channel, float _gain) {}
 
 // frequency
-void usrp_io::get_tx_freq(int _channel, float &_freq);
-void usrp_io::get_rx_freq(int _channel, float &_freq);
-void usrp_io::set_tx_freq(int _channel, float _freq);
-void usrp_io::set_rx_freq(int _channel, float _freq);
+void usrp_io::get_tx_freq(int _channel, float &_freq) {}
+void usrp_io::get_rx_freq(int _channel, float &_freq) {}
+void usrp_io::set_tx_freq(int _channel, float _freq) {}
+void usrp_io::set_rx_freq(int _channel, float _freq) {}
 
 // decimation
-void usrp_io::get_tx_decim(int _channel, int &_decim);
-void usrp_io::get_rx_decim(int _channel, int &_decim);
-void usrp_io::set_tx_decim(int _channel, int _decim);
-void usrp_io::set_rx_decim(int _channel, int _decim);
-#endif
+void usrp_io::get_tx_decim(int _channel, int &_decim) {}
+void usrp_io::get_rx_decim(int _channel, int &_decim) {}
+void usrp_io::set_tx_decim(int _channel, int _decim) {}
+void usrp_io::set_rx_decim(int _channel, int _decim) {}
 
 // initialization methods
 void usrp_io::initialize()

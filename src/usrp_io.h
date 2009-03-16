@@ -13,10 +13,10 @@ public:
     ~usrp_io();
 
     // start/stop
-    void usrp_io_start_rx();
-    void usrp_io_start_tx();
-    void usrp_io_stop_rx();
-    void usrp_io_stop_tx();
+    void start_rx(int _channel);
+    void start_tx(int _channel);
+    void stop_rx(int _channel);
+    void stop_tx(int _channel);
 
     // gain
     void get_tx_gain(int _channel, float &_gain);
