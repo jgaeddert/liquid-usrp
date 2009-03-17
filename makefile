@@ -17,6 +17,7 @@ local_progs	:=		\
 	src/usrp_init_test.cc	\
 	src/usrp_io_test.cc	\
 	src/gr_usrp_rx_test.cc	\
+	src/gr_usrp_tx_test.cc	\
 	src/test_usrp_standard_tx.cc
 
 sources		= $(addprefix src/,$(local_src))
