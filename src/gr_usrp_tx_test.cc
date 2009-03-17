@@ -81,11 +81,13 @@ int main (int argc, char **argv)
     //int    mode = 0;
     int    nunderruns = 0;
     bool   underrun;
-    int    total_reads = 10000;
+    int    total_writes = 10000;
     int    i;
-    int    buf[SAMPLES_PER_READ];
-    int    bufsize = SAMPLES_PER_READ*4; // Should be multiple of 512 Bytes
-     
+    //int    buf[SAMPLES_PER_READ];
+    //int    bufsize = SAMPLES_PER_READ*4; // Should be multiple of 512 Bytes
+    const unsigned int tx_buf_len = 512;
+    short tx_buf[tx_buf_len];
+
 #if 0 
     if (loopback_p)    mode |= usrp_standard_tx::FPGA_MODE_LOOPBACK;
    
@@ -122,22 +124,23 @@ int main (int argc, char **argv)
     std::cout << "tx db slot 0 : " << usrp_dbid_to_string(tx_db0) << std::endl;
  
     // Set DDC center frequency
-    utx->set_tx_freq (0, center_freq);
+    //utx->set_tx_freq (0, center_freq);
  
      // Set Number of channels
     utx->set_nchannels(nchannels);
  
     // Set ADC PGA gain
-    utx->set_pga(0,gain);
+    //utx->set_pga(0,gain);
  
     // Set FPGA Mux
-    utx->set_mux(0x32103210); // Board A only
+    //utx->set_mux(0x32103210); // Board A only
  
     // Set DDC decimation rate
     //utx->set_decim_rate(decim);
   
     // Set DDC phase 
     //utx->set_ddc_phase(0,0);
+
 
     if (tx_db0 == USRP_DBID_FLEX_400_TX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_TX_MIMO_B\n");
@@ -150,35 +153,52 @@ int main (int argc, char **argv)
     // set the ddc frequency
     utx->set_tx_freq(USRP_CHANNEL, 0.0);
 
+    // set the daughterboard gain
+    float gmin, gmax, gstep;
+    tx_db0_control->get_gain_range(gmin,gmax,gstep);
+    printf("gmin/gmax/gstep: %f/%f/%f\n", gmin,gmax,gstep);
+    tx_db0_control->set_gain(gmax);
+
     // set the daughterboard frequency
+    float fmin, fmax, fstep;
+    tx_db0_control->get_freq_range(fmin,fmax,fstep);
+    printf("fmin/fmax/fstep: %f/%f/%f\n", fmin,fmax,fstep);
     float frequency = 485e6;
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
     float db_lo_freq_set = frequency + db_lo_offset;
     tx_db0_control->set_db_freq(db_lo_freq_set, db_lo_freq);
-    float ddc_freq = frequency - db_lo_freq;
-    utx->set_tx_freq(USRP_CHANNEL, ddc_freq);
+    printf("lo frequency: %f MHz (actual: %f MHz)\n", db_lo_freq_set/1e6, db_lo_freq/1e6);
+    float ddc_freq_set = frequency - db_lo_freq;
+    utx->set_tx_freq(USRP_CHANNEL, ddc_freq_set);
+    float ddc_freq = utx->tx_freq(USRP_CHANNEL);
+    printf("ddc freq: %f MHz (actual %f MHz)\n", ddc_freq_set/1e6, ddc_freq/1e6);
 
     // generate data buffer
-    for (i=0; i<bufsize; i++)
-        buf[i] = 1000;
- 
-    utx->start();        // Start data transfer
+    for (i=0; i<tx_buf_len; i++)
+        tx_buf[i] = 20000;
  
     printf("USRP Transfer Started\n");
+    tx_db0_control->set_enable(true);
+    utx->start();        // Start data transfer
  
     // Do USRP Samples Reading 
-    for (i = 0; i < total_reads; i++) {
-        utx->write(&buf, bufsize, &underrun); 
+    for (i = 0; i < total_writes; i++) {
+        //utx->write(&buf, bufsize, &underrun); 
+        int rc = utx->write(&tx_buf, 2*tx_buf_len, &underrun); 
             
         if (underrun) {
             printf ("USRP tx underrun\n");
             nunderruns++;
         }
+
+        if (rc < 0) {
+            printf("error occurred with USRP\n");
+            exit(0);
+        }
  
         // Do whatever you want with the data
         //process_data(&buf[0]);
-        
     }
  
  
