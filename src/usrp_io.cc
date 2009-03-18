@@ -140,6 +140,9 @@ void usrp_io::initialize()
     // default: set tx_enable
     tx_db0->set_enable(true);
 
+    // defaults
+    usrp_rx->set_nchannels(1);
+    usrp_tx->set_nchannels(1);
 }
 
 // threading functions
@@ -152,6 +155,9 @@ void* usrp_io_tx_process(void * _u)
     // local variables
     int rc;
     bool underrun;
+
+    // start data transfer
+    usrp->usrp_tx->start();
 
     while (usrp->tx_active) {
         // invoke callback
@@ -173,6 +179,9 @@ void* usrp_io_tx_process(void * _u)
             std::cerr << "underrun" << std::endl;
     }
 
+    // stop data transfer
+    usrp->usrp_tx->stop();
+
     std::cout << "usrp_io_tx_process() terminating" << std::endl;
     pthread_exit(NULL);
 }
@@ -187,15 +196,16 @@ void* usrp_io_rx_process(void * _u)
     int rc;
     bool overrun;
 
+    // start data transfer
+    usrp->usrp_rx->start();
+
     while (usrp->rx_active) {
         // read data
         rc = usrp->usrp_rx->read(usrp->rx_buffer, usrp->rx_buffer_length, &overrun);
 
-        if (overrun)
-            std::cerr << "overrun" << std::endl;
-
         if (rc < 0) {
-            std::cerr << "error: usrp_io_rx_process(), rx error" << std::endl;
+            std::cerr << "error: usrp_io_rx_process(), rx error ("
+                      << rc << ")" << std::endl;
             throw 0;
         } else if (rc != (int)(usrp->rx_buffer_length) ) {
             std::cerr << "warning: usrp_io_rx_process(), usrp attempted to write "
@@ -203,9 +213,15 @@ void* usrp_io_rx_process(void * _u)
                       << rc << " actually written)" << std::endl;
         }
 
+        if (overrun)
+            std::cerr << "overrun" << std::endl;
+
         // invoke callback
         usrp->rx_callback0(usrp->rx_buffer, usrp->rx_buffer_length, userdata);
     }
+
+    // stop data transfer
+    usrp->usrp_rx->stop();
 
     std::cout << "usrp_io_rx_process() terminating" << std::endl;
     pthread_exit(NULL);
