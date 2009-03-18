@@ -150,7 +150,7 @@ void* usrp_io_tx_process(void * _u)
         // callback
         usrp->tx_callback0(NULL, NULL, 0, userdata);
     }
-    return NULL;
+    pthread_exit(NULL);
 }
 
 void* usrp_io_rx_process(void * _u)
@@ -165,7 +165,7 @@ void* usrp_io_rx_process(void * _u)
         // invoke callback
         usrp->rx_callback0(NULL, NULL, 0, userdata);
     }
-    return NULL;
+    pthread_exit(NULL);
 }
 
 

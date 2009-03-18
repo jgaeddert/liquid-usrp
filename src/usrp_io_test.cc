@@ -2,6 +2,7 @@
 //
 //
 
+#include <iostream>
 #include "usrp_io.h"
 
 void* tx_nco_callback(short *_I, short *_Q, unsigned int _n, void * _userdata);
@@ -27,6 +28,11 @@ int main() {
     usrp->start_tx(0,tx_nco_callback,NULL);
     usrp->start_rx(0,rx_display_callback,NULL);
 
+    // process data, wait
+    std::cout << "waiting..." << std::endl;
+    usleep(4000000);
+    std::cout << "done." << std::endl;
+
     // stop
     usrp->stop_rx(0);
     usrp->stop_tx(0);
@@ -37,11 +43,13 @@ int main() {
 
 void* tx_nco_callback(short *_I, short *_Q, unsigned int _n, void * _userdata)
 {
+    std::cout << "tx_nco_callback() invoked" << std::endl;
     return NULL;
 }
 
 void* rx_display_callback(short *_I, short *_Q, unsigned int _n, void * _userdata)
 {
+    std::cout << "rx_display_callback() invoked" << std::endl;
     return NULL;
 }
 
