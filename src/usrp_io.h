@@ -7,8 +7,8 @@
 #include "db_base.h"
 
 // callback function definitions
-typedef void* (*usrp_tx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
-typedef void* (*usrp_rx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
+typedef void* (*usrp_tx_callback)(short *_iq_data, unsigned int _n, void * _userdata);
+typedef void* (*usrp_rx_callback)(short *_iq_data, unsigned int _n, void * _userdata);
 
 // threading functions
 void* usrp_io_tx_process(void * _u);

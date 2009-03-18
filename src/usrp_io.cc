@@ -145,8 +145,10 @@ void* usrp_io_tx_process(void * _u)
         // run
 
         // callback
-        usrp->tx_callback0(NULL, NULL, 0, userdata);
+        usrp->tx_callback0(NULL, 0, userdata);
     }
+
+    std::cout << "usrp_io_tx_process() terminating" << std::endl;
     pthread_exit(NULL);
 }
 
@@ -156,12 +158,26 @@ void* usrp_io_rx_process(void * _u)
     usrp_io * usrp = (usrp_io*) _u;
     void * userdata = usrp->rx_userdata;
 
+    // local variables
+    unsigned int rx_buffer_length = 512;
+    short * rx_buffer = new short[rx_buffer_length*2];
+    bool overrun;
+
     while (usrp->rx_active) {
         // run
+        usrp->usrp_rx->read(rx_buffer, rx_buffer_length*2, &overrun);
+
+        if (overrun)
+            std::cerr << "overrun" << std::endl;
 
         // invoke callback
-        usrp->rx_callback0(NULL, NULL, 0, userdata);
+        usrp->rx_callback0(rx_buffer, rx_buffer_length*2, userdata);
     }
+
+    // clean up memory allocation
+    delete [] rx_buffer;
+
+    std::cout << "usrp_io_rx_process() terminating" << std::endl;
     pthread_exit(NULL);
 }
 
