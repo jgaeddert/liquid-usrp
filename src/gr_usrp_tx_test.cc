@@ -73,11 +73,11 @@ int main (int argc, char **argv)
     //bool   width_8_p = false;
     //int    which_board = 0;
     //int    decim = 256;            // 8 -> 32 MB/sec
-    double center_freq = 0;
+    //double center_freq = 0;
     //int    fusb_block_size = 0;
     //int    fusb_nblocks = 0;
     int    nchannels = 1;
-    int    gain = 0;
+    //int    gain = 0;
     //int    mode = 0;
     int    nunderruns = 0;
     bool   underrun;
@@ -85,7 +85,7 @@ int main (int argc, char **argv)
     int    i;
     //int    buf[SAMPLES_PER_READ];
     //int    bufsize = SAMPLES_PER_READ*4; // Should be multiple of 512 Bytes
-    const unsigned int tx_buf_len = 512;
+    const int tx_buf_len = 512;
     short tx_buf[tx_buf_len];
 
 #if 0 
