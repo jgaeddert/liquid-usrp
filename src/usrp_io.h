@@ -85,5 +85,11 @@ protected:
     // user data
     void * tx_userdata;
     void * rx_userdata;
+
+    // internal buffering
+    unsigned int tx_buffer_length;
+    unsigned int rx_buffer_length;
+    short * tx_buffer;
+    short * rx_buffer;
 };
 

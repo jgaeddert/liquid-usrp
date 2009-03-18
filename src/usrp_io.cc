@@ -21,11 +21,19 @@ usrp_io::usrp_io()
 
     initialize();
 
+    tx_buffer_length = 512;
+    rx_buffer_length = 512;
+
+    tx_buffer = new short[tx_buffer_length];
+    rx_buffer = new short[tx_buffer_length];
 }
 
 usrp_io::~usrp_io()
 {
     // TODO: delete usrp_rx and usrp_tx objects
+
+    delete [] tx_buffer;
+    delete [] rx_buffer;
 }
 
 // start/stop
@@ -141,11 +149,28 @@ void* usrp_io_tx_process(void * _u)
     usrp_io * usrp = (usrp_io*) _u;
     void * userdata = usrp->tx_userdata;
 
-    while (usrp->tx_active) {
-        // run
+    // local variables
+    int rc;
+    bool underrun;
 
-        // callback
-        usrp->tx_callback0(NULL, 0, userdata);
+    while (usrp->tx_active) {
+        // invoke callback
+        usrp->tx_callback0(usrp->tx_buffer, usrp->tx_buffer_length, userdata);
+
+        // write data
+        rc = usrp->usrp_tx->write(usrp->tx_buffer, usrp->tx_buffer_length, &underrun);
+
+        if (rc < 0) {
+            std::cerr << "error: usrp_io_tx_process(), tx error" << std::endl;
+            throw 0;
+        } else if (rc != (int)(usrp->tx_buffer_length) ) {
+            std::cerr << "warning: usrp_io_tx_process(), usrp attempted to write "
+                      << usrp->tx_buffer_length << " values ("
+                      << rc << " actually written)" << std::endl;
+        }
+
+        if (underrun)
+            std::cerr << "underrun" << std::endl;
     }
 
     std::cout << "usrp_io_tx_process() terminating" << std::endl;
@@ -159,23 +184,28 @@ void* usrp_io_rx_process(void * _u)
     void * userdata = usrp->rx_userdata;
 
     // local variables
-    unsigned int rx_buffer_length = 512;
-    short * rx_buffer = new short[rx_buffer_length*2];
+    int rc;
     bool overrun;
 
     while (usrp->rx_active) {
-        // run
-        usrp->usrp_rx->read(rx_buffer, rx_buffer_length*2, &overrun);
+        // read data
+        rc = usrp->usrp_rx->read(usrp->rx_buffer, usrp->rx_buffer_length, &overrun);
 
         if (overrun)
             std::cerr << "overrun" << std::endl;
 
-        // invoke callback
-        usrp->rx_callback0(rx_buffer, rx_buffer_length*2, userdata);
-    }
+        if (rc < 0) {
+            std::cerr << "error: usrp_io_rx_process(), rx error" << std::endl;
+            throw 0;
+        } else if (rc != (int)(usrp->rx_buffer_length) ) {
+            std::cerr << "warning: usrp_io_rx_process(), usrp attempted to write "
+                      << usrp->rx_buffer_length << " values ("
+                      << rc << " actually written)" << std::endl;
+        }
 
-    // clean up memory allocation
-    delete [] rx_buffer;
+        // invoke callback
+        usrp->rx_callback0(usrp->rx_buffer, usrp->rx_buffer_length, userdata);
+    }
 
     std::cout << "usrp_io_rx_process() terminating" << std::endl;
     pthread_exit(NULL);
