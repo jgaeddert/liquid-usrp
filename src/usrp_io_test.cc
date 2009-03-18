@@ -4,8 +4,8 @@
 
 #include "usrp_io.h"
 
-void* tx_nco_callback(void*);
-void* rx_display_callback(void*);
+void* tx_nco_callback(short *_I, short *_Q, unsigned int _n, void * _userdata);
+void* rx_display_callback(short *_I, short *_Q, unsigned int _n, void * _userdata);
 
 int main() {
     // options
@@ -35,12 +35,13 @@ int main() {
     delete usrp;
 }
 
-void* tx_nco_callback(void* _nco)
+void* tx_nco_callback(short *_I, short *_Q, unsigned int _n, void * _userdata)
 {
     return NULL;
 }
 
-void* rx_display_callback(void*)
+void* rx_display_callback(short *_I, short *_Q, unsigned int _n, void * _userdata)
 {
     return NULL;
 }
+

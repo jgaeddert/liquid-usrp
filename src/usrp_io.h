@@ -5,8 +5,8 @@
 #include <usrp_standard.h>
 #include "db_base.h"
 
-typedef void* (*tx_callback)(void *);
-typedef void* (*rx_callback)(void *);
+typedef void* (*tx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
+typedef void* (*rx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
 
 class usrp_io
 {
