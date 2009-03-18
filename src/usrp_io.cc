@@ -59,9 +59,6 @@ void usrp_io::start_rx(int _channel, usrp_rx_callback _callback, void * _userdat
     pthread_create(&rx_thread, NULL, usrp_io_rx_process, this);
 }
 
-void usrp_io::stop_tx(int _channel) { tx_active = false; }
-void usrp_io::stop_rx(int _channel) { rx_active = false; }
-
 // gain
 void usrp_io::get_tx_gain(int _channel, float &_gain) {}
 void usrp_io::get_rx_gain(int _channel, float &_gain) {}

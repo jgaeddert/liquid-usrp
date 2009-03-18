@@ -28,8 +28,8 @@ public:
     // start/stop
     void start_tx(int _channel, usrp_tx_callback _callback, void * _userdata);
     void start_rx(int _channel, usrp_rx_callback _callback, void * _userdata);
-    void stop_tx(int _channel);
-    void stop_rx(int _channel);
+    void stop_tx(int _channel) { tx_active = false; }
+    void stop_rx(int _channel) { rx_active = false; }
 
     // gain
     void get_tx_gain(int _channel, float &_gain);
@@ -48,6 +48,10 @@ public:
     void get_rx_decim(int _channel, int &_decim);
     void set_tx_decim(int _channel, int _decim);
     void set_rx_decim(int _channel, int _decim);
+
+    // other properties
+    void enable_auto_tx(int _channel)   { tx_db0->set_auto_tr(true);  }
+    void disable_auto_tx(int _channel)  { tx_db0->set_auto_tr(false); }
 
 protected:
     // initialization methods

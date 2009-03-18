@@ -23,12 +23,13 @@ int main() {
     usrp->set_rx_freq(0, rx_freq);
     usrp->set_tx_decim(0, tx_decim);
     usrp->set_rx_decim(0, rx_decim);
+    usrp->enable_auto_tx(0);
 
     // start
     usrp->start_tx(0,tx_nco_callback,NULL);
     usrp->start_rx(0,rx_display_callback,NULL);
 
-    // process data, wait
+    // process data, wait, configure properties
     std::cout << "waiting..." << std::endl;
     usleep(4000000);
     std::cout << "done." << std::endl;
