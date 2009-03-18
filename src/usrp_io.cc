@@ -31,6 +31,13 @@ usrp_io::~usrp_io()
 // start/stop
 void usrp_io::start_tx(int _channel, usrp_tx_callback _callback, void * _userdata)
 {
+    if (_channel != 0) {
+        std::cerr << "error: usrp_io::start_tx(), only channel 0 currently supported" << std::endl;
+        throw 0;
+    } else if (tx_active) {
+        std::cerr << "error: usrp_io::start_tx(), tx active" << std::endl;
+        throw 0;
+    }
     tx_callback0 = _callback;
     tx_active = true;
     tx_userdata = _userdata;
@@ -39,14 +46,21 @@ void usrp_io::start_tx(int _channel, usrp_tx_callback _callback, void * _userdat
 
 void usrp_io::start_rx(int _channel, usrp_rx_callback _callback, void * _userdata)
 {
+    if (_channel != 0) {
+        std::cerr << "error: usrp_io::start_rx(), only channel 0 currently supported" << std::endl;
+        throw 0;
+    } else if (rx_active) {
+        std::cerr << "error: usrp_io::start_rx(), rx active" << std::endl;
+        throw 0;
+    }
     rx_callback0 = _callback;
     rx_active = true;
     rx_userdata = _userdata;
     pthread_create(&rx_thread, NULL, usrp_io_rx_process, this);
 }
 
-void usrp_io::stop_rx(int _channel) {}
-void usrp_io::stop_tx(int _channel) {}
+void usrp_io::stop_tx(int _channel) { tx_active = false; }
+void usrp_io::stop_rx(int _channel) { rx_active = false; }
 
 // gain
 void usrp_io::get_tx_gain(int _channel, float &_gain) {}
