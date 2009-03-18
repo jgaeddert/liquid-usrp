@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+#include <math.h>
 #include "usrp_io.h"
 
 void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata);
@@ -11,7 +12,7 @@ void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata);
 int main() {
     // options
     float   tx_freq     = 462e6f;
-    float   rx_freq     = 427e6f;
+    float   rx_freq     = 485e6f;
     int     tx_decim    = 256;
     int     rx_decim    = 256;
 
@@ -31,7 +32,7 @@ int main() {
 
     // process data, wait, configure properties
     std::cout << "waiting..." << std::endl;
-    usleep(4000000);
+    usleep(10000000);
     std::cout << "done." << std::endl;
 
     // stop
@@ -44,13 +45,28 @@ int main() {
 
 void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata)
 {
-    std::cout << "tx_nco_callback() invoked" << std::endl;
+    //std::cout << "tx_nco_callback() invoked" << std::endl;
+    unsigned int i;
+    for (i=0; i<_n; i+=2) {
+        _iq_data[i+0] = 10000;
+        _iq_data[i+1] = 0;
+    }
     return NULL;
 }
 
 void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata)
 {
-    std::cout << "rx_display_callback() invoked" << std::endl;
+    //std::cout << "rx_display_callback() invoked" << std::endl;
+    unsigned int i;
+    short I,Q;
+    float e=0.0f;
+    for (i=0; i<_n; i+=2) {
+        I = _iq_data[i+0];
+        Q = _iq_data[i+1];
+        e += fabsf(I) + fabsf(Q);
+    }
+    e /= _n;
+    std::cout << "energy: " << e << std::endl;
     return NULL;
 }
 

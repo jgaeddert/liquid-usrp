@@ -74,10 +74,36 @@ void usrp_io::set_tx_gain(int _channel, float _gain) {}
 void usrp_io::set_rx_gain(int _channel, float _gain) {}
 
 // frequency
-void usrp_io::get_tx_freq(int _channel, float &_freq) {}
-void usrp_io::get_rx_freq(int _channel, float &_freq) {}
-void usrp_io::set_tx_freq(int _channel, float _freq) {}
-void usrp_io::set_rx_freq(int _channel, float _freq) {}
+void usrp_io::get_tx_freq(int _channel, float &_freq) { _freq = 0.0f; }
+void usrp_io::get_rx_freq(int _channel, float &_freq) { _freq = 0.0f; }
+void usrp_io::set_tx_freq(int _channel, float _freq)
+{
+    // TODO: check daughterboard capabilities
+
+    // set the daughterboard frequency
+    float db_lo_offset  = -8e6;
+    float db_lo_freq    = 0.0f;
+    float db_lo_freq_set = _freq + db_lo_offset;
+    tx_db0->set_db_freq(db_lo_freq_set, db_lo_freq);
+    float ddc_freq = _freq - db_lo_freq;
+    usrp_tx->set_tx_freq(_channel, ddc_freq);
+
+    // TODO: store local oscillator and ddc frequencies internally
+}
+void usrp_io::set_rx_freq(int _channel, float _freq)
+{
+    // TODO: check daughterboard capabilities
+
+    // set the daughterboard frequency
+    float db_lo_offset  = -8e6;
+    float db_lo_freq    = 0.0f;
+    float db_lo_freq_set = _freq + db_lo_offset;
+    rx_db0->set_db_freq(db_lo_freq_set, db_lo_freq);
+    float ddc_freq = _freq - db_lo_freq;
+    usrp_rx->set_rx_freq(_channel, ddc_freq);
+
+    // TODO: store local oscillator and ddc frequencies internally
+}
 
 // decimation
 void usrp_io::get_tx_decim(int _channel, int &_decim) {}
