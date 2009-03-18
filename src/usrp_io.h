@@ -5,19 +5,28 @@
 #include <usrp_standard.h>
 #include "db_base.h"
 
-typedef void* (*tx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
-typedef void* (*rx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
+// callback function definitions
+typedef void* (*usrp_tx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
+typedef void* (*usrp_rx_callback)(short *_I, short *_Q, unsigned int _n, void * _userdata);
+
+// threading functions
+void* usrp_io_tx_process(void * _u);
+void* usrp_io_rx_process(void * _u);
 
 class usrp_io
 {
+    // friend functions allow private access
+    friend void* usrp_io_tx_process(void * _u);
+    friend void* usrp_io_rx_process(void * _u);
+
 public:
     // default constructor
     usrp_io();
     ~usrp_io();
 
     // start/stop
-    void start_tx(int _channel, tx_callback _callback);
-    void start_rx(int _channel, rx_callback _callback);
+    void start_tx(int _channel, usrp_tx_callback _callback);
+    void start_rx(int _channel, usrp_rx_callback _callback);
     void stop_tx(int _channel);
     void stop_rx(int _channel);
 
@@ -39,7 +48,7 @@ public:
     void set_tx_decim(int _channel, int _decim);
     void set_rx_decim(int _channel, int _decim);
 
-private:
+protected:
     // initialization methods
     void initialize();
 
@@ -57,5 +66,11 @@ private:
     bool use_complex;
     bool rx_active;
     bool tx_active;
+
+    // callback functions
+    usrp_tx_callback tx_callback0;
+    usrp_tx_callback tx_callback1;
+    usrp_rx_callback rx_callback0;
+    usrp_rx_callback rx_callback1;
 };
 

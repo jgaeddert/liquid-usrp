@@ -29,8 +29,8 @@ usrp_io::~usrp_io()
 }
 
 // start/stop
-void usrp_io::start_tx(int _channel, tx_callback _callback) {}
-void usrp_io::start_rx(int _channel, rx_callback _callback) {}
+void usrp_io::start_tx(int _channel, usrp_tx_callback _callback) {}
+void usrp_io::start_rx(int _channel, usrp_rx_callback _callback) {}
 void usrp_io::stop_rx(int _channel) {}
 void usrp_io::stop_tx(int _channel) {}
 
@@ -108,4 +108,30 @@ void usrp_io::initialize()
     tx_db0->set_enable(true);
 
 }
+
+// threading functions
+void* usrp_io_tx_process(void * _u)
+{
+    usrp_io * usrp = (usrp_io*) _u;
+
+    while (usrp->tx_active) {
+        // run
+
+        // callback
+        usrp->tx_callback0(NULL, NULL, 0, NULL);
+    }
+}
+
+void* usrp_io_rx_process(void * _u)
+{
+    usrp_io * usrp = (usrp_io*) _u;
+
+    while (usrp->rx_active) {
+        // run
+
+        // invoke callback
+        usrp->rx_callback0(NULL, NULL, 0, NULL);
+    }
+}
+
 
