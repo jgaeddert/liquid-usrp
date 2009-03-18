@@ -3,6 +3,7 @@
 //
 
 #include <usrp_standard.h>
+#include <pthread.h>
 #include "db_base.h"
 
 // callback function definitions
@@ -25,8 +26,8 @@ public:
     ~usrp_io();
 
     // start/stop
-    void start_tx(int _channel, usrp_tx_callback _callback);
-    void start_rx(int _channel, usrp_rx_callback _callback);
+    void start_tx(int _channel, usrp_tx_callback _callback, void * _userdata);
+    void start_rx(int _channel, usrp_rx_callback _callback, void * _userdata);
     void stop_tx(int _channel);
     void stop_rx(int _channel);
 
@@ -67,10 +68,18 @@ protected:
     bool rx_active;
     bool tx_active;
 
+    // threads
+    pthread_t tx_thread;
+    pthread_t rx_thread;
+
     // callback functions
     usrp_tx_callback tx_callback0;
-    usrp_tx_callback tx_callback1;
+    //usrp_tx_callback tx_callback1;
     usrp_rx_callback rx_callback0;
-    usrp_rx_callback rx_callback1;
+    //usrp_rx_callback rx_callback1;
+
+    // user data
+    void * tx_userdata;
+    void * rx_userdata;
 };
 

@@ -29,8 +29,22 @@ usrp_io::~usrp_io()
 }
 
 // start/stop
-void usrp_io::start_tx(int _channel, usrp_tx_callback _callback) {}
-void usrp_io::start_rx(int _channel, usrp_rx_callback _callback) {}
+void usrp_io::start_tx(int _channel, usrp_tx_callback _callback, void * _userdata)
+{
+    tx_callback0 = _callback;
+    tx_active = true;
+    tx_userdata = _userdata;
+    pthread_create(&tx_thread, NULL, usrp_io_tx_process, this);
+}
+
+void usrp_io::start_rx(int _channel, usrp_rx_callback _callback, void * _userdata)
+{
+    rx_callback0 = _callback;
+    rx_active = true;
+    rx_userdata = _userdata;
+    pthread_create(&rx_thread, NULL, usrp_io_rx_process, this);
+}
+
 void usrp_io::stop_rx(int _channel) {}
 void usrp_io::stop_tx(int _channel) {}
 
@@ -112,26 +126,30 @@ void usrp_io::initialize()
 // threading functions
 void* usrp_io_tx_process(void * _u)
 {
+    std::cout << "usrp_io_tx_process() invoked" << std::endl;
     usrp_io * usrp = (usrp_io*) _u;
+    void * userdata = usrp->tx_userdata;
 
     while (usrp->tx_active) {
         // run
 
         // callback
-        usrp->tx_callback0(NULL, NULL, 0, NULL);
+        usrp->tx_callback0(NULL, NULL, 0, userdata);
     }
     return NULL;
 }
 
 void* usrp_io_rx_process(void * _u)
 {
+    std::cout << "usrp_io_rx_process() invoked" << std::endl;
     usrp_io * usrp = (usrp_io*) _u;
+    void * userdata = usrp->rx_userdata;
 
     while (usrp->rx_active) {
         // run
 
         // invoke callback
-        usrp->rx_callback0(NULL, NULL, 0, NULL);
+        usrp->rx_callback0(NULL, NULL, 0, userdata);
     }
     return NULL;
 }

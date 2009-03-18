@@ -24,8 +24,8 @@ int main() {
     usrp->set_rx_decim(0, rx_decim);
 
     // start
-    usrp->start_tx(0,tx_nco_callback);
-    usrp->start_rx(0,rx_display_callback);
+    usrp->start_tx(0,tx_nco_callback,NULL);
+    usrp->start_rx(0,rx_display_callback,NULL);
 
     // stop
     usrp->stop_rx(0);

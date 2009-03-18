@@ -2,7 +2,7 @@
 # USRP tests makefile
 #
 
-LDFLAGS	= -lusrp
+LDFLAGS	= -lusrp -pthread
 
 local_src	:=		\
 	basic.cc		\
