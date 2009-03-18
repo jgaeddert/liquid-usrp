@@ -5,6 +5,9 @@
 #include <usrp_standard.h>
 #include "db_base.h"
 
+typedef void* (*tx_callback)(void *);
+typedef void* (*rx_callback)(void *);
+
 class usrp_io
 {
 public:
@@ -13,10 +16,10 @@ public:
     ~usrp_io();
 
     // start/stop
-    void start_rx(int _channel);
-    void start_tx(int _channel);
-    void stop_rx(int _channel);
+    void start_tx(int _channel, tx_callback _callback);
+    void start_rx(int _channel, rx_callback _callback);
     void stop_tx(int _channel);
+    void stop_rx(int _channel);
 
     // gain
     void get_tx_gain(int _channel, float &_gain);

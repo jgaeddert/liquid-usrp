@@ -29,8 +29,8 @@ usrp_io::~usrp_io()
 }
 
 // start/stop
-void usrp_io::start_rx(int _channel) {}
-void usrp_io::start_tx(int _channel) {}
+void usrp_io::start_tx(int _channel, tx_callback _callback) {}
+void usrp_io::start_rx(int _channel, rx_callback _callback) {}
 void usrp_io::stop_rx(int _channel) {}
 void usrp_io::stop_tx(int _channel) {}
 
@@ -103,6 +103,9 @@ void usrp_io::initialize()
 
     std::cout << "usrp daughterboard tx slot 0 : " << usrp_dbid_to_string(tx_db0_id) << std::endl;
     std::cout << "usrp daughterboard tx slot 1 : " << usrp_dbid_to_string(tx_db1_id) << std::endl;
+
+    // default: set tx_enable
+    tx_db0->set_enable(true);
 
 }
 

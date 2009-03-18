@@ -4,6 +4,9 @@
 
 #include "usrp_io.h"
 
+void* tx_nco_callback(void*);
+void* rx_display_callback(void*);
+
 int main() {
     // options
     float   tx_freq     = 462e6f;
@@ -21,8 +24,8 @@ int main() {
     usrp->set_rx_decim(0, rx_decim);
 
     // start
-    usrp->start_rx(0);
-    usrp->start_tx(0);
+    usrp->start_tx(0,tx_nco_callback);
+    usrp->start_rx(0,rx_display_callback);
 
     // stop
     usrp->stop_rx(0);
@@ -30,4 +33,14 @@ int main() {
 
     // delete usrp object
     delete usrp;
+}
+
+void* tx_nco_callback(void* _nco)
+{
+    return NULL;
+}
+
+void* rx_display_callback(void*)
+{
+    return NULL;
 }
