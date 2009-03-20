@@ -82,7 +82,7 @@ int main (int argc, char **argv)
     int    i;
     //int    buf[SAMPLES_PER_READ];
     //int    bufsize = SAMPLES_PER_READ*4; // Should be multiple of 512 Bytes
-    const int tx_buf_len = 512;
+    const int tx_buf_len = 2*2*2048;
     short tx_buf[tx_buf_len];
 
 #if 0 
@@ -188,7 +188,7 @@ int main (int argc, char **argv)
     unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
     unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
     unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
-    std::complex<float> interp_buffer[2*block_size];
+    std::complex<float> interp_buffer[2*2048];
     std::complex<float> * block_ptr;
 
     // framing
@@ -209,53 +209,47 @@ int main (int argc, char **argv)
     // Do USRP Samples Reading 
     for (i = 0; i < total_writes; i++) {
         // generate random data
-        for (i=0; i<24; i++)    header[i]  = rand() % 256;
-        for (i=0; i<64; i++)    payload[i] = rand() % 256;
+        for (j=0; j<24; j++)    header[j]  = rand() % 256;
+        for (j=0; j<64; j++)    payload[j] = rand() % 256;
 
-        // generate the frame
-        framegen64_execute(framegen, header, payload, frame);
+        // generate the frame / transmit silence
+        if (i%2)
+            framegen64_execute(framegen, header, payload, frame);
+        else
+            framegen64_flush(framegen, 2048, frame);
 
-        for (n=0; n<num_blocks+num_flush; n++) {
+        for (n=0; n<2048; n++) {
             
-            if (n < num_blocks)
-                block_ptr = frame + n*block_size;
-            else {
-                // flush frame
-                framegen64_flush(framegen, block_size, frame);
-                block_ptr = frame;
-            }
             // run interpolator
-            for (j=0; j<block_size; j++) {
-                resamp2_crcf_interp_execute(interpolator,
-                    block_ptr[j], &interp_buffer[2*j]);
-            }
+            resamp2_crcf_interp_execute(interpolator,
+                frame[n], &interp_buffer[2*n]);
+        }
 
+        for (n=0; n<4096; n++) {
             // prepare data
-            for (j=0; j<block_size; j++) {
-                I = (short) (interp_buffer[j].real() * 1000);
-                Q = (short) (interp_buffer[j].imag() * 1000);
+            I = (short) (interp_buffer[n].real() * 1000);
+            Q = (short) (interp_buffer[n].imag() * 1000);
 
-                tx_buf[2*j+0] = host_to_usrp_short(I);
-                tx_buf[2*j+1] = host_to_usrp_short(Q);
-            }
+            tx_buf[2*n+0] = host_to_usrp_short(I);
+            tx_buf[2*n+1] = host_to_usrp_short(Q);
+        }
 
-            // write data
+        // write data
 
-            //utx->write(&buf, bufsize, &underrun); 
-            int rc = utx->write(tx_buf, tx_buf_len*sizeof(short), &underrun); 
+        //utx->write(&buf, bufsize, &underrun); 
+        int rc = utx->write(tx_buf, tx_buf_len*sizeof(short), &underrun); 
                     
-            if (underrun) {
-                printf ("USRP tx underrun\n");
-                nunderruns++;
-            }
+        if (underrun) {
+            printf ("USRP tx underrun\n");
+            nunderruns++;
+        }
 
-            if (rc < 0) {
-                printf("error occurred with USRP\n");
-                exit(0);
-            } else if (rc != tx_buf_len*sizeof(short)) {
-                printf("error: did not write proper length\n");
-                exit(0);
-            }
+        if (rc < 0) {
+            printf("error occurred with USRP\n");
+            exit(0);
+        } else if (rc != tx_buf_len*sizeof(short)) {
+            printf("error: did not write proper length\n");
+            exit(0);
         }
  
     }
