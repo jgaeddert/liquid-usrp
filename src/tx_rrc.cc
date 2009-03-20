@@ -192,6 +192,11 @@ int main (int argc, char **argv)
     std::complex<float> interp_buffer[k];
     std::complex<float> symbol;
 
+    modulation_scheme ms = MOD_PSK;
+    unsigned int bps = 2;
+    modem linmod = modem_create(ms, bps);
+    unsigned int s;
+
     // generate data buffer
     short I, Q;
     printf("USRP Transfer Started\n");
@@ -205,16 +210,11 @@ int main (int argc, char **argv)
         for (j=0; j<tx_buf_len; j+=2*k) {
             symbol.real() = rand()%2 ? 1.0f : -1.0f;
             symbol.imag() = rand()%2 ? 1.0f : -1.0f;
-            //I = rand()%2 ? 1000 : -1000;
-            //Q = rand()%2 ? 1000 : -1000;
 
-            /*
-            // 'interpolate' (square pulse shape)
-            for (n=0; n<k; n++) {
-                tx_buf[j+2*n+0] = host_to_usrp_short(I);
-                tx_buf[j+2*n+1] = host_to_usrp_short(Q);
-            }
-            */
+            s = modem_gen_rand_sym(linmod);
+            modem_modulate(linmod, s, &symbol);
+
+            // run interpolator
             interp_crcf_execute(interpolator, symbol, interp_buffer);
             for (n=0; n<k; n++) {
                 I = (short) (interp_buffer[n].real() * 1000);
@@ -251,6 +251,7 @@ int main (int argc, char **argv)
 
     // clean it up
     interp_crcf_destroy(interpolator);
+    modem_destroy(linmod);
     delete utx;
     return 0;
 }
