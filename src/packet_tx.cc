@@ -187,7 +187,9 @@ int main (int argc, char **argv)
     resamp2_crcf interpolator = resamp2_crcf_create(37);
     unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
     unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
+    unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
     std::complex<float> interp_buffer[2*block_size];
+    std::complex<float> * block_ptr;
 
     // framing
     std::complex<float> frame[2048];
@@ -213,12 +215,19 @@ int main (int argc, char **argv)
         // generate the frame
         framegen64_execute(framegen, header, payload, frame);
 
-        for (n=0; n<num_blocks; n++) {
+        for (n=0; n<num_blocks+num_flush; n++) {
             
+            if (n < num_blocks)
+                block_ptr = frame + n*block_size;
+            else {
+                // flush frame
+                framegen64_flush(framegen, block_size, frame);
+                block_ptr = frame;
+            }
             // run interpolator
             for (j=0; j<block_size; j++) {
                 resamp2_crcf_interp_execute(interpolator,
-                    frame[n*block_size+j], &interp_buffer[2*j]);
+                    block_ptr[j], &interp_buffer[2*j]);
             }
 
             // prepare data
