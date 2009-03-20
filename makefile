@@ -2,7 +2,7 @@
 # USRP tests makefile
 #
 
-LDFLAGS	= -lusrp -pthread
+LDFLAGS	= -lusrp -pthread -lliquid
 
 local_src	:=		\
 	basic.cc		\
@@ -18,6 +18,8 @@ local_progs	:=		\
 	src/usrp_io_test.cc	\
 	src/gr_usrp_rx_test.cc	\
 	src/gr_usrp_tx_test.cc	\
+	src/tx.cc \
+	src/tx_rrc.cc \
 	src/test_usrp_standard_tx.cc
 
 sources		= $(addprefix src/,$(local_src))

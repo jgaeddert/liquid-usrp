@@ -36,6 +36,11 @@
 #include "usrp_standard.h"
 #include "usrp_bytesex.h"
 
+#include "usrp_standard.h"
+#include "usrp_prims.h"
+#include "usrp_dbid.h"
+#include "flex.h"
+#define USRP_CHANNEL (0) 
 #ifdef HAVE_SCHED_H
 #include <sched.h>
 #endif
@@ -218,6 +223,7 @@ main (int argc, char **argv)
 				-1, 	// mux
 				fusb_block_size,
 				fusb_nblocks);
+  usrp_standard_rx * urx = usrp_standard_rx::make(0,256);
 
   if (utx == 0)
     die ("usrp_standard_tx::make");
@@ -232,6 +238,33 @@ main (int argc, char **argv)
   
   fflush (stdout);
   fflush (stderr);
+
+    // daughterboard
+    int rx_db0 = urx->daughterboard_id(0);
+    db_base * rx_db0_control;   // from ossie
+    //std::cout << "rx db slot 0 : " << usrp_dbid_to_string(rx_db0) << std::endl;
+    //printf("rx db slot 0: %s\n", usrp_dbid_to_string(rx_db0));
+ 
+    if (rx_db0 == USRP_DBID_FLEX_400_RX_MIMO_B) {
+        printf("usrp daughterboard: USRP_DBID_FLEX_400_RX_MIMO_B\n");
+        rx_db0_control = new db_flex400_rx_mimo_b(urx,0);
+    } else {
+        printf("use usrp db flex 400 rx MIMO B\n");
+        return 0;
+    }   
+
+
+    // set the daughterboard frequency
+    float frequency = 485e6;
+    float db_lo_offset = -8e6;
+    float db_lo_freq = 0.0f;
+    float db_lo_freq_set = frequency + db_lo_offset;
+    rx_db0_control->set_db_freq(db_lo_freq_set, db_lo_freq);
+    float ddc_freq = frequency - db_lo_freq;
+    utx->set_tx_freq(USRP_CHANNEL, ddc_freq);
+    urx->set_rx_freq(USRP_CHANNEL, ddc_freq);
+
+ 
 
   utx->start();		// start data xfers
 
