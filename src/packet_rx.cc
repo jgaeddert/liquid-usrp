@@ -70,8 +70,8 @@ Each buffer element, for example buffer[0] contains 4 bytes
 
 static int callback(unsigned char * _header, unsigned char * _payload)
 {
-    std::cout << "********* callback invoked" << std::endl;
-
+    std::cout << "********* callback invoked, ";// << std::endl;
+    printf("packet id: %u\n", (unsigned int ) _header[0]);
     return 0;
 }
 
@@ -90,7 +90,7 @@ int main (int argc, char **argv)
     int    mode = 0;
     int    noverruns = 0;
     bool   overrun;
-    int    total_reads = 100;
+    int    total_reads = 10000;
     int    i;
     const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
@@ -193,8 +193,8 @@ int main (int argc, char **argv)
         // convert to float
         std::complex<float> sample;
         for (n=0; n<rx_buf_len; n+=2) {
-            sample.real() = (float) ( rx_buf[n+0]);
-            sample.imag() = (float) (-rx_buf[n+1]);
+            sample.real() = (float) ( rx_buf[n+0]) * 0.01f;
+            sample.imag() = (float) (-rx_buf[n+1]) * 0.01f;
 
             buffer[n/2] = sample;
         }
@@ -203,6 +203,12 @@ int main (int argc, char **argv)
         for (n=0; n<rx_buf_len/2; n+=2) {
             resamp2_crcf_decim_execute(decimator, &buffer[n], &decim_out[n/2]);
         }
+
+        /*
+        for (n=0; n<rx_buf_len/4; n++)
+            printf("%8.4f ", abs(decim_out[n]));
+        printf("\n");
+        */
 
         // run through frame synchronizer
         framesync64_execute(framesync, decim_out, rx_buf_len/4);
