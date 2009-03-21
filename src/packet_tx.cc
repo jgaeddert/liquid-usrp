@@ -205,18 +205,22 @@ int main (int argc, char **argv)
     tx_db0_control->set_enable(true);
     utx->start();        // Start data transfer
  
-    unsigned int j, n;
+    unsigned int j, n, pid=0;
     // Do USRP Samples Reading 
     for (i = 0; i < total_writes; i++) {
-        // generate random data
-        for (j=0; j<24; j++)    header[j]  = rand() % 256;
-        for (j=0; j<64; j++)    payload[j] = rand() % 256;
-
         // generate the frame / transmit silence
-        if (i%2)
+        if ((i%4)==0) {
+            // generate random data
+            for (j=0; j<24; j++)    header[j]  = rand() % 256;
+            for (j=0; j<64; j++)    payload[j] = rand() % 256;
+            header[0] = pid;
+            printf("packet id: %u\n", pid);
+            pid = (pid+1)%256;
+
             framegen64_execute(framegen, header, payload, frame);
-        else
+        } else {
             framegen64_flush(framegen, 2048, frame);
+            }
 
         for (n=0; n<2048; n++) {
             
