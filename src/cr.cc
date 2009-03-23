@@ -60,10 +60,17 @@ void * ce_process(void*);   // cognitive engine
  
 void usrp_set_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
 
-static int callback(unsigned char * _header, unsigned char * _payload)
+static int callback(unsigned char * _header,  int _header_valid,
+                    unsigned char * _payload, int _payload_valid)
 {
     std::cout << "********* callback invoked, ";// << std::endl;
-    printf("packet id: %u\n", (unsigned int ) _header[0]);
+    if ( !_header_valid ) {
+        printf("header crc : FAIL\n");
+    } else if ( !_payload_valid ) {
+        printf("payload crc : FAIL\n");
+    } else {
+        printf("packet id: %u\n", (unsigned int ) _header[0]);
+    }
     return 0;
 }
 

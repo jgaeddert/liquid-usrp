@@ -68,10 +68,17 @@ Each buffer element, for example buffer[0] contains 4 bytes
 
 }
 
-static int callback(unsigned char * _header, unsigned char * _payload)
+static int callback(unsigned char * _header,  int _header_valid,
+                    unsigned char * _payload, int _payload_valid)
 {
     std::cout << "********* callback invoked, ";// << std::endl;
-    printf("packet id: %u\n", (unsigned int ) _header[0]);
+    if ( !_header_valid ) {
+        printf("header crc : FAIL\n");
+    } else if ( !_payload_valid ) {
+        printf("payload crc : FAIL\n");
+    } else {
+        printf("packet id: %u\n", (unsigned int ) _header[0]);
+    }
     return 0;
 }
 
