@@ -43,15 +43,14 @@ typedef struct crdata {
     pthread_cond_t  tx_data_ready;
 
     // data buffers
+    pthread_mutex_t tx_data_mutex;
     unsigned char tx_header[24];
     unsigned char tx_payload[64];
-    bool tx_header_crc_pass;
-    bool tx_payload_crc_pass;
 
     unsigned char rx_header[24];
     unsigned char rx_payload[64];
-    bool rx_header_crc_pass;
-    bool rx_payload_crc_pass;
+    bool rx_header_valid;
+    bool rx_payload_valid;
 };
 
 void * tx_process(void*);   // transmitter
@@ -212,7 +211,9 @@ void * tx_process(void*userdata)
         pthread_mutex_lock(&(p->rx_mutex));
 
         // generate the frame
+        pthread_mutex_lock(&(p->tx_data_mutex));
         framegen64_execute(framegen, p->tx_header, p->tx_payload, frame);
+        pthread_mutex_unlock(&(p->tx_data_mutex));
         
         pthread_mutex_unlock(&(p->internal_mutex));
 
@@ -337,6 +338,16 @@ void * rx_process(void*userdata)
 void * ce_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
+
+    while (true) {
+        usleep(500000);
+
+        printf("transmitting packet\n");
+
+        //pthread_mutex_lock(&(p->
+
+        //for (i=0; i<24; i++) p->
+    }
 
     pthread_exit(NULL);
 }
