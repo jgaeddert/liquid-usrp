@@ -65,9 +65,9 @@ static int callback(unsigned char * _header,  int _header_valid,
 {
     std::cout << "********* callback invoked, ";// << std::endl;
     if ( !_header_valid ) {
-        printf("header crc : FAIL\n");
+        printf("HEADER CRC FAIL\n");
     } else if ( !_payload_valid ) {
-        printf("payload crc : FAIL\n");
+        printf("PAYLOAD CRC FAIL\n");
     } else {
         printf("packet id: %u\n", (unsigned int ) _header[0]);
     }
@@ -95,6 +95,10 @@ int main (int argc, char **argv)
     // Set Number of channels
     data.urx->set_nchannels(1);
     data.utx->set_nchannels(1);
+
+    // Set other properties
+    data.urx->set_pga(0,0);         // adc pga gain
+    data.urx->set_mux(0x32103210);  // Board A only
  
     // daughterboard
     data.dbid = data.urx->daughterboard_id(0);
@@ -191,8 +195,8 @@ void * tx_process(void*userdata)
     std::complex<float> frame[2048];
     framegen64 framegen = framegen64_create(m,beta);
 
-    printf("USRP Transfer Started\n");
     p->utx->start();        // Start data transfer
+    printf("usrp tx transfer started\n");
 
     unsigned int i, n;
     short I, Q;
@@ -252,7 +256,7 @@ void * tx_process(void*userdata)
  
     // stop data transfer
     p->utx->stop();
-    printf("USRP Transfer Stopped\n");
+    printf("usrp tx transfer stopped\n");
 
     // clean up allocated memory
     framegen64_destroy(framegen);
@@ -266,13 +270,66 @@ void * rx_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
 
-    while (false) {
+    // create buffer
+    const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
+    short  rx_buf[rx_buf_len];
+    bool overrun;
+    int num_overruns=0;
+
+    // framing
+    unsigned int m=3;
+    float beta=0.7f;
+    framesync64 framesync = framesync64_create(m,beta,callback);
+
+    // create decimator
+    resamp2_crcf decimator = resamp2_crcf_create(37);
+    std::complex<float> buffer[rx_buf_len/2];
+    std::complex<float> decim_out[rx_buf_len/4];
+ 
+    p->urx->start();        // Start data transfer
+    printf("usrp rx transfer started\n");
+
+    int n;
+    while (true) {
         // lock receiver mutex
-        pthread_mutex_lock(&(p->rx_mutex));
+        //pthread_mutex_lock(&(p->rx_mutex));
+
+        // read data
+        p->urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
+            
+        if (overrun) {
+            printf ("USRP Rx Overrun\n");
+            num_overruns++;
+        }
+ 
+        // convert to float
+        std::complex<float> sample;
+        for (n=0; n<rx_buf_len; n+=2) {
+            sample.real() = (float) ( rx_buf[n+0]) * 0.01f;
+            sample.imag() = (float) (-rx_buf[n+1]) * 0.01f;
+
+            buffer[n/2] = sample;
+        }
+
+        // run decimator
+        for (n=0; n<rx_buf_len/2; n+=2) {
+            resamp2_crcf_decim_execute(decimator, &buffer[n], &decim_out[n/2]);
+        }
+
+        // run through frame synchronizer
+        framesync64_execute(framesync, decim_out, rx_buf_len/4);
 
         // unlock receiver mutex
-        pthread_mutex_unlock(&(p->rx_mutex));
+        //pthread_mutex_unlock(&(p->rx_mutex));
     }
+
+    p->urx->stop();  // Stop data transfer
+    printf("usrp rx transfer stopped\n");
+
+
+    // clean up memory allocation
+    framesync64_destroy(framesync);
+    resamp2_crcf_destroy(decimator);
 
     pthread_exit(NULL);
 }
