@@ -73,13 +73,13 @@ int main (int argc, char **argv)
     crdata data;
     data.fc = 462e6;
 
-    data.urx =  usrp_standard_rx::make (0, 512);
+    data.urx =  usrp_standard_rx::make (0, 256);
     if (data.urx == 0) {
         fprintf (stderr, "Error: usrp_standard_rx::make\n");
         exit (1);
     }
 
-    data.utx =  usrp_standard_tx::make (0, 256);
+    data.utx =  usrp_standard_tx::make (0, 512);
     if (data.utx == 0) {
         fprintf (stderr, "Error: usrp_standard_tx::make\n");
         exit (1);
@@ -111,6 +111,12 @@ int main (int argc, char **argv)
     // set frequency
     usrp_set_frequency(data.urx, data.db, data.fc);
 
+    // initialize mutexes, etc.
+    pthread_mutex_init(&(data.rx_mutex),NULL);
+    pthread_mutex_init(&(data.internal_mutex),NULL);
+    pthread_mutex_init(&(data.control_mutex),NULL);
+    pthread_cond_init(&(data.tx_data_ready),NULL);
+
     // create thread objects
     void * status;
     pthread_t tx_thread;
@@ -132,6 +138,14 @@ int main (int argc, char **argv)
     pthread_join(rx_thread, &status);
     pthread_join(ce_thread, &status);
 
+    //
+    printf("finished\n");
+
+    // clean up objects
+    pthread_mutex_destroy(&(data.rx_mutex));
+    pthread_mutex_destroy(&(data.internal_mutex));
+    pthread_mutex_destroy(&(data.control_mutex));
+    pthread_cond_destroy(&(data.tx_data_ready));
     return 0;
 }
 
@@ -178,11 +192,18 @@ void * tx_process(void*userdata)
     bool underrun;
     unsigned int num_underruns;
     for (i=0; i<1000000; i++) {
-        // TODO: wait for signal condition
+        // wait for signal condition
+        printf("tx: waiting for data\n");
+        pthread_mutex_lock(&(p->internal_mutex));
         pthread_cond_wait(&(p->tx_data_ready),&(p->internal_mutex));
+
+        // lock receiver mutex
+        pthread_mutex_lock(&(p->rx_mutex));
 
         // generate the frame
         framegen64_execute(framegen, p->tx_header, p->tx_payload, frame);
+        
+        pthread_mutex_unlock(&(p->internal_mutex));
 
         // TODO: flush the frame
 
@@ -217,6 +238,9 @@ void * tx_process(void*userdata)
             printf("error: did not write proper length\n");
             exit(0);
         }
+
+        // unlock receiver mutex
+        pthread_mutex_unlock(&(p->rx_mutex));
     }
  
     // stop data transfer
@@ -234,6 +258,14 @@ void * tx_process(void*userdata)
 void * rx_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
+
+    while (false) {
+        // lock receiver mutex
+        pthread_mutex_lock(&(p->rx_mutex));
+
+        // unlock receiver mutex
+        pthread_mutex_unlock(&(p->rx_mutex));
+    }
 
     pthread_exit(NULL);
 }
