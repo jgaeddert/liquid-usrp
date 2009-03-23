@@ -117,7 +117,7 @@ int main (int argc, char **argv)
     float gmin, gmax, gstep;
     data.db->get_gain_range(gmin,gmax,gstep);
     printf("gmin/gmax/gstep: %f/%f/%f\n", gmin,gmax,gstep);
-    data.db->set_gain(gmax);
+    //data.db->set_gain(gmax);    // note: not a good idea to set to max
 
     // set frequency
     usrp_set_frequency(data.urx, data.db, data.fc);
