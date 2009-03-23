@@ -22,7 +22,8 @@ local_progs	:=		\
 	src/tx_rrc.cc \
 	src/test_usrp_standard_tx.cc \
 	src/packet_tx.cc \
-	src/packet_rx.cc
+	src/packet_rx.cc	\
+	src/cr.cc
 
 sources		= $(addprefix src/,$(local_src))
 objects		= $(patsubst %.cc,%.cc.o,$(sources))
