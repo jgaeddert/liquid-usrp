@@ -32,9 +32,11 @@ typedef struct crdata {
 
     // front end objects
     usrp_standard_tx * utx;
+    int tx_db_id;
+    db_base * txdb;
     usrp_standard_rx * urx;
-    int dbid;
-    db_base * db;
+    int rx_db_id;
+    db_base * rxdb;
 
     // threading
     pthread_mutex_t rx_mutex;
@@ -57,7 +59,8 @@ void * tx_process(void*);   // transmitter
 void * rx_process(void*);   // receiver
 void * ce_process(void*);   // cognitive engine
  
-void usrp_set_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
+void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
+void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
 
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid)
@@ -98,28 +101,44 @@ int main (int argc, char **argv)
     // Set other properties
     data.urx->set_pga(0,0);         // adc pga gain
     data.urx->set_mux(0x32103210);  // Board A only
+  
+    // tx daughterboard
+    data.tx_db_id = data.utx->daughterboard_id(0);
+    std::cout << "tx db slot 0 : " << usrp_dbid_to_string(data.tx_db_id) << std::endl;
  
-    // daughterboard
-    data.dbid = data.urx->daughterboard_id(0);
-    std::cout << "rx db slot 0 : " << usrp_dbid_to_string(data.dbid) << std::endl;
+    if (data.tx_db_id == USRP_DBID_FLEX_400_TX_MIMO_B) {
+        printf("usrp daughterboard: USRP_DBID_FLEX_400_TX_MIMO_B\n");
+        data.txdb = new db_flex400_tx_mimo_b(data.utx,0);
+    } else {
+        printf("use usrp db flex 400 tx MIMO B\n");
+        return 0;
+    }   
+    data.txdb->set_enable(true);
+
+    // rx daughterboard
+    data.rx_db_id = data.urx->daughterboard_id(0);
+    std::cout << "rx db slot 0 : " << usrp_dbid_to_string(data.rx_db_id) << std::endl;
  
-    if (data.dbid == USRP_DBID_FLEX_400_RX_MIMO_B) {
+    if (data.rx_db_id == USRP_DBID_FLEX_400_RX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_RX_MIMO_B\n");
-        data.db = new db_flex400_rx_mimo_b(data.urx,0);
+        data.rxdb = new db_flex400_rx_mimo_b(data.urx,0);
     } else {
         printf("use usrp db flex 400 rx MIMO B\n");
         return 0;
     }   
-    data.db->set_enable(true);
 
     // set the daughterboard gain
     float gmin, gmax, gstep;
-    data.db->get_gain_range(gmin,gmax,gstep);
-    printf("gmin/gmax/gstep: %f/%f/%f\n", gmin,gmax,gstep);
+    data.txdb->get_gain_range(gmin,gmax,gstep);
+    printf("tx: gmin/gmax/gstep: %f/%f/%f\n", gmin,gmax,gstep);
+    //data.db->set_gain(gmax);    // note: not a good idea to set to max
+    data.rxdb->get_gain_range(gmin,gmax,gstep);
+    printf("rx: gmin/gmax/gstep: %f/%f/%f\n", gmin,gmax,gstep);
     //data.db->set_gain(gmax);    // note: not a good idea to set to max
 
     // set frequency
-    usrp_set_frequency(data.urx, data.db, data.fc);
+    usrp_set_tx_frequency(data.utx, data.txdb, data.fc);
+    usrp_set_rx_frequency(data.urx, data.rxdb, data.fc);
 
     // initialize mutexes, etc.
     pthread_mutex_init(&(data.rx_mutex),NULL);
@@ -159,13 +178,25 @@ int main (int argc, char **argv)
     return 0;
 }
 
-void usrp_set_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency)
+void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _txdb, float _frequency)
 {
     // set the daughterboard frequency
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
     float db_lo_freq_set = _frequency + db_lo_offset;
-    _db->set_db_freq(db_lo_freq_set, db_lo_freq);
+    _txdb->set_db_freq(db_lo_freq_set, db_lo_freq);
+    float ddc_freq = _frequency - db_lo_freq;
+    _utx->set_tx_freq(USRP_CHANNEL, ddc_freq);
+}
+
+
+void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _rxdb, float _frequency)
+{
+    // set the daughterboard frequency
+    float db_lo_offset = -8e6;
+    float db_lo_freq = 0.0f;
+    float db_lo_freq_set = _frequency + db_lo_offset;
+    _rxdb->set_db_freq(db_lo_freq_set, db_lo_freq);
     float ddc_freq = _frequency - db_lo_freq;
     _urx->set_rx_freq(USRP_CHANNEL, ddc_freq);
 }
@@ -180,15 +211,15 @@ void * tx_process(void*userdata)
     short tx_buf[tx_buf_len];
 
     // create interpolator
-    unsigned int k=2; // samples per symbol
+    //unsigned int k=2; // samples per symbol
     unsigned int m=3; // delay
     float beta=0.7f;  // excess bandwidth factor
     resamp2_crcf interpolator = resamp2_crcf_create(37);
-    unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
-    unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
-    unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
+    //unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
+    //unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
+    //unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
     std::complex<float> interp_buffer[2*2048];
-    std::complex<float> * block_ptr;
+    //std::complex<float> * block_ptr;
 
     // framing
     std::complex<float> frame[2048];
@@ -204,18 +235,21 @@ void * tx_process(void*userdata)
     for (i=0; i<1000000; i++) {
         // wait for signal condition
         printf("tx: waiting for data\n");
-        pthread_mutex_lock(&(p->internal_mutex));
-        pthread_cond_wait(&(p->tx_data_ready),&(p->internal_mutex));
+        //pthread_mutex_lock(&(p->internal_mutex));
+        pthread_cond_wait(&(p->tx_data_ready),&(p->tx_data_mutex));
+        printf("tx: received tx_data_ready signal\n");
+
+        pthread_mutex_lock(&(p->tx_data_mutex));
 
         // lock receiver mutex
-        pthread_mutex_lock(&(p->rx_mutex));
+        //pthread_mutex_lock(&(p->rx_mutex));
 
         // generate the frame
-        pthread_mutex_lock(&(p->tx_data_mutex));
+        //pthread_mutex_lock(&(p->tx_data_mutex));
         framegen64_execute(framegen, p->tx_header, p->tx_payload, frame);
-        pthread_mutex_unlock(&(p->tx_data_mutex));
+        //pthread_mutex_unlock(&(p->tx_data_mutex));
         
-        pthread_mutex_unlock(&(p->internal_mutex));
+        //pthread_mutex_unlock(&(p->internal_mutex));
 
         // TODO: flush the frame
 
@@ -235,7 +269,7 @@ void * tx_process(void*userdata)
         }
 
         // write data
-        //utx->write(&buf, bufsize, &underrun); 
+        printf("tx: writing to usrp...\n");
         int rc = p->utx->write(tx_buf, tx_buf_len*sizeof(short), &underrun); 
                     
         if (underrun) {
@@ -252,7 +286,7 @@ void * tx_process(void*userdata)
         }
 
         // unlock receiver mutex
-        pthread_mutex_unlock(&(p->rx_mutex));
+        //pthread_mutex_unlock(&(p->rx_mutex));
     }
  
     // stop data transfer
@@ -339,14 +373,21 @@ void * ce_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
 
+    unsigned int i, pid=0;
     while (true) {
         usleep(500000);
 
         printf("transmitting packet\n");
 
-        //pthread_mutex_lock(&(p->
+        pthread_mutex_lock(&(p->tx_data_mutex));
 
-        //for (i=0; i<24; i++) p->
+        for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
+        for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
+        p->tx_header[i] = pid;
+        pid = (pid+1)%256;
+
+        pthread_mutex_unlock(&(p->tx_data_mutex));
+        pthread_cond_signal(&(p->tx_data_ready));
     }
 
     pthread_exit(NULL);
