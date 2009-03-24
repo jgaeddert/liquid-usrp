@@ -39,9 +39,9 @@ typedef struct crdata {
     db_base * rxdb;
 
     // threading
-    pthread_mutex_t rx_mutex;
-    pthread_mutex_t control_mutex;
-    pthread_mutex_t internal_mutex;
+    //pthread_mutex_t rx_mutex;
+    //pthread_mutex_t control_mutex;
+    //pthread_mutex_t internal_mutex;
     pthread_cond_t  tx_data_ready;
 
     // data buffers
@@ -141,9 +141,10 @@ int main (int argc, char **argv)
     usrp_set_rx_frequency(data.urx, data.rxdb, data.fc);
 
     // initialize mutexes, etc.
-    pthread_mutex_init(&(data.rx_mutex),NULL);
-    pthread_mutex_init(&(data.internal_mutex),NULL);
-    pthread_mutex_init(&(data.control_mutex),NULL);
+    //pthread_mutex_init(&(data.rx_mutex),NULL);
+    //pthread_mutex_init(&(data.internal_mutex),NULL);
+    //pthread_mutex_init(&(data.control_mutex),NULL);
+    pthread_mutex_init(&(data.tx_data_mutex),NULL);
     pthread_cond_init(&(data.tx_data_ready),NULL);
 
     // create thread objects
@@ -171,9 +172,10 @@ int main (int argc, char **argv)
     printf("finished\n");
 
     // clean up objects
-    pthread_mutex_destroy(&(data.rx_mutex));
-    pthread_mutex_destroy(&(data.internal_mutex));
-    pthread_mutex_destroy(&(data.control_mutex));
+    //pthread_mutex_destroy(&(data.rx_mutex));
+    //pthread_mutex_destroy(&(data.internal_mutex));
+    //pthread_mutex_destroy(&(data.control_mutex));
+    pthread_mutex_destroy(&(data.tx_data_mutex));
     pthread_cond_destroy(&(data.tx_data_ready));
     return 0;
 }
@@ -234,12 +236,12 @@ void * tx_process(void*userdata)
     unsigned int num_underruns;
     for (i=0; i<1000000; i++) {
         // wait for signal condition
-        printf("tx: waiting for data\n");
-        //pthread_mutex_lock(&(p->internal_mutex));
-        pthread_cond_wait(&(p->tx_data_ready),&(p->tx_data_mutex));
-        printf("tx: received tx_data_ready signal\n");
-
+        //printf("tx: waiting for data\n");
         pthread_mutex_lock(&(p->tx_data_mutex));
+        pthread_cond_wait(&(p->tx_data_ready),&(p->tx_data_mutex));
+        //printf("tx: received tx_data_ready signal\n");
+
+        pthread_mutex_unlock(&(p->tx_data_mutex));
 
         // lock receiver mutex
         //pthread_mutex_lock(&(p->rx_mutex));
@@ -269,7 +271,7 @@ void * tx_process(void*userdata)
         }
 
         // write data
-        printf("tx: writing to usrp...\n");
+        //printf("tx: writing to usrp...\n");
         int rc = p->utx->write(tx_buf, tx_buf_len*sizeof(short), &underrun); 
                     
         if (underrun) {
@@ -377,17 +379,17 @@ void * ce_process(void*userdata)
     while (true) {
         usleep(500000);
 
-        printf("transmitting packet\n");
+        printf("transmitting packet %u\n", pid);
 
         pthread_mutex_lock(&(p->tx_data_mutex));
 
         for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
         for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
-        p->tx_header[i] = pid;
+        p->tx_header[0] = pid;
         pid = (pid+1)%256;
 
-        pthread_mutex_unlock(&(p->tx_data_mutex));
         pthread_cond_signal(&(p->tx_data_ready));
+        pthread_mutex_unlock(&(p->tx_data_mutex));
     }
 
     pthread_exit(NULL);
