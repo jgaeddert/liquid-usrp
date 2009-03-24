@@ -97,7 +97,7 @@ int main (int argc, char **argv)
     int    mode = 0;
     int    noverruns = 0;
     bool   overrun;
-    int    total_reads = 10000;
+    int    total_reads = 1000;
     int    i;
     const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
@@ -142,7 +142,7 @@ int main (int argc, char **argv)
     urx->set_pga(0,gain);
  
     // Set FPGA Mux
-    urx->set_mux(0x32103210); // Board A only
+    //urx->set_mux(0x32103210); // Board A only
  
     // Set DDC decimation rate
     urx->set_decim_rate(decim);
@@ -156,7 +156,31 @@ int main (int argc, char **argv)
     } else {
         printf("use usrp db flex 400 rx MIMO B\n");
         return 0;
+    }
+
+    rx_db0_control->set_auto_tr(true);
+
+    //
+    // USRP TX
+    //
+    usrp_standard_tx *utx = usrp_standard_tx::make(0, 512);
+    if (utx == 0) {
+        fprintf (stderr, "Error: usrp_standard_tx::make\n");
+        exit (1);
+    }
+    utx->set_nchannels(1);
+    // daughterboard
+    int tx_db0 = utx->daughterboard_id(0);
+    db_base * tx_db0_control;   // from ossie
+    std::cout << "tx db slot 0 : " << usrp_dbid_to_string(tx_db0) << std::endl;
+    if (tx_db0 == USRP_DBID_FLEX_400_TX_MIMO_B) {
+        printf("usrp daughterboard: USRP_DBID_FLEX_400_TX_MIMO_B\n");
+        tx_db0_control = new db_flex400_tx_mimo_b(utx,0);
+    } else {
+        printf("use usrp db flex 400 tx MIMO B\n");
+        return 0;
     }   
+    tx_db0_control->set_auto_tr(true);
 
     // set the ddc frequency
     urx->set_rx_freq(USRP_CHANNEL, 0.0);
