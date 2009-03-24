@@ -140,6 +140,10 @@ int main (int argc, char **argv)
     usrp_set_tx_frequency(data.utx, data.txdb, data.fc);
     usrp_set_rx_frequency(data.urx, data.rxdb, data.fc);
 
+    // enable automatic transmit/receive
+    data.txdb->set_auto_tr(true);
+    data.rxdb->set_auto_tr(true);
+
     // initialize mutexes, etc.
     //pthread_mutex_init(&(data.rx_mutex),NULL);
     //pthread_mutex_init(&(data.internal_mutex),NULL);
