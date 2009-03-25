@@ -43,6 +43,7 @@ typedef struct crdata {
     //pthread_mutex_t control_mutex;
     //pthread_mutex_t internal_mutex;
     pthread_cond_t  tx_data_ready;
+    bool radio_active;
 
     // data buffers
     pthread_mutex_t tx_data_mutex;
@@ -152,6 +153,8 @@ int main (int argc, char **argv)
     pthread_mutex_init(&(data.tx_data_mutex),NULL);
     pthread_cond_init(&(data.tx_data_ready),NULL);
 
+    data.radio_active = true;
+
     // create thread objects
     void * status;
     pthread_t tx_thread;
@@ -239,7 +242,7 @@ void * tx_process(void*userdata)
     short I, Q;
     bool underrun;
     unsigned int num_underruns;
-    for (i=0; i<1000000; i++) {
+    while (p->radio_active) {
         // wait for signal condition
         //printf("tx: waiting for data\n");
         pthread_mutex_lock(&(p->tx_data_mutex));
@@ -332,7 +335,7 @@ void * rx_process(void*userdata)
     printf("usrp rx transfer started\n");
 
     int n;
-    while (true) {
+    while (p->radio_active) {
         // lock receiver mutex
         //pthread_mutex_lock(&(p->rx_mutex));
 
@@ -380,9 +383,9 @@ void * ce_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
 
-    unsigned int i, pid=0;
-    while (true) {
-        usleep(500000);
+    unsigned int i, n, pid=0;
+    for (n=0; n<100; n++) {
+        usleep(100000);
 
         printf("transmitting packet %u\n", pid);
 
@@ -393,9 +396,13 @@ void * ce_process(void*userdata)
         p->tx_header[0] = pid;
         pid = (pid+1)%256;
 
-        pthread_cond_signal(&(p->tx_data_ready));
         pthread_mutex_unlock(&(p->tx_data_mutex));
+        pthread_cond_signal(&(p->tx_data_ready));
     }
+
+    // lock mutex
+    p->radio_active = false;
+    // unlock mutex
 
     pthread_exit(NULL);
 }
