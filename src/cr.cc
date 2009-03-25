@@ -81,6 +81,7 @@ int main (int argc, char **argv)
     // create common data object
     crdata data;
     data.fc = 462e6;
+    data.tx_gain = 8000;
 
     data.urx =  usrp_standard_rx::make (0, 256);
     if (data.urx == 0) {
@@ -267,8 +268,8 @@ void * tx_process(void*userdata)
 
         // prepare data
         for (n=0; n<4096; n++) {
-            I = (short) (interp_buffer[n].real() * 1000);
-            Q = (short) (interp_buffer[n].imag() * 1000);
+            I = (short) (interp_buffer[n].real() * p->tx_gain);
+            Q = (short) (interp_buffer[n].imag() * p->tx_gain);
 
             tx_buf[2*n+0] = host_to_usrp_short(I);
             tx_buf[2*n+1] = host_to_usrp_short(Q);
