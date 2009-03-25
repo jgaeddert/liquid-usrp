@@ -69,7 +69,8 @@ Each buffer element, for example buffer[0] contains 4 bytes
 }
 
 static int callback(unsigned char * _header,  int _header_valid,
-                    unsigned char * _payload, int _payload_valid)
+                    unsigned char * _payload, int _payload_valid,
+                    void * _userdata)
 {
     std::cout << "********* callback invoked, ";// << std::endl;
     if ( !_header_valid ) {
@@ -197,7 +198,7 @@ int main (int argc, char **argv)
     // framing
     unsigned int m=3;
     float beta=0.7f;
-    framesync64 framesync = framesync64_create(m,beta,callback);
+    framesync64 framesync = framesync64_create(m,beta,callback,NULL);
 
     // create decimator
     resamp2_crcf decimator = resamp2_crcf_create(37);

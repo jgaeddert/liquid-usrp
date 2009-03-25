@@ -30,6 +30,9 @@ typedef struct crdata {
     unsigned int fd_rx;     // rx data rate (decim)
     unsigned short tx_gain; // from 0 to 20,000
 
+    unsigned int num_rx_packets;
+    unsigned int num_valid_rx_packets;
+
     // front end objects
     usrp_standard_tx * utx;
     int tx_db_id;
@@ -64,9 +67,19 @@ void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _freque
 void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
 
 static int callback(unsigned char * _header,  int _header_valid,
-                    unsigned char * _payload, int _payload_valid)
+                    unsigned char * _payload, int _payload_valid,
+                    void * _userdata)
 {
-    std::cout << "********* callback invoked, ";// << std::endl;
+    crdata * p = (crdata*) _userdata;
+
+    // lock internal mutex
+    p->num_rx_packets++;
+    if (_header_valid && _payload_valid)
+        p->num_valid_rx_packets++;
+    // unlock internal mutex
+
+    printf("********* callback invoked, %4u/%4u ",
+            p->num_valid_rx_packets, p->num_rx_packets);
     if ( !_header_valid ) {
         printf("HEADER CRC FAIL\n");
     } else if ( !_payload_valid ) {
@@ -83,6 +96,10 @@ int main (int argc, char **argv)
     crdata data;
     data.fc = 462e6;
     data.tx_gain = 8000;
+
+    //
+    data.num_rx_packets = 0;
+    data.num_valid_rx_packets = 0;
 
     data.urx =  usrp_standard_rx::make (0, 256);
     if (data.urx == 0) {
@@ -324,7 +341,7 @@ void * rx_process(void*userdata)
     // framing
     unsigned int m=3;
     float beta=0.7f;
-    framesync64 framesync = framesync64_create(m,beta,callback);
+    framesync64 framesync = framesync64_create(m,beta,callback,(void*)p);
 
     // create decimator
     resamp2_crcf decimator = resamp2_crcf_create(37);
@@ -385,7 +402,7 @@ void * ce_process(void*userdata)
 
     unsigned int i, n, pid=0;
     for (n=0; n<100; n++) {
-        usleep(100000);
+        usleep(200000);
 
         printf("transmitting packet %u\n", pid);
 
