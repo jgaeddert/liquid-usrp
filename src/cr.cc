@@ -6,6 +6,8 @@
 #include <iostream>
 #include <complex>
 #include <pthread.h>
+#include <time.h>
+#include <getopt.h>
 #include <liquid/liquid.h>
 
 #include "usrp_standard.h"
@@ -13,6 +15,15 @@
 #include "usrp_dbid.h"
 #include "usrp_bytesex.h"
 #include "flex.h"
+
+// Packet control structure (header)
+// IDX  DESCR
+// 0,1  src0
+// 2,3  src1
+// 4,5  dst0
+// 6,7  dst1
+// 8    packet type (e.g. control, data, ACK, etc.)
+//
  
 /*
  SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
@@ -23,12 +34,20 @@
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
  
+#define OPMODE_MASTER   0
+#define OPMODE_SLAVE    1
+
 typedef struct crdata {
+    // fixed
+    unsigned short node_id; // identifier for this node (randomly generated)
+    int mode;
+
     // cognitive radio parameters
     float fc;               // carrier frequency
     unsigned int fd_tx;     // tx data rate (interp)
     unsigned int fd_rx;     // rx data rate (decim)
     unsigned short tx_gain; // from 0 to 20,000
+    unsigned int ack_timeout;   // time to wait for acknowledgement
 
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
@@ -93,8 +112,27 @@ static int callback(unsigned char * _header,  int _header_valid,
 
 int main (int argc, char **argv)
 {
+    srand(time(NULL));
+
     // create common data object
     crdata data;
+    data.mode = OPMODE_SLAVE;
+
+    //
+    int d;
+    while ((d = getopt(argc,argv,"ms")) != EOF) {
+        switch (d) {
+            case 'm':
+                data.mode = OPMODE_MASTER;
+                break;
+            case 's':
+                data.mode = OPMODE_SLAVE;
+                break;
+            default:    /* print help() */  return 0;
+        }
+    }
+
+    data.node_id = rand() & 0xffff;
     data.fc = 462e6;
     data.tx_gain = 8000;
 
@@ -403,6 +441,9 @@ void * rx_process(void*userdata)
 void * pm_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
+
+    printf("pm_process started, mode : %s\n", p->mode == OPMODE_MASTER ?
+            "master" : "slave");
 
     unsigned int i, pid=0;
     while (p->radio_active) {
