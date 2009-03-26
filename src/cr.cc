@@ -143,10 +143,11 @@ int main (int argc, char **argv)
     // create common data object
     crdata data;
     data.mode = OPMODE_SLAVE;
+    data.node_id = rand() & 0xffff;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"ms")) != EOF) {
+    while ((d = getopt(argc,argv,"msi:")) != EOF) {
         switch (d) {
             case 'm':
                 data.mode = OPMODE_MASTER;
@@ -154,11 +155,14 @@ int main (int argc, char **argv)
             case 's':
                 data.mode = OPMODE_SLAVE;
                 break;
+            case 'i':
+                data.node_id = atoi(optarg) & 0xffff;
+                break;
             default:    /* print help() */  return 0;
         }
     }
+    printf("node id: %d\n", data.node_id);
 
-    data.node_id = rand() & 0xffff;
     data.fc = 462e6;
     data.tx_gain = 8000;
 
@@ -327,7 +331,7 @@ void * tx_process(void*userdata)
     p->utx->start();        // Start data transfer
     printf("usrp tx transfer started\n");
 
-    unsigned int i, n;
+    unsigned int n;
     short I, Q;
     bool underrun;
     unsigned int num_underruns;
@@ -405,7 +409,7 @@ void * rx_process(void*userdata)
     crdata * p = (crdata*) userdata;
 
     // create buffer
-    const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
+    const int    rx_buf_len = 512/2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
     bool overrun;
     int num_overruns=0;
@@ -475,13 +479,11 @@ void * pm_process(void*userdata)
     printf("pm_process started, mode : %s\n", p->mode == OPMODE_MASTER ?
             "master" : "slave");
 
-    unsigned int i, pid=0, tx_attempt;
+    unsigned int pid=0, tx_attempt;
     while (p->radio_active) {
 
         switch (p->mode) {
         case OPMODE_MASTER:
-            usleep(200000);
-
             pid = (pid+1)%256;
 
             p->ack = false;
@@ -572,8 +574,9 @@ void * ce_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
 
-    unsigned int i;
-    for (i=0; i<100; i++) {
+    //unsigned int i;
+    //for (i=0; i<100; i++) {
+    while (true) {
         usleep(200000);
     }
 
