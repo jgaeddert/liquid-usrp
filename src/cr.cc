@@ -7,6 +7,7 @@
 #include <complex>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h> // gettimeofday
 #include <getopt.h>
 #include <liquid/liquid.h>
 
@@ -73,6 +74,7 @@ typedef struct crdata {
     // data buffers
     unsigned char tx_header[24];
     unsigned char tx_payload[64];
+    bool ack;
 
     unsigned char rx_header[24];
     unsigned char rx_payload[64];
@@ -84,6 +86,10 @@ void * tx_process(void*);   // transmitter
 void * rx_process(void*);   // receiver
 void * pm_process(void*);   // packet manager
 void * ce_process(void*);   // cognitive engine
+
+void pm_send_data_packet(crdata * p, unsigned int pid);
+void pm_send_ack_packet(crdata * p, unsigned int pid);
+bool pm_wait_for_ack_packet(crdata * p, unsigned int pid);
  
 void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
 void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
@@ -469,34 +475,36 @@ void * pm_process(void*userdata)
     printf("pm_process started, mode : %s\n", p->mode == OPMODE_MASTER ?
             "master" : "slave");
 
-    unsigned int i, pid=0;
+    unsigned int i, pid=0, tx_attempt;
     while (p->radio_active) {
 
         switch (p->mode) {
         case OPMODE_MASTER:
             usleep(200000);
 
-            printf("transmitting packet %u\n", pid);
-
-            pthread_mutex_lock(&(p->tx_data_mutex));
-
-            for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
-            for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
-            p->tx_header[0] = pid;
             pid = (pid+1)%256;
 
-            pthread_mutex_unlock(&(p->tx_data_mutex));
-            pthread_cond_signal(&(p->tx_data_ready));
+            p->ack = false;
+            tx_attempt = 0;
+            // continue transmitting until packet is received
+            do {
+                printf("transmitting packet %u (attempt %u)\n", pid, tx_attempt);
+                pm_send_data_packet(p,pid);
+
+                p->ack = pm_wait_for_ack_packet(p,pid);
+                tx_attempt++;
+            } while (!p->ack && p->radio_active);
 
             break;
         case OPMODE_SLAVE:
             // wait until packet is received
-
             pthread_mutex_lock(&(p->rx_data_mutex));
             pthread_cond_wait(&(p->rx_data_ready),&(p->rx_data_mutex));
             printf("pm: received rx_data_ready signal\n");
-
             pthread_mutex_unlock(&(p->rx_data_mutex));
+
+            // send ACK
+            pm_send_ack_packet(p,pid);
 
             break;
         default:
@@ -508,6 +516,57 @@ void * pm_process(void*userdata)
     pthread_exit(NULL);
 }
 
+void pm_send_data_packet(crdata * p, unsigned int pid)
+{
+
+    pthread_mutex_lock(&(p->tx_data_mutex));
+
+    unsigned int i;
+    for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
+    for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
+    p->tx_header[0] = pid;
+
+    pthread_mutex_unlock(&(p->tx_data_mutex));
+    pthread_cond_signal(&(p->tx_data_ready));
+}
+
+void pm_send_ack_packet(crdata * p, unsigned int pid)
+{
+    printf("pm: transmitting ack on packet %u\n", pid);
+
+    pthread_mutex_lock(&(p->tx_data_mutex));
+
+    p->tx_header[0] = pid;
+
+    pthread_mutex_unlock(&(p->tx_data_mutex));
+    pthread_cond_signal(&(p->tx_data_ready));
+
+}
+
+bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
+{
+    // wait until packet is received
+
+    // set timeout variables
+    int rc;
+    struct timespec ts;
+    struct timeval  tp;
+    rc = gettimeofday(&tp,NULL);
+    ts.tv_sec  = tp.tv_sec;
+    ts.tv_nsec = tp.tv_usec * 1000;
+    ts.tv_sec += 1;//WAIT_TIME_SECONDS;
+
+    pthread_mutex_lock(&(p->rx_data_mutex));
+    rc = pthread_cond_timedwait(&(p->rx_data_ready),&(p->rx_data_mutex),&ts);
+    printf("pm: received rx_data_ready signal, rc = %d\n", rc);
+    pthread_mutex_unlock(&(p->rx_data_mutex));
+
+    if (rc == 0)
+        return true;
+
+    return false;
+}
+ 
 
 void * ce_process(void*userdata)
 {
