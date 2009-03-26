@@ -447,19 +447,33 @@ void * pm_process(void*userdata)
 
     unsigned int i, pid=0;
     while (p->radio_active) {
-        usleep(200000);
 
-        printf("transmitting packet %u\n", pid);
+        switch (p->mode) {
+        case OPMODE_MASTER:
+            usleep(200000);
 
-        pthread_mutex_lock(&(p->tx_data_mutex));
+            printf("transmitting packet %u\n", pid);
 
-        for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
-        for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
-        p->tx_header[0] = pid;
-        pid = (pid+1)%256;
+            pthread_mutex_lock(&(p->tx_data_mutex));
 
-        pthread_mutex_unlock(&(p->tx_data_mutex));
-        pthread_cond_signal(&(p->tx_data_ready));
+            for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
+            for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
+            p->tx_header[0] = pid;
+            pid = (pid+1)%256;
+
+            pthread_mutex_unlock(&(p->tx_data_mutex));
+            pthread_cond_signal(&(p->tx_data_ready));
+
+            break;
+        case OPMODE_SLAVE:
+            // TODO: wait until packet is received
+            usleep(200000);
+
+            break;
+        default:
+            printf("error: pm_process(), unknown operating mode: %u\n", p->mode);
+            exit(1);
+        }
     }
 
     pthread_exit(NULL);
