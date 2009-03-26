@@ -61,6 +61,7 @@ typedef struct crdata {
 
 void * tx_process(void*);   // transmitter
 void * rx_process(void*);   // receiver
+void * pm_process(void*);   // packet manager
 void * ce_process(void*);   // cognitive engine
  
 void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
@@ -176,6 +177,7 @@ int main (int argc, char **argv)
     void * status;
     pthread_t tx_thread;
     pthread_t rx_thread;
+    pthread_t pm_thread;
     pthread_t ce_thread;
 
     // set thread attributes
@@ -186,11 +188,13 @@ int main (int argc, char **argv)
     // create threads
     pthread_create(&tx_thread, &attr, tx_process, (void*)&data);
     pthread_create(&rx_thread, &attr, rx_process, (void*)&data);
+    pthread_create(&pm_thread, &attr, pm_process, (void*)&data);
     pthread_create(&ce_thread, &attr, ce_process, (void*)&data);
 
     // join threads
     pthread_join(tx_thread, &status);
     pthread_join(rx_thread, &status);
+    pthread_join(pm_thread, &status);
     pthread_join(ce_thread, &status);
 
     //
@@ -396,12 +400,12 @@ void * rx_process(void*userdata)
     pthread_exit(NULL);
 }
 
-void * ce_process(void*userdata)
+void * pm_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
 
-    unsigned int i, n, pid=0;
-    for (n=0; n<100; n++) {
+    unsigned int i, pid=0;
+    while (p->radio_active) {
         usleep(200000);
 
         printf("transmitting packet %u\n", pid);
@@ -415,6 +419,19 @@ void * ce_process(void*userdata)
 
         pthread_mutex_unlock(&(p->tx_data_mutex));
         pthread_cond_signal(&(p->tx_data_ready));
+    }
+
+    pthread_exit(NULL);
+}
+
+
+void * ce_process(void*userdata)
+{
+    crdata * p = (crdata*) userdata;
+
+    unsigned int i;
+    for (i=0; i<100; i++) {
+        usleep(200000);
     }
 
     // lock mutex
