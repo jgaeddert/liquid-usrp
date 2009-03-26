@@ -65,10 +65,12 @@ typedef struct crdata {
     //pthread_mutex_t control_mutex;
     //pthread_mutex_t internal_mutex;
     pthread_cond_t  tx_data_ready;
+    pthread_cond_t  rx_data_ready;
+    pthread_mutex_t tx_data_mutex;
+    pthread_mutex_t rx_data_mutex;
     bool radio_active;
 
     // data buffers
-    pthread_mutex_t tx_data_mutex;
     unsigned char tx_header[24];
     unsigned char tx_payload[64];
 
@@ -102,11 +104,29 @@ static int callback(unsigned char * _header,  int _header_valid,
             p->num_valid_rx_packets, p->num_rx_packets);
     if ( !_header_valid ) {
         printf("HEADER CRC FAIL\n");
+        return 0;
     } else if ( !_payload_valid ) {
         printf("PAYLOAD CRC FAIL\n");
+        return 0;
     } else {
         printf("packet id: %u\n", (unsigned int ) _header[0]);
     }
+
+    // lock mutex
+    pthread_mutex_lock(&(p->rx_data_mutex));
+
+    // copy data
+    memmove(p->rx_header,  _header , 24);
+    memmove(p->rx_payload, _payload, 64);
+    p->rx_header_valid  = _header_valid;
+    p->rx_payload_valid = _payload_valid;
+
+    // unlock mutex
+    pthread_mutex_unlock(&(p->rx_data_mutex));
+
+    // signal condition (received packet)
+    pthread_cond_signal(&(p->rx_data_ready));
+
     return 0;
 }
 
@@ -207,7 +227,9 @@ int main (int argc, char **argv)
     //pthread_mutex_init(&(data.internal_mutex),NULL);
     //pthread_mutex_init(&(data.control_mutex),NULL);
     pthread_mutex_init(&(data.tx_data_mutex),NULL);
+    pthread_mutex_init(&(data.rx_data_mutex),NULL);
     pthread_cond_init(&(data.tx_data_ready),NULL);
+    pthread_cond_init(&(data.rx_data_ready),NULL);
 
     data.radio_active = true;
 
@@ -243,7 +265,9 @@ int main (int argc, char **argv)
     //pthread_mutex_destroy(&(data.internal_mutex));
     //pthread_mutex_destroy(&(data.control_mutex));
     pthread_mutex_destroy(&(data.tx_data_mutex));
+    pthread_mutex_destroy(&(data.rx_data_mutex));
     pthread_cond_destroy(&(data.tx_data_ready));
+    pthread_cond_destroy(&(data.rx_data_ready));
     return 0;
 }
 
@@ -466,8 +490,13 @@ void * pm_process(void*userdata)
 
             break;
         case OPMODE_SLAVE:
-            // TODO: wait until packet is received
-            usleep(200000);
+            // wait until packet is received
+
+            pthread_mutex_lock(&(p->rx_data_mutex));
+            pthread_cond_wait(&(p->rx_data_ready),&(p->rx_data_mutex));
+            printf("pm: received rx_data_ready signal\n");
+
+            pthread_mutex_unlock(&(p->rx_data_mutex));
 
             break;
         default:
