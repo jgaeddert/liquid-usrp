@@ -62,9 +62,6 @@ typedef struct crdata {
     db_base * rxdb;
 
     // threading
-    //pthread_mutex_t rx_mutex;
-    //pthread_mutex_t control_mutex;
-    //pthread_mutex_t internal_mutex;
     pthread_cond_t  tx_data_ready;
     pthread_cond_t  rx_data_ready;
     pthread_mutex_t tx_data_mutex;
@@ -233,9 +230,6 @@ int main (int argc, char **argv)
     data.rxdb->set_auto_tr(true);
 
     // initialize mutexes, etc.
-    //pthread_mutex_init(&(data.rx_mutex),NULL);
-    //pthread_mutex_init(&(data.internal_mutex),NULL);
-    //pthread_mutex_init(&(data.control_mutex),NULL);
     pthread_mutex_init(&(data.tx_data_mutex),NULL);
     pthread_mutex_init(&(data.rx_data_mutex),NULL);
     pthread_cond_init(&(data.tx_data_ready),NULL);
@@ -271,9 +265,6 @@ int main (int argc, char **argv)
     printf("finished\n");
 
     // clean up objects
-    //pthread_mutex_destroy(&(data.rx_mutex));
-    //pthread_mutex_destroy(&(data.internal_mutex));
-    //pthread_mutex_destroy(&(data.control_mutex));
     pthread_mutex_destroy(&(data.tx_data_mutex));
     pthread_mutex_destroy(&(data.rx_data_mutex));
     pthread_cond_destroy(&(data.tx_data_ready));
@@ -344,16 +335,11 @@ void * tx_process(void*userdata)
 
         pthread_mutex_unlock(&(p->tx_data_mutex));
 
-        // lock receiver mutex
-        //pthread_mutex_lock(&(p->rx_mutex));
-
         // generate the frame
-        //pthread_mutex_lock(&(p->tx_data_mutex));
+        pthread_mutex_lock(&(p->tx_data_mutex));
         framegen64_execute(framegen, p->tx_header, p->tx_payload, frame);
-        //pthread_mutex_unlock(&(p->tx_data_mutex));
+        pthread_mutex_unlock(&(p->tx_data_mutex));
         
-        //pthread_mutex_unlock(&(p->internal_mutex));
-
         // TODO: flush the frame
 
         // run interpolator
@@ -388,8 +374,6 @@ void * tx_process(void*userdata)
             exit(0);
         }
 
-        // unlock receiver mutex
-        //pthread_mutex_unlock(&(p->rx_mutex));
     }
  
     // stop data transfer
@@ -429,9 +413,6 @@ void * rx_process(void*userdata)
 
     int n;
     while (p->radio_active) {
-        // lock receiver mutex
-        //pthread_mutex_lock(&(p->rx_mutex));
-
         // read data
         p->urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
             
@@ -456,9 +437,6 @@ void * rx_process(void*userdata)
 
         // run through frame synchronizer
         framesync64_execute(framesync, decim_out, rx_buf_len/4);
-
-        // unlock receiver mutex
-        //pthread_mutex_unlock(&(p->rx_mutex));
     }
 
     p->urx->stop();  // Stop data transfer
