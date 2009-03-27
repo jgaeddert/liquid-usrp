@@ -17,17 +17,10 @@
 #include "usrp_bytesex.h"
 #include "flex.h"
 
-/*
- SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
- 2 bytes for Q. Since the reading length from USRP should be multiple of 512 
- bytes see "usrp_basic.h", then we have to read multiple of 128 samples each 
- time (4 bytes * 128 sample = 512 bytes)  
- */
-#define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
-#define USRP_CHANNEL        (0)
+#define USRP_CHANNEL        0
  
-#define OPMODE_MASTER   0
-#define OPMODE_SLAVE    1
+#define OPMODE_MASTER       0
+#define OPMODE_SLAVE        1
 
 #define PACKET_TYPE_DATA    0
 #define PACKET_TYPE_ACK     1
