@@ -557,6 +557,7 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
     pthread_mutex_lock(&(p->rx_data_mutex));
     rc = pthread_cond_timedwait(&(p->rx_data_ready),&(p->rx_data_mutex),&ts);
     printf("pm: received rx_data_ready signal, rc = %d\n", rc);
+    pthread_mutex_unlock(&(p->rx_data_mutex));
 
     if (rc != 0) {
         printf("  ==> timeout\n");
@@ -571,8 +572,8 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
         printf("  ==> wrong packet id (received %u, expected %u)\n",  p->rx_pm_header.pid, pid);
         return false;
     }
-    pthread_mutex_unlock(&(p->rx_data_mutex));
 
+    printf("pm: received ack on packet %u\n", pid);
     return true;
 }
  
