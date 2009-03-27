@@ -51,6 +51,7 @@ typedef struct crdata {
 
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
+    unsigned int num_ce_rx_packets;
 
     // front end objects
     usrp_standard_tx * utx;
@@ -152,16 +153,16 @@ int main (int argc, char **argv)
     int d;
     while ((d = getopt(argc,argv,"msi:")) != EOF) {
         switch (d) {
-            case 'm':
-                data.mode = OPMODE_MASTER;
-                break;
-            case 's':
-                data.mode = OPMODE_SLAVE;
-                break;
-            case 'i':
-                data.node_id = atoi(optarg) & 0xffff;
-                break;
-            default:    /* print help() */  return 0;
+        case 'm':
+            data.mode = OPMODE_MASTER;
+            break;
+        case 's':
+            data.mode = OPMODE_SLAVE;
+            break;
+        case 'i':
+            data.node_id = atoi(optarg) & 0xffff;
+            break;
+        default:    /* print help() */  return 0;
         }
     }
     printf("node id: %d\n", data.node_id);
@@ -465,7 +466,7 @@ void * pm_process(void*userdata)
 
         switch (p->mode) {
         case OPMODE_MASTER:
-            pid = (pid+1)%256;
+            pid = (pid+1) & 0xffff;
 
             p->ack = false;
             tx_attempt = 0;
@@ -606,10 +607,21 @@ void * ce_process(void*userdata)
 {
     crdata * p = (crdata*) userdata;
 
+    float throughput;
+    p->num_ce_rx_packets = 0;
     //unsigned int i;
     //for (i=0; i<100; i++) {
     while (true) {
-        usleep(200000);
+        // sleep for 5 seconds
+        usleep(5000000);
+
+        // measure throughput
+        throughput = 64*8*(p->num_valid_rx_packets - p->num_ce_rx_packets)/5.0f;
+        printf("*****************************\n");
+        printf("  throughput: %8.3f kb/s\n", throughput*1e-3);
+        printf("*****************************\n");
+
+        p->num_ce_rx_packets = p->num_valid_rx_packets;
     }
 
     // lock mutex
