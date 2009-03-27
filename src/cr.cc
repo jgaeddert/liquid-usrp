@@ -90,7 +90,7 @@ void pm_send_ack_packet(crdata * p, unsigned int pid);
 bool pm_wait_for_ack_packet(crdata * p, unsigned int pid);
 
 void pm_assemble_header(pm_header _h, unsigned char * _header);
-void pm_dissemble_header(unsigned char * _header, pm_header * _h);
+void pm_disassemble_header(unsigned char * _header, pm_header * _h);
 
 void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
 void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
@@ -127,7 +127,7 @@ static int callback(unsigned char * _header,  int _header_valid,
     p->rx_payload_valid = _payload_valid;
 
     // decode packet header
-    pm_dissemble_header(p->rx_header, &(p->rx_pm_header));
+    pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
     printf("packet id: %u\n", p->rx_pm_header.pid);
 
     // unlock mutex
@@ -485,7 +485,7 @@ void * pm_process(void*userdata)
             pthread_cond_wait(&(p->rx_data_ready),&(p->rx_data_mutex));
             printf("pm: received packet\n");
 
-            pm_dissemble_header(p->rx_header, &(p->rx_pm_header));
+            pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
             printf("pm: packet id: %u\n", p->rx_pm_header.pid);
 
             pthread_mutex_unlock(&(p->rx_data_mutex));
@@ -590,7 +590,7 @@ void pm_assemble_header(pm_header _h, unsigned char * _header)
     _header[10] = _h.type & 0x00ff;
 }
 
-void pm_dissemble_header(unsigned char * _header, pm_header * _h)
+void pm_disassemble_header(unsigned char * _header, pm_header * _h)
 {
     _h->src0 = (_header[0] << 8) | (_header[1]);
     _h->src1 = (_header[2] << 8) | (_header[3]);
