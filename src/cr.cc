@@ -578,12 +578,12 @@ void pm_assemble_header(pm_header _h, unsigned char * _header)
 
 void pm_dissemble_header(unsigned char * _header, pm_header * _h)
 {
-    _h->src0 = (_header[0] << 8) & (_header[1]);
-    _h->src1 = (_header[2] << 8) & (_header[3]);
-    _h->dst0 = (_header[4] << 8) & (_header[5]);
-    _h->dst1 = (_header[6] << 8) & (_header[7]);
+    _h->src0 = (_header[0] << 8) | (_header[1]);
+    _h->src1 = (_header[2] << 8) | (_header[3]);
+    _h->dst0 = (_header[4] << 8) | (_header[5]);
+    _h->dst1 = (_header[6] << 8) | (_header[7]);
 
-    _h->pid  = (_header[8] << 8) & (_header[9]);
+    _h->pid  = (_header[8] << 8) | (_header[9]);
 
     _h->type = _header[10];
 }
