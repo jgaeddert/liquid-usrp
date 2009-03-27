@@ -50,6 +50,7 @@ typedef struct crdata {
     unsigned int fd_rx;     // rx data rate (decim)
     unsigned short tx_gain; // from 0 to 20,000
     unsigned int ack_timeout;   // time to wait for acknowledgement
+    unsigned int ce_sleep;      // time for ce to sleep
 
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
@@ -175,7 +176,8 @@ int main (int argc, char **argv)
 
     data.fc = 462e6;
     data.tx_gain = 8000;
-    data.ack_timeout = 200; // (ms)
+    data.ack_timeout = 100; // (ms)
+    data.ce_sleep = 2000;   // (ms)
 
     //
     data.num_rx_packets = 0;
@@ -631,11 +633,13 @@ void * ce_process(void*userdata)
     //unsigned int i;
     //for (i=0; i<100; i++) {
     while (true) {
-        // sleep for 5 seconds
-        usleep(5000000);
+        // sleep for several seconds
+        usleep((p->ce_sleep)*1000);
+
+        // TODO: lock internal mutex
 
         // measure throughput
-        throughput = 64*8*(p->num_valid_rx_packets)/5.0f;
+        throughput = 64*8*(p->num_valid_rx_packets)/((p->ce_sleep)/1000.0f);
         printf("ce: throughput: %8.3f kb/s, [%4u / %4u]\n",
                 throughput*1e-3,
                 p->num_valid_rx_packets,
@@ -643,6 +647,8 @@ void * ce_process(void*userdata)
 
         p->num_rx_packets = 0;
         p->num_valid_rx_packets = 0;
+
+        // TODO: unlock internal mutex
     }
 
     // lock mutex
