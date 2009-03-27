@@ -17,15 +17,6 @@
 #include "usrp_bytesex.h"
 #include "flex.h"
 
-// Packet control structure (header)
-// IDX  DESCR
-// 0,1  src0
-// 2,3  src1
-// 4,5  dst0
-// 6,7  dst1
-// 8    packet type (e.g. control, data, ACK, etc.)
-//
- 
 /*
  SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
  2 bytes for Q. Since the reading length from USRP should be multiple of 512 
@@ -37,6 +28,17 @@
  
 #define OPMODE_MASTER   0
 #define OPMODE_SLAVE    1
+
+typedef struct pm_header {
+    unsigned int src0;  // 0,1
+    unsigned int src1;  // 2,3
+    unsigned int dst0;  // 4,5
+    unsigned int dst1;  // 6,7
+
+    unsigned int pid;   // 8,9
+    unsigned int type;  // 10
+
+};
 
 typedef struct crdata {
     // fixed
@@ -72,11 +74,13 @@ typedef struct crdata {
     unsigned char tx_header[24];
     unsigned char tx_payload[64];
     bool ack;
+    pm_header tx_pm_header;
 
     unsigned char rx_header[24];
     unsigned char rx_payload[64];
     bool rx_header_valid;
     bool rx_payload_valid;
+    pm_header rx_pm_header;
 };
 
 void * tx_process(void*);   // transmitter
@@ -87,7 +91,10 @@ void * ce_process(void*);   // cognitive engine
 void pm_send_data_packet(crdata * p, unsigned int pid);
 void pm_send_ack_packet(crdata * p, unsigned int pid);
 bool pm_wait_for_ack_packet(crdata * p, unsigned int pid);
- 
+
+void pm_assemble_header(pm_header _h, unsigned char * _header);
+void pm_dissemble_header(unsigned char * _header, pm_header * _h);
+
 void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
 void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
 
@@ -477,7 +484,11 @@ void * pm_process(void*userdata)
             // wait until packet is received
             pthread_mutex_lock(&(p->rx_data_mutex));
             pthread_cond_wait(&(p->rx_data_ready),&(p->rx_data_mutex));
-            printf("pm: received rx_data_ready signal\n");
+            printf("pm: received packet\n");
+
+            pm_dissemble_header(p->rx_header, &(p->rx_pm_header));
+            printf("pm: packet id: %u\n", p->rx_pm_header.pid);
+
             pthread_mutex_unlock(&(p->rx_data_mutex));
 
             // send ACK
@@ -499,9 +510,10 @@ void pm_send_data_packet(crdata * p, unsigned int pid)
     pthread_mutex_lock(&(p->tx_data_mutex));
 
     unsigned int i;
-    for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
+    //for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
+    p->tx_pm_header.pid = pid;
+    pm_assemble_header(p->tx_pm_header, p->tx_header);
     for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
-    p->tx_header[0] = pid;
 
     pthread_mutex_unlock(&(p->tx_data_mutex));
     pthread_cond_signal(&(p->tx_data_ready));
@@ -544,6 +556,37 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
     return false;
 }
  
+void pm_assemble_header(pm_header _h, unsigned char * _header)
+{
+    _header[0] = (_h.src0 >> 8) & 0x00ff;
+    _header[1] = (_h.src0     ) & 0x00ff;
+
+    _header[2] = (_h.src1 >> 8) & 0x00ff;
+    _header[3] = (_h.src1     ) & 0x00ff;
+
+    _header[4] = (_h.dst0 >> 8) & 0x00ff;
+    _header[5] = (_h.dst0     ) & 0x00ff;
+
+    _header[6] = (_h.dst1 >> 8) & 0x00ff;
+    _header[7] = (_h.dst1     ) & 0x00ff;
+
+    _header[8] = (_h.pid >> 8)  & 0x00ff;
+    _header[9] = (_h.pid     )  & 0x00ff;
+
+    _header[10] = _h.type & 0x00ff;
+}
+
+void pm_dissemble_header(unsigned char * _header, pm_header * _h)
+{
+    _h->src0 = (_header[0] << 8) & (_header[1]);
+    _h->src1 = (_header[2] << 8) & (_header[3]);
+    _h->dst0 = (_header[4] << 8) & (_header[5]);
+    _h->dst1 = (_header[6] << 8) & (_header[7]);
+
+    _h->pid  = (_header[8] << 8) & (_header[9]);
+
+    _h->type = _header[10];
+}
 
 void * ce_process(void*userdata)
 {
