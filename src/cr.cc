@@ -175,6 +175,7 @@ int main (int argc, char **argv)
 
     data.fc = 462e6;
     data.tx_gain = 8000;
+    data.ack_timeout = 200; // (ms)
 
     //
     data.num_rx_packets = 0;
@@ -556,8 +557,12 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
     struct timeval  tp;
     rc = gettimeofday(&tp,NULL);
     ts.tv_sec  = tp.tv_sec;
-    ts.tv_nsec = tp.tv_usec * 1000;
-    ts.tv_sec += 1;//WAIT_TIME_SECONDS;
+    ts.tv_nsec = (tp.tv_usec + 1000*(p->ack_timeout)) * 1000;
+
+    while (ts.tv_nsec > 1000000000) {
+        ts.tv_nsec -= 1000000000;
+        ts.tv_sec += 1;
+    }
 
     pthread_mutex_lock(&(p->rx_data_mutex));
     rc = pthread_cond_timedwait(&(p->rx_data_ready),&(p->rx_data_mutex),&ts);
