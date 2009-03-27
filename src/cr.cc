@@ -104,6 +104,24 @@ static int callback(unsigned char * _header,  int _header_valid,
 {
     crdata * p = (crdata*) _userdata;
 
+    // lock internal mutex
+    p->num_rx_packets++;
+    if (_header_valid && _payload_valid)
+        p->num_valid_rx_packets++;
+    // unlock internal mutex
+
+    printf("********* callback invoked, %4u/%4u ",
+            p->num_valid_rx_packets, p->num_rx_packets);
+    if ( !_header_valid ) {
+        printf("HEADER CRC FAIL\n");
+        return 0;
+    } else if ( !_payload_valid ) {
+        printf("PAYLOAD CRC FAIL\n");
+        return 0;
+    } else {
+        printf("packet id: %u\n", (unsigned int ) _header[0]);
+    }
+
     // lock mutex
     pthread_mutex_lock(&(p->rx_data_mutex));
 
