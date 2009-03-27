@@ -54,6 +54,7 @@ typedef struct crdata {
 
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
+    unsigned int num_ack_timeouts;
 
     // front end objects
     usrp_standard_tx * utx;
@@ -182,6 +183,7 @@ int main (int argc, char **argv)
     //
     data.num_rx_packets = 0;
     data.num_valid_rx_packets = 0;
+    data.num_ack_timeouts = 0;
 
     data.urx =  usrp_standard_rx::make (0, 256);
     if (data.urx == 0) {
@@ -488,6 +490,8 @@ void * pm_process(void*userdata)
                 pm_send_data_packet(p,pid);
 
                 p->ack = pm_wait_for_ack_packet(p,pid);
+                if (!p->ack)
+                    p->num_ack_timeouts++;
                 tx_attempt++;
 
                 //if ((tx_attempt%10)==0) {
@@ -652,13 +656,15 @@ void * ce_process(void*userdata)
 
         // measure throughput
         throughput = 64*8*(p->num_valid_rx_packets)/((p->ce_sleep)/1000.0f);
-        printf("ce: throughput: %8.3f kb/s, [%4u / %4u]\n",
+        printf("ce: throughput: %8.3f kb/s, [%4u / %4u] %4u timeout(s)\n",
                 throughput*1e-3,
                 p->num_valid_rx_packets,
-                p->num_rx_packets);
+                p->num_rx_packets,
+                p->num_ack_timeouts);
 
         p->num_rx_packets = 0;
         p->num_valid_rx_packets = 0;
+        p->num_ack_timeouts = 0;
 
         // TODO: unlock internal mutex
     }
