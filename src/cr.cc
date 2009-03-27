@@ -333,10 +333,7 @@ void * tx_process(void*userdata)
         pthread_cond_wait(&(p->tx_data_ready),&(p->tx_data_mutex));
         //printf("tx: received tx_data_ready signal\n");
 
-        pthread_mutex_unlock(&(p->tx_data_mutex));
-
         // generate the frame
-        pthread_mutex_lock(&(p->tx_data_mutex));
         framegen64_execute(framegen, p->tx_header, p->tx_payload, frame);
         pthread_mutex_unlock(&(p->tx_data_mutex));
         
