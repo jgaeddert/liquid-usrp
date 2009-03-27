@@ -470,7 +470,8 @@ void * pm_process(void*userdata)
     printf("pm_process started, mode : %s\n", p->mode == OPMODE_MASTER ?
             "master" : "slave");
 
-    unsigned int pid=0, tx_attempt;
+    unsigned int pid=0, tx_attempt, channel=0;
+    float channel_frequency;
     while (p->radio_active) {
 
         switch (p->mode) {
@@ -488,6 +489,16 @@ void * pm_process(void*userdata)
 
                 p->ack = pm_wait_for_ack_packet(p,pid);
                 tx_attempt++;
+
+                if ((tx_attempt%10)==0) {
+                    // change frequency
+                    channel = rand() % 8;
+                    channel_frequency = (460.0f + 0.5f * channel)*1e6;
+                    printf("node switching to channel %u (%5.1f MHz)\n", channel, channel_frequency*1e-6);
+                    usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
+                    usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+
+                };
             } while (!p->ack && p->radio_active);
 
             break;
