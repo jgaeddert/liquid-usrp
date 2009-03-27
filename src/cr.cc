@@ -490,7 +490,8 @@ void * pm_process(void*userdata)
                 p->ack = pm_wait_for_ack_packet(p,pid);
                 tx_attempt++;
 
-                if ((tx_attempt%10)==0) {
+                //if ((tx_attempt%10)==0) {
+                if (0) {
                     // change frequency
                     channel = rand() % 8;
                     channel_frequency = (460.0f + 0.5f * channel)*1e6;
