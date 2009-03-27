@@ -17,6 +17,8 @@
 #include "usrp_bytesex.h"
 #include "flex.h"
 
+#define VERBOSE             0
+
 #define USRP_CHANNEL        0
  
 #define OPMODE_MASTER       0
@@ -51,7 +53,6 @@ typedef struct crdata {
 
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
-    unsigned int num_ce_rx_packets;
 
     // front end objects
     usrp_standard_tx * utx;
@@ -108,15 +109,18 @@ static int callback(unsigned char * _header,  int _header_valid,
         p->num_valid_rx_packets++;
     // unlock internal mutex
 
+#if VERBOSE
     printf("********* callback invoked, %4u/%4u ",
             p->num_valid_rx_packets, p->num_rx_packets);
     if ( !_header_valid ) {
         printf("HEADER CRC FAIL\n");
-        return 0;
     } else if ( !_payload_valid ) {
         printf("PAYLOAD CRC FAIL\n");
-        return 0;
     }
+#endif
+
+    if ( !_header_valid || !_payload_valid )
+        return 0;
 
     // lock mutex
     pthread_mutex_lock(&(p->rx_data_mutex));
@@ -129,7 +133,9 @@ static int callback(unsigned char * _header,  int _header_valid,
 
     // decode packet header
     pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
+#if VERBOSE
     printf("packet id: %u\n", p->rx_pm_header.pid);
+#endif
 
     // unlock mutex
     pthread_mutex_unlock(&(p->rx_data_mutex));
@@ -472,7 +478,9 @@ void * pm_process(void*userdata)
             tx_attempt = 0;
             // continue transmitting until packet is received
             do {
+#if VERBOSE
                 printf("transmitting packet %u (attempt %u)\n", pid, tx_attempt);
+#endif
                 pm_send_data_packet(p,pid);
 
                 p->ack = pm_wait_for_ack_packet(p,pid);
@@ -484,10 +492,11 @@ void * pm_process(void*userdata)
             // wait until packet is received
             pthread_mutex_lock(&(p->rx_data_mutex));
             pthread_cond_wait(&(p->rx_data_ready),&(p->rx_data_mutex));
-            printf("pm: received packet\n");
 
             pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
+#if VERBOSE
             printf("pm: packet id: %u\n", p->rx_pm_header.pid);
+#endif
 
             pthread_mutex_unlock(&(p->rx_data_mutex));
 
@@ -522,7 +531,9 @@ void pm_send_data_packet(crdata * p, unsigned int pid)
 
 void pm_send_ack_packet(crdata * p, unsigned int pid)
 {
+#if VERBOSE
     printf("pm: transmitting ack on packet %u\n", pid);
+#endif
 
     pthread_mutex_lock(&(p->tx_data_mutex));
 
@@ -550,7 +561,9 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
 
     pthread_mutex_lock(&(p->rx_data_mutex));
     rc = pthread_cond_timedwait(&(p->rx_data_ready),&(p->rx_data_mutex),&ts);
+#if VERBOSE
     printf("pm: received rx_data_ready signal, rc = %d\n", rc);
+#endif
     pthread_mutex_unlock(&(p->rx_data_mutex));
 
     if (rc != 0) {
@@ -567,7 +580,9 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
         return false;
     }
 
+#if VERBOSE
     printf("pm: received ack on packet %u\n", pid);
+#endif
     return true;
 }
  
@@ -608,7 +623,6 @@ void * ce_process(void*userdata)
     crdata * p = (crdata*) userdata;
 
     float throughput;
-    p->num_ce_rx_packets = 0;
     //unsigned int i;
     //for (i=0; i<100; i++) {
     while (true) {
@@ -616,12 +630,14 @@ void * ce_process(void*userdata)
         usleep(5000000);
 
         // measure throughput
-        throughput = 64*8*(p->num_valid_rx_packets - p->num_ce_rx_packets)/5.0f;
-        printf("*****************************\n");
-        printf("  throughput: %8.3f kb/s\n", throughput*1e-3);
-        printf("*****************************\n");
+        throughput = 64*8*(p->num_valid_rx_packets)/5.0f;
+        printf("ce: throughput: %8.3f kb/s, [%4u / %4u]\n",
+                throughput*1e-3,
+                p->num_valid_rx_packets,
+                p->num_rx_packets);
 
-        p->num_ce_rx_packets = p->num_valid_rx_packets;
+        p->num_rx_packets = 0;
+        p->num_valid_rx_packets = 0;
     }
 
     // lock mutex
