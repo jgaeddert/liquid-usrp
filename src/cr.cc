@@ -29,6 +29,10 @@
 #define OPMODE_MASTER   0
 #define OPMODE_SLAVE    1
 
+#define PACKET_TYPE_DATA    0
+#define PACKET_TYPE_ACK     1
+#define PACKET_TYPE_CONTROL 2
+
 typedef struct pm_header {
     unsigned int src0;  // 0,1
     unsigned int src1;  // 2,3
@@ -118,8 +122,6 @@ static int callback(unsigned char * _header,  int _header_valid,
     } else if ( !_payload_valid ) {
         printf("PAYLOAD CRC FAIL\n");
         return 0;
-    } else {
-        printf("packet id: %u\n", (unsigned int ) _header[0]);
     }
 
     // lock mutex
@@ -130,6 +132,10 @@ static int callback(unsigned char * _header,  int _header_valid,
     memmove(p->rx_payload, _payload, 64);
     p->rx_header_valid  = _header_valid;
     p->rx_payload_valid = _payload_valid;
+
+    // decode packet header
+    pm_dissemble_header(p->rx_header, &(p->rx_pm_header));
+    printf("packet id: %u\n", p->rx_pm_header.pid);
 
     // unlock mutex
     pthread_mutex_unlock(&(p->rx_data_mutex));
@@ -492,7 +498,7 @@ void * pm_process(void*userdata)
             pthread_mutex_unlock(&(p->rx_data_mutex));
 
             // send ACK
-            pm_send_ack_packet(p,pid);
+            pm_send_ack_packet(p,p->rx_pm_header.pid);
 
             break;
         default:
@@ -512,6 +518,7 @@ void pm_send_data_packet(crdata * p, unsigned int pid)
     unsigned int i;
     //for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
     p->tx_pm_header.pid = pid;
+    p->tx_pm_header.type = PACKET_TYPE_DATA;
     pm_assemble_header(p->tx_pm_header, p->tx_header);
     for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
 
@@ -525,7 +532,9 @@ void pm_send_ack_packet(crdata * p, unsigned int pid)
 
     pthread_mutex_lock(&(p->tx_data_mutex));
 
-    p->tx_header[0] = pid;
+    p->tx_pm_header.pid = pid;
+    p->tx_pm_header.type = PACKET_TYPE_ACK;
+    pm_assemble_header(p->tx_pm_header, p->tx_header);
 
     pthread_mutex_unlock(&(p->tx_data_mutex));
     pthread_cond_signal(&(p->tx_data_ready));
@@ -548,12 +557,23 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
     pthread_mutex_lock(&(p->rx_data_mutex));
     rc = pthread_cond_timedwait(&(p->rx_data_ready),&(p->rx_data_mutex),&ts);
     printf("pm: received rx_data_ready signal, rc = %d\n", rc);
+
+    if (rc != 0) {
+        printf("  ==> timeout\n");
+        return false;
+    }
+
+    // check received packet
+    if ( p->rx_pm_header.type != PACKET_TYPE_ACK ) {
+        printf("  ==> wrong packet type (expecing ACK)\n");
+        return false;
+    } else if ( p->rx_pm_header.pid != pid ) {
+        printf("  ==> wrong packet id (received %u, expected %u)\n",  p->rx_pm_header.pid, pid);
+        return false;
+    }
     pthread_mutex_unlock(&(p->rx_data_mutex));
 
-    if (rc == 0)
-        return true;
-
-    return false;
+    return true;
 }
  
 void pm_assemble_header(pm_header _h, unsigned char * _header)
