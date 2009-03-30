@@ -223,6 +223,10 @@ int main (int argc, char **argv)
     cr_set_tx_symbol_rate(&data, data.fs_tx);
     cr_set_rx_symbol_rate(&data, data.fs_rx);
 
+    // set ack timeout (empirical relationship)
+    data.ack_timeout = (unsigned int) (6000.0e3f / data.fs_tx);
+    printf("setting ACK timeout to %u ms\n", data.ack_timeout);
+
     // Set other properties
     data.urx->set_pga(0,0);         // adc pga gain
     data.urx->set_mux(0x32103210);  // Board A only
