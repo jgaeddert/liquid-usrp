@@ -507,6 +507,7 @@ void * rx_process(void*userdata)
     p->urx->start();        // Start data transfer
     printf("usrp rx transfer started\n");
 
+    unsigned int reset=0;
     int n;
     while (p->radio_active) {
         // read data
@@ -533,6 +534,16 @@ void * rx_process(void*userdata)
 
         // run through frame synchronizer
         framesync64_execute(framesync, decim_out, rx_buf_len/4);
+
+        // periodically reset the synchronizer
+        reset++;
+        if (reset == 10000) {
+#if VERBOSE
+            printf("resetting synchronizer\n");
+#endif
+            reset = 0;
+            framesync64_reset(framesync);
+        }
     }
 
     p->urx->stop();  // Stop data transfer
