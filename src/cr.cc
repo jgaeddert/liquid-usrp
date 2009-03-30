@@ -590,7 +590,9 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
     pthread_mutex_unlock(&(p->rx_data_mutex));
 
     if (rc != 0) {
+#if VERBOSE
         printf("  ==> timeout\n");
+#endif
         return false;
     }
 
