@@ -20,6 +20,11 @@
 #define VERBOSE             0
 
 #define USRP_CHANNEL        0
+
+#define TX_RATE_MIN         (62.5e3f)
+#define TX_RATE_MAX         (2000e3f)
+#define RX_RATE_MIN         (62.5e3f)
+#define RX_RATE_MAX         (2000e3f)
  
 #define OPMODE_MASTER       0
 #define OPMODE_SLAVE        1
@@ -46,11 +51,11 @@ typedef struct crdata {
 
     // cognitive radio parameters
     float fc;               // carrier frequency
-    unsigned int fd_tx;     // tx data rate (interp)
-    unsigned int fd_rx;     // rx data rate (decim)
+    float fs_tx;            // tx symbol rate (32e6/interp)
+    float fs_rx;            // rx symbol rate (16e6/decim)
     unsigned short tx_gain; // from 0 to 20,000
-    unsigned int ack_timeout;   // time to wait for acknowledgement
-    unsigned int ce_sleep;      // time for ce to sleep
+    unsigned int ack_timeout;   // time to wait for acknowledgement (ms)
+    unsigned int ce_sleep;      // time for ce to sleep (ms)
 
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
@@ -63,6 +68,10 @@ typedef struct crdata {
     usrp_standard_rx * urx;
     int rx_db_id;
     db_base * rxdb;
+
+    //
+    unsigned int tx_interp;
+    unsigned int rx_decim;
 
     // threading
     pthread_cond_t  tx_data_ready;
@@ -98,6 +107,9 @@ void pm_disassemble_header(unsigned char * _header, pm_header * _h);
 
 void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
 void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
+
+void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate);
+void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate);
 
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid,
@@ -156,10 +168,12 @@ int main (int argc, char **argv)
     crdata data;
     data.mode = OPMODE_SLAVE;
     data.node_id = rand() & 0xffff;
+    data.fs_tx = 62.5e3f;
+    data.fs_rx = 62.5e3f;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"msi:")) != EOF) {
+    while ((d = getopt(argc,argv,"msi:r:")) != EOF) {
         switch (d) {
         case 'm':
             data.mode = OPMODE_MASTER;
@@ -169,6 +183,10 @@ int main (int argc, char **argv)
             break;
         case 'i':
             data.node_id = atoi(optarg) & 0xffff;
+            break;
+        case 'r':
+            data.fs_tx = atof(optarg);
+            data.fs_rx = atof(optarg);
             break;
         default:    /* print help() */  return 0;
         }
@@ -200,6 +218,10 @@ int main (int argc, char **argv)
     // Set Number of channels
     data.urx->set_nchannels(1);
     data.utx->set_nchannels(1);
+
+    // Set symbol rate
+    cr_set_tx_symbol_rate(&data, data.fs_tx);
+    cr_set_rx_symbol_rate(&data, data.fs_rx);
 
     // Set other properties
     data.urx->set_pga(0,0);         // adc pga gain
@@ -313,6 +335,61 @@ void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _rxdb, float _freq
     _urx->set_rx_freq(USRP_CHANNEL, ddc_freq);
 }
 
+void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate)
+{
+    // check validity
+    if (_tx_rate < TX_RATE_MIN) {
+        printf("warning: input tx symbol rate (%f) too small; setting to minimum (%f)\n",
+            _tx_rate, TX_RATE_MIN);
+        _tx_rate = TX_RATE_MIN;
+    } else if (_tx_rate > TX_RATE_MAX) {
+        printf("warning: input tx symbol rate (%f) too large; setting to maximum (%f)\n",
+            _tx_rate, TX_RATE_MAX);
+        _tx_rate = TX_RATE_MAX;
+    }
+
+    _p->tx_interp = (unsigned int) (32e6f / _tx_rate);
+
+    // interpolator must be multiple of 4
+    _p->tx_interp = ((_p->tx_interp) >> 2) << 2;
+
+    // update actual tx symbol rate
+    _p->fs_tx = 32e6 / (_p->tx_interp);
+
+    // set value in usrp
+    _p->utx->set_interp_rate( _p->tx_interp );
+
+    printf("setting tx symbol rate to %8.2f kHz (interp: %3u)\n",
+            _p->fs_tx * 1e-3f, _p->tx_interp);
+}
+
+void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate)
+{
+    // check validity
+    if (_rx_rate < RX_RATE_MIN) {
+        printf("warning: input rx symbol rate (%f) too small; setting to minimum (%f)\n",
+            _rx_rate, RX_RATE_MIN);
+        _rx_rate = RX_RATE_MIN;
+    } else if (_rx_rate > RX_RATE_MAX) {
+        printf("warning: input rx symbol rate (%f) too large; setting to maximum (%f)\n",
+            _rx_rate, RX_RATE_MAX);
+        _rx_rate = RX_RATE_MAX;
+    }
+
+    _p->rx_decim = (unsigned int) (16e6f / _rx_rate);
+
+    // decimator must be multiple of 2
+    _p->rx_decim = ((_p->rx_decim) >> 1) << 1;
+
+    // update actual rx symbol rate
+    _p->fs_rx = 16e6 / (_p->rx_decim);
+
+    // set value in usrp
+    _p->urx->set_decim_rate( _p->rx_decim );
+
+    printf("setting rx symbol rate to %8.2f kHz (decim:  %3u)\n",
+            _p->fs_rx * 1e-3f, _p->rx_decim);
+}
 
 void * tx_process(void*userdata)
 {
