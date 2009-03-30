@@ -193,10 +193,10 @@ int main (int argc, char **argv)
     }
     printf("node id: %d\n", data.node_id);
 
-    data.fc = 462e6;
+    data.fc = 462.5625e6;
     data.tx_gain = 8000;
     data.ack_timeout = 100; // (ms)
-    data.ce_sleep = 2000;   // (ms)
+    data.ce_sleep = 500;   // (ms)
 
     //
     data.num_rx_packets = 0;
