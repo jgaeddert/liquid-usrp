@@ -405,9 +405,9 @@ void * tx_process(void*userdata)
 
     // create interpolator
     //unsigned int k=2; // samples per symbol
-    unsigned int m=3; // delay
+    unsigned int m=2; // delay
     float beta=0.7f;  // excess bandwidth factor
-    resamp2_crcf interpolator = resamp2_crcf_create(37);
+    resamp2_crcf interpolator = resamp2_crcf_create(13);
     //unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
     //unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
     //unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
@@ -495,12 +495,12 @@ void * rx_process(void*userdata)
     int num_overruns=0;
 
     // framing
-    unsigned int m=3;
+    unsigned int m=2;
     float beta=0.7f;
     framesync64 framesync = framesync64_create(m,beta,callback,(void*)p);
 
     // create decimator
-    resamp2_crcf decimator = resamp2_crcf_create(37);
+    resamp2_crcf decimator = resamp2_crcf_create(13);
     std::complex<float> buffer[rx_buf_len/2];
     std::complex<float> decim_out[rx_buf_len/4];
  
@@ -690,10 +690,14 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
 
     // check received packet
     if ( p->rx_pm_header.type != PACKET_TYPE_ACK ) {
+#if VERBOSE
         printf("  ==> wrong packet type (expecing ACK)\n");
+#endif
         return false;
     } else if ( p->rx_pm_header.pid != pid ) {
+#if VERBOSE
         printf("  ==> wrong packet id (received %u, expected %u)\n",  p->rx_pm_header.pid, pid);
+#endif
         return false;
     }
 
