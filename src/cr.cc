@@ -631,6 +631,15 @@ void * pm_process(void*userdata)
                 };
             } while (!p->packet_received && p->radio_active);
 
+            if (p->tx_pm_header.do_set_control) {
+                // switch parameters
+                channel = p->tx_pm_header.ctrl_channel;
+                channel_frequency = pm_get_channel_frequency(channel);
+                printf("*** CONTROL : switching to channel %u\n", channel);
+                usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
+                usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+            }
+
             break;
         case OPMODE_SLAVE:
             // wait until packet is received
@@ -648,7 +657,7 @@ void * pm_process(void*userdata)
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
-                    printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
+                    printf("** CONTROL : node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
                     usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
                     usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
 
@@ -658,21 +667,31 @@ void * pm_process(void*userdata)
 
             pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
 
-            // set control parameters
-            if (p->rx_pm_header.do_set_control) {
-                printf("***** sending control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
-                    p->rx_pm_header.ctrl_channel,
-                    p->rx_pm_header.ctrl_bandwidth,
-                    p->rx_pm_header.ctrl_txgain,
-                    p->rx_pm_header.ctrl_bch0);
-            }
-
 #if VERBOSE
             printf("pm: packet id: %u\n", p->rx_pm_header.pid);
 #endif
 
             // send ACK
             pm_send_ack_packet(p,p->rx_pm_header.pid);
+
+            // set control parameters
+            if (p->rx_pm_header.do_set_control) {
+                printf("***** receiving control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
+                    p->rx_pm_header.ctrl_channel,
+                    p->rx_pm_header.ctrl_bandwidth,
+                    p->rx_pm_header.ctrl_txgain,
+                    p->rx_pm_header.ctrl_bch0);
+
+                printf("*** sending extra ACK\n");
+                pm_send_ack_packet(p,p->rx_pm_header.pid);
+
+                // change frequency (rendezvous channel)
+                channel = p->rx_pm_header.ctrl_channel;
+                channel_frequency = pm_get_channel_frequency(channel);
+                printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
+                usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
+                usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+            }
 
             break;
         default:
