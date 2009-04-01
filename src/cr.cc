@@ -205,7 +205,7 @@ int main (int argc, char **argv)
     }
     printf("node id: %d\n", data.node_id);
 
-    data.fc = pm_get_channel_frequency(3);
+    data.fc = pm_get_channel_frequency(32*4);
     data.tx_gain = 8000;
     data.ack_timeout = 100; // (ms)
     data.ce_sleep = 500;   // (ms)
