@@ -69,10 +69,6 @@ typedef struct crdata {
     unsigned int ack_timeout;   // time to wait for acknowledgement (ms)
     unsigned int ce_sleep;      // time for ce to sleep (ms)
 
-    // control
-    bool do_set_ctrl_channel;
-    unsigned int ctrl_channel;
-
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
     unsigned int num_ack_timeouts;
@@ -173,9 +169,6 @@ static int callback(unsigned char * _header,  int _header_valid,
     printf("packet id: %u\n", p->rx_pm_header.pid);
 #endif
 
-    if (p->rx_pm_header.do_set_ctrl_channel)
-        printf("******* received signal to set channel to %u\n", p->rx_pm_header.ctrl_channel);
-
     // unlock mutex
     pthread_mutex_unlock(&(p->rx_data_mutex));
 
@@ -227,6 +220,12 @@ int main (int argc, char **argv)
     data.num_rx_packets = 0;
     data.num_valid_rx_packets = 0;
     data.num_ack_timeouts = 0;
+
+    // packet header properties
+    data.tx_pm_header.do_set_ctrl_channel   = 0;
+    data.tx_pm_header.do_set_ctrl_bandwidth = 0;
+    data.tx_pm_header.do_set_ctrl_txgain    = 0;
+    data.tx_pm_header.do_set_ctrl_bch0      = 0;
 
     data.urx =  usrp_standard_rx::make (0, 256);
     if (data.urx == 0) {
@@ -599,6 +598,31 @@ void * pm_process(void*userdata)
 
         switch (p->mode) {
         case OPMODE_MASTER:
+            // set control parameters
+            p->tx_pm_header.do_set_ctrl_channel   = 0;
+            p->tx_pm_header.do_set_ctrl_bandwidth = 0;
+            p->tx_pm_header.do_set_ctrl_txgain    = 0;
+            p->tx_pm_header.do_set_ctrl_bch0      = 0;
+
+            // randomly send control signal
+            if ((rand()%500)==0) {
+                p->tx_pm_header.do_set_ctrl_channel   = 1;
+                p->tx_pm_header.do_set_ctrl_bandwidth = 1;
+                p->tx_pm_header.do_set_ctrl_txgain    = 1;
+                p->tx_pm_header.do_set_ctrl_bch0      = 1;
+
+                p->tx_pm_header.ctrl_channel    = 1;
+                p->tx_pm_header.ctrl_bandwidth  = 2;
+                p->tx_pm_header.ctrl_txgain     = 3;
+                p->tx_pm_header.ctrl_bch0       = 4;
+
+                printf("***** sending control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
+                    p->tx_pm_header.ctrl_channel,
+                    p->tx_pm_header.ctrl_bandwidth,
+                    p->tx_pm_header.ctrl_txgain,
+                    p->tx_pm_header.ctrl_bch0);
+            }
+
             // continue transmitting until packet is received
             do {
 #if VERBOSE
@@ -648,6 +672,21 @@ void * pm_process(void*userdata)
             } while (!p->packet_received && p->radio_active);
 
             pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
+
+            // set control parameters
+            if (p->rx_pm_header.do_set_ctrl_channel)
+                printf("***** received control signal to set channel to %u\n", p->rx_pm_header.ctrl_channel);
+
+            if (p->rx_pm_header.do_set_ctrl_bandwidth)
+                printf("***** received control signal to set bandwidth to %u\n", p->rx_pm_header.ctrl_bandwidth);
+
+            if (p->rx_pm_header.do_set_ctrl_txgain)
+                printf("***** received control signal to set tx gain to %u\n", p->rx_pm_header.ctrl_txgain);
+
+            if (p->rx_pm_header.do_set_ctrl_bch0)
+                printf("***** received control signal to set backup channel to %u\n", p->rx_pm_header.ctrl_bch0);
+
+
 #if VERBOSE
             printf("pm: packet id: %u\n", p->rx_pm_header.pid);
 #endif
@@ -674,13 +713,6 @@ void pm_send_data_packet(crdata * p, unsigned int pid)
     //for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
     p->tx_pm_header.pid = pid;
     p->tx_pm_header.type = PACKET_TYPE_DATA;
-
-    // set control data
-    p->tx_pm_header.do_set_ctrl_channel = (rand() % 100) == 0;
-    p->tx_pm_header.ctrl_channel = rand() % 256;
-
-    if (p->tx_pm_header.do_set_ctrl_channel)
-        printf("******** sending signal to set channel to %u\n", p->tx_pm_header.ctrl_channel);
 
     pm_assemble_header(p->tx_pm_header, p->tx_header);
     for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
