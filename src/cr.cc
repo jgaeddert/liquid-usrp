@@ -657,7 +657,7 @@ void * pm_process(void*userdata)
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
-                    printf("** CONTROL : node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
+                    printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
                     usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
                     usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
 
@@ -685,10 +685,12 @@ void * pm_process(void*userdata)
                 printf("*** sending extra ACK\n");
                 pm_send_ack_packet(p,p->rx_pm_header.pid);
 
+                usleep(2*1000*(p->ack_timeout));
+
                 // change frequency (rendezvous channel)
                 channel = p->rx_pm_header.ctrl_channel;
                 channel_frequency = pm_get_channel_frequency(channel);
-                printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
+                printf("*** CONTROL : node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
                 usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
                 usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
             }
