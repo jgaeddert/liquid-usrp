@@ -596,16 +596,10 @@ void * pm_process(void*userdata)
             if ((rand()%500)==0) {
                 p->tx_pm_header.do_set_control  = 1;
 
-                p->tx_pm_header.ctrl_channel    = 1;
+                p->tx_pm_header.ctrl_channel    = rand()%256;
                 p->tx_pm_header.ctrl_bandwidth  = 2;
                 p->tx_pm_header.ctrl_txgain     = 3;
                 p->tx_pm_header.ctrl_bch0       = 4;
-
-                printf("***** sending control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
-                    p->tx_pm_header.ctrl_channel,
-                    p->tx_pm_header.ctrl_bandwidth,
-                    p->tx_pm_header.ctrl_txgain,
-                    p->tx_pm_header.ctrl_bch0);
             }
 
             // continue transmitting until packet is received
@@ -613,14 +607,28 @@ void * pm_process(void*userdata)
 #if VERBOSE
                 printf("transmitting packet %u (attempt %u)\n", pid, pm_attempt);
 #endif
+                if (p->tx_pm_header.do_set_control) {
+                    printf("***** sending control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
+                        p->tx_pm_header.ctrl_channel,
+                        p->tx_pm_header.ctrl_bandwidth,
+                        p->tx_pm_header.ctrl_txgain,
+                        p->tx_pm_header.ctrl_bch0);
+                }
                 pm_send_data_packet(p,pid);
 
                 p->packet_received = pm_wait_for_ack_packet(p,pid);
                 if (!p->packet_received)
                     p->num_ack_timeouts++;
+
+                if (p->packet_received && p->tx_pm_header.do_set_control)
+                    printf("****** control received ack\n");
+
                 pm_attempt++;
 
                 if ((pm_attempt%10)==0) {
+                    // disable control
+                    p->tx_pm_header.do_set_control = 0;
+
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
