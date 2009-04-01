@@ -52,7 +52,7 @@ void flex_vco_control::compute_regs(float frequency, int &R, int &control, int &
     actual_frequency = desired_n * phdet_freq;
     int B_DIV = (int) floor(desired_n / prescaler());
     int A_DIV = (int) floor(desired_n - prescaler() * B_DIV);
-    DEBUG(3, USRP, "phdet_freq = " << phdet_freq << "  desired_n = " << desired_n << " actual_frequency = " << actual_frequency << "  B_DIV = " << B_DIV << "  A_DIV = " << A_DIV)
+    //DEBUG(3, USRP, "phdet_freq = " << phdet_freq << "  desired_n = " << desired_n << " actual_frequency = " << actual_frequency << "  B_DIV = " << B_DIV << "  A_DIV = " << A_DIV)
 
     if (B_DIV < A_DIV)
         return ;
