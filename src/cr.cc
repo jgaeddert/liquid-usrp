@@ -107,6 +107,7 @@ void * ce_process(void*);   // cognitive engine
 void pm_send_data_packet(crdata * p, unsigned int pid);
 void pm_send_ack_packet(crdata * p, unsigned int pid);
 bool pm_wait_for_ack_packet(crdata * p, unsigned int pid);
+bool pm_wait_for_data_packet(crdata * p, unsigned int pid);
 
 void pm_assemble_header(pm_header _h, unsigned char * _header);
 void pm_disassemble_header(unsigned char * _header, pm_header * _h);
@@ -579,12 +580,12 @@ void * pm_process(void*userdata)
     float channel_frequency;
     while (p->radio_active) {
 
+        pid = (pid+1) & 0xffff;
+        p->ack = false;
+        tx_attempt = 0;
+
         switch (p->mode) {
         case OPMODE_MASTER:
-            pid = (pid+1) & 0xffff;
-
-            p->ack = false;
-            tx_attempt = 0;
             // continue transmitting until packet is received
             do {
 #if VERBOSE
@@ -611,15 +612,32 @@ void * pm_process(void*userdata)
             break;
         case OPMODE_SLAVE:
             // wait until packet is received
-            pthread_mutex_lock(&(p->rx_data_mutex));
-            pthread_cond_wait(&(p->rx_data_ready),&(p->rx_data_mutex));
+
+            do {
+#if VERBOSE
+                printf("slave waiting for data packet %u...\n",pid);
+#endif
+                p->ack = pm_wait_for_data_packet(p,pid);
+                if (!p->ack)
+                    p->num_ack_timeouts++;
+                tx_attempt++;
+
+                if ((tx_attempt%10)==0) {
+                    // change frequency (rendezvous channel)
+                    channel = 32*(rand() % 8);
+                    channel_frequency = pm_get_channel_frequency(channel);
+                    printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
+                    usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
+                    usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+
+                };
+
+            } while (!p->ack && p->radio_active);
 
             pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
 #if VERBOSE
             printf("pm: packet id: %u\n", p->rx_pm_header.pid);
 #endif
-
-            pthread_mutex_unlock(&(p->rx_data_mutex));
 
             // send ACK
             pm_send_ack_packet(p,p->rx_pm_header.pid);
@@ -714,6 +732,52 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid)
 #if VERBOSE
     printf("pm: received ack on packet %u\n", pid);
 #endif
+    return true;
+}
+ 
+bool pm_wait_for_data_packet(crdata * p, unsigned int pid)
+{
+    // wait until packet is received
+
+    // set timeout variables
+    int rc;
+    struct timespec ts;
+    struct timeval  tp;
+    rc = gettimeofday(&tp,NULL);
+    ts.tv_sec  = tp.tv_sec;
+    ts.tv_nsec = (tp.tv_usec + 1000*(p->ack_timeout)) * 1000;
+
+    while (ts.tv_nsec > 1000000000) {
+        ts.tv_nsec -= 1000000000;
+        ts.tv_sec += 1;
+    }
+
+    pthread_mutex_lock(&(p->rx_data_mutex));
+    rc = pthread_cond_timedwait(&(p->rx_data_ready),&(p->rx_data_mutex),&ts);
+#if VERBOSE
+    printf("pm: received rx_data_ready signal, rc = %d\n", rc);
+#endif
+    pthread_mutex_unlock(&(p->rx_data_mutex));
+
+    if (rc != 0) {
+#if VERBOSE
+        printf("  ==> timeout\n");
+#endif
+        return false;
+    }
+
+    // check received packet
+    if ( p->rx_pm_header.type != PACKET_TYPE_DATA ) {
+//#if VERBOSE
+        printf("  ==> wrong packet type (expecing DATA)\n");
+//#endif
+        return false;
+    }
+
+#if VERBOSE
+    printf("pm: received data packet %u\n", pid);
+#endif
+
     return true;
 }
  
