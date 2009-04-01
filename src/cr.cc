@@ -854,14 +854,18 @@ void pm_assemble_header(pm_header _h, unsigned char * _header)
     _header[10] = _h.type & 0x00ff;
 
     // control
-    //unsigned int set_channel;   // 14,15 move to this channel next packet
-    //unsigned int set_bandwidth; // 16,17 set signal bandwidth
-    //unsigned int set_tx_gain;   // 18,19 set transmit gain
-    //unsigned int set_bch_0;     // 20,21 set primary backup channel
-    //unsigned int set_bch_1;     // 22,23 set secondary backup channel
 
     _header[14] = _h.do_set_ctrl_channel;
     _header[15] = _h.ctrl_channel;
+
+    _header[16] = _h.do_set_ctrl_bandwidth;
+    _header[17] = _h.ctrl_bandwidth;
+
+    _header[18] = _h.do_set_ctrl_txgain;
+    _header[19] = _h.ctrl_txgain;
+
+    _header[20] = _h.do_set_ctrl_bch0;
+    _header[21] = _h.ctrl_bch0;
 }
 
 void pm_disassemble_header(unsigned char * _header, pm_header * _h)
@@ -876,8 +880,18 @@ void pm_disassemble_header(unsigned char * _header, pm_header * _h)
     _h->type = _header[10];
 
     // control
-    _h->do_set_ctrl_channel = _header[14] > 0;
+    _h->do_set_ctrl_channel = _header[14] & 0x01;
     _h->ctrl_channel = _header[15];
+
+    _h->do_set_ctrl_bandwidth = _header[16] & 0x01;
+    _h->ctrl_bandwidth = _header[17];
+
+    _h->do_set_ctrl_txgain = _header[18] & 0x01;
+    _h->ctrl_txgain = _header[19];
+
+    _h->do_set_ctrl_bch0 = _header[20] & 0x01;
+    _h->ctrl_bch0 = _header[21];
+
 }
 
 void * ce_process(void*userdata)
