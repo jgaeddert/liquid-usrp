@@ -43,17 +43,11 @@ typedef struct pm_header {
     unsigned int type;  // 10
 
     // control information
-    bool do_set_ctrl_channel;   // 14
+    bool do_set_control;        // 14 enable control change
     unsigned int ctrl_channel;  // 15 move to this channel next packet
-
-    bool do_set_ctrl_bandwidth; // 16
-    unsigned int ctrl_bandwidth;// 17 set signal bandwidth
-
-    bool do_set_ctrl_txgain;    // 18
-    unsigned int ctrl_txgain;   // 19 set transmit gain
-
-    bool do_set_ctrl_bch0;      // 20
-    unsigned int ctrl_bch0;     // 21 set primary backup channel
+    unsigned int ctrl_bandwidth;// 16 set signal bandwidth
+    unsigned int ctrl_txgain;   // 17 set transmit gain
+    unsigned int ctrl_bch0;     // 18 set primary backup channel
 };
 
 typedef struct crdata {
@@ -222,10 +216,7 @@ int main (int argc, char **argv)
     data.num_ack_timeouts = 0;
 
     // packet header properties
-    data.tx_pm_header.do_set_ctrl_channel   = 0;
-    data.tx_pm_header.do_set_ctrl_bandwidth = 0;
-    data.tx_pm_header.do_set_ctrl_txgain    = 0;
-    data.tx_pm_header.do_set_ctrl_bch0      = 0;
+    data.tx_pm_header.do_set_control        = 0;
 
     data.urx =  usrp_standard_rx::make (0, 256);
     if (data.urx == 0) {
@@ -599,17 +590,11 @@ void * pm_process(void*userdata)
         switch (p->mode) {
         case OPMODE_MASTER:
             // set control parameters
-            p->tx_pm_header.do_set_ctrl_channel   = 0;
-            p->tx_pm_header.do_set_ctrl_bandwidth = 0;
-            p->tx_pm_header.do_set_ctrl_txgain    = 0;
-            p->tx_pm_header.do_set_ctrl_bch0      = 0;
+            p->tx_pm_header.do_set_control = 0;
 
             // randomly send control signal
             if ((rand()%500)==0) {
-                p->tx_pm_header.do_set_ctrl_channel   = 1;
-                p->tx_pm_header.do_set_ctrl_bandwidth = 1;
-                p->tx_pm_header.do_set_ctrl_txgain    = 1;
-                p->tx_pm_header.do_set_ctrl_bch0      = 1;
+                p->tx_pm_header.do_set_control  = 1;
 
                 p->tx_pm_header.ctrl_channel    = 1;
                 p->tx_pm_header.ctrl_bandwidth  = 2;
@@ -674,18 +659,13 @@ void * pm_process(void*userdata)
             pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
 
             // set control parameters
-            if (p->rx_pm_header.do_set_ctrl_channel)
-                printf("***** received control signal to set channel to %u\n", p->rx_pm_header.ctrl_channel);
-
-            if (p->rx_pm_header.do_set_ctrl_bandwidth)
-                printf("***** received control signal to set bandwidth to %u\n", p->rx_pm_header.ctrl_bandwidth);
-
-            if (p->rx_pm_header.do_set_ctrl_txgain)
-                printf("***** received control signal to set tx gain to %u\n", p->rx_pm_header.ctrl_txgain);
-
-            if (p->rx_pm_header.do_set_ctrl_bch0)
-                printf("***** received control signal to set backup channel to %u\n", p->rx_pm_header.ctrl_bch0);
-
+            if (p->rx_pm_header.do_set_control) {
+                printf("***** sending control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
+                    p->rx_pm_header.ctrl_channel,
+                    p->rx_pm_header.ctrl_bandwidth,
+                    p->rx_pm_header.ctrl_txgain,
+                    p->rx_pm_header.ctrl_bch0);
+            }
 
 #if VERBOSE
             printf("pm: packet id: %u\n", p->rx_pm_header.pid);
@@ -855,17 +835,11 @@ void pm_assemble_header(pm_header _h, unsigned char * _header)
 
     // control
 
-    _header[14] = _h.do_set_ctrl_channel;
+    _header[14] = _h.do_set_control;
     _header[15] = _h.ctrl_channel;
-
-    _header[16] = _h.do_set_ctrl_bandwidth;
-    _header[17] = _h.ctrl_bandwidth;
-
-    _header[18] = _h.do_set_ctrl_txgain;
-    _header[19] = _h.ctrl_txgain;
-
-    _header[20] = _h.do_set_ctrl_bch0;
-    _header[21] = _h.ctrl_bch0;
+    _header[16] = _h.ctrl_bandwidth;
+    _header[17] = _h.ctrl_txgain;
+    _header[18] = _h.ctrl_bch0;
 }
 
 void pm_disassemble_header(unsigned char * _header, pm_header * _h)
@@ -880,17 +854,11 @@ void pm_disassemble_header(unsigned char * _header, pm_header * _h)
     _h->type = _header[10];
 
     // control
-    _h->do_set_ctrl_channel = _header[14] & 0x01;
-    _h->ctrl_channel = _header[15];
-
-    _h->do_set_ctrl_bandwidth = _header[16] & 0x01;
-    _h->ctrl_bandwidth = _header[17];
-
-    _h->do_set_ctrl_txgain = _header[18] & 0x01;
-    _h->ctrl_txgain = _header[19];
-
-    _h->do_set_ctrl_bch0 = _header[20] & 0x01;
-    _h->ctrl_bch0 = _header[21];
+    _h->do_set_control  = _header[14] & 0x01;
+    _h->ctrl_channel    = _header[15];
+    _h->ctrl_bandwidth  = _header[16];
+    _h->ctrl_txgain     = _header[17];
+    _h->ctrl_bch0       = _header[18];
 
 }
 
