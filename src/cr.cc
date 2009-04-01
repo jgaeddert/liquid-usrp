@@ -43,11 +43,17 @@ typedef struct pm_header {
     unsigned int type;  // 10
 
     // control information
-    unsigned int set_channel;   // 14,15 move to this channel next packet
-    unsigned int set_bandwidth; // 16,17 set signal bandwidth
-    unsigned int set_tx_gain;   // 18,19 set transmit gain
-    unsigned int set_bch_0;     // 20,21 set primary backup channel
-    unsigned int set_bch_1;     // 22,23 set secondary backup channel
+    bool do_set_ctrl_channel;   // 14
+    unsigned int ctrl_channel;  // 15 move to this channel next packet
+
+    bool do_set_ctrl_bandwidth; // 16
+    unsigned int ctrl_bandwidth;// 17 set signal bandwidth
+
+    bool do_set_ctrl_txgain;    // 18
+    unsigned int ctrl_txgain;   // 19 set transmit gain
+
+    bool do_set_ctrl_bch0;      // 20
+    unsigned int ctrl_bch0;     // 21 set primary backup channel
 };
 
 typedef struct crdata {
@@ -62,6 +68,10 @@ typedef struct crdata {
     unsigned short tx_gain;     // from 0 to 20,000
     unsigned int ack_timeout;   // time to wait for acknowledgement (ms)
     unsigned int ce_sleep;      // time for ce to sleep (ms)
+
+    // control
+    bool do_set_ctrl_channel;
+    unsigned int ctrl_channel;
 
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
@@ -162,6 +172,9 @@ static int callback(unsigned char * _header,  int _header_valid,
 #if VERBOSE
     printf("packet id: %u\n", p->rx_pm_header.pid);
 #endif
+
+    if (p->rx_pm_header.do_set_ctrl_channel)
+        printf("******* received signal to set channel to %u\n", p->rx_pm_header.ctrl_channel);
 
     // unlock mutex
     pthread_mutex_unlock(&(p->rx_data_mutex));
@@ -661,6 +674,14 @@ void pm_send_data_packet(crdata * p, unsigned int pid)
     //for (i=0; i<24; i++) p->tx_header[i]    = rand()%256;
     p->tx_pm_header.pid = pid;
     p->tx_pm_header.type = PACKET_TYPE_DATA;
+
+    // set control data
+    p->tx_pm_header.do_set_ctrl_channel = (rand() % 100) == 0;
+    p->tx_pm_header.ctrl_channel = rand() % 256;
+
+    if (p->tx_pm_header.do_set_ctrl_channel)
+        printf("******** sending signal to set channel to %u\n", p->tx_pm_header.ctrl_channel);
+
     pm_assemble_header(p->tx_pm_header, p->tx_header);
     for (i=0; i<64; i++) p->tx_payload[i]   = rand()%256;
 
@@ -799,6 +820,16 @@ void pm_assemble_header(pm_header _h, unsigned char * _header)
     _header[9] = (_h.pid     )  & 0x00ff;
 
     _header[10] = _h.type & 0x00ff;
+
+    // control
+    //unsigned int set_channel;   // 14,15 move to this channel next packet
+    //unsigned int set_bandwidth; // 16,17 set signal bandwidth
+    //unsigned int set_tx_gain;   // 18,19 set transmit gain
+    //unsigned int set_bch_0;     // 20,21 set primary backup channel
+    //unsigned int set_bch_1;     // 22,23 set secondary backup channel
+
+    _header[14] = _h.do_set_ctrl_channel;
+    _header[15] = _h.ctrl_channel;
 }
 
 void pm_disassemble_header(unsigned char * _header, pm_header * _h)
@@ -811,6 +842,10 @@ void pm_disassemble_header(unsigned char * _header, pm_header * _h)
     _h->pid  = (_header[8] << 8) | (_header[9]);
 
     _h->type = _header[10];
+
+    // control
+    _h->do_set_ctrl_channel = _header[14] > 0;
+    _h->ctrl_channel = _header[15];
 }
 
 void * ce_process(void*userdata)
