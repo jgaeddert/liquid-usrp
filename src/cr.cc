@@ -89,7 +89,7 @@ typedef struct crdata {
     // data buffers
     unsigned char tx_header[24];
     unsigned char tx_payload[64];
-    bool ack;
+    bool packet_received;
     pm_header tx_pm_header;
 
     unsigned char rx_header[24];
@@ -205,7 +205,7 @@ int main (int argc, char **argv)
     }
     printf("node id: %d\n", data.node_id);
 
-    data.fc = pm_get_channel_frequency(0);
+    data.fc = pm_get_channel_frequency(3);
     data.tx_gain = 8000;
     data.ack_timeout = 100; // (ms)
     data.ce_sleep = 500;   // (ms)
@@ -576,29 +576,29 @@ void * pm_process(void*userdata)
     printf("pm_process started, mode : %s\n", p->mode == OPMODE_MASTER ?
             "master" : "slave");
 
-    unsigned int pid=0, tx_attempt, channel=0;
+    unsigned int pid=0, pm_attempt, channel=0;
     float channel_frequency;
     while (p->radio_active) {
 
         pid = (pid+1) & 0xffff;
-        p->ack = false;
-        tx_attempt = 0;
+        p->packet_received = false;
+        pm_attempt = 0;
 
         switch (p->mode) {
         case OPMODE_MASTER:
             // continue transmitting until packet is received
             do {
 #if VERBOSE
-                printf("transmitting packet %u (attempt %u)\n", pid, tx_attempt);
+                printf("transmitting packet %u (attempt %u)\n", pid, pm_attempt);
 #endif
                 pm_send_data_packet(p,pid);
 
-                p->ack = pm_wait_for_ack_packet(p,pid);
-                if (!p->ack)
+                p->packet_received = pm_wait_for_ack_packet(p,pid);
+                if (!p->packet_received)
                     p->num_ack_timeouts++;
-                tx_attempt++;
+                pm_attempt++;
 
-                if ((tx_attempt%10)==0) {
+                if ((pm_attempt%10)==0) {
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
@@ -607,7 +607,7 @@ void * pm_process(void*userdata)
                     usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
 
                 };
-            } while (!p->ack && p->radio_active);
+            } while (!p->packet_received && p->radio_active);
 
             break;
         case OPMODE_SLAVE:
@@ -617,12 +617,12 @@ void * pm_process(void*userdata)
 #if VERBOSE
                 printf("slave waiting for data packet %u...\n",pid);
 #endif
-                p->ack = pm_wait_for_data_packet(p,pid);
-                if (!p->ack)
+                p->packet_received = pm_wait_for_data_packet(p,pid);
+                if (!p->packet_received)
                     p->num_ack_timeouts++;
-                tx_attempt++;
+                pm_attempt++;
 
-                if ((tx_attempt%10)==0) {
+                if ((pm_attempt%10)==0) {
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
@@ -632,7 +632,7 @@ void * pm_process(void*userdata)
 
                 };
 
-            } while (!p->ack && p->radio_active);
+            } while (!p->packet_received && p->radio_active);
 
             pm_disassemble_header(p->rx_header, &(p->rx_pm_header));
 #if VERBOSE
