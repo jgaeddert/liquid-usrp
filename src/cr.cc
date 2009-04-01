@@ -42,6 +42,12 @@ typedef struct pm_header {
     unsigned int pid;   // 8,9
     unsigned int type;  // 10
 
+    // control information
+    unsigned int set_channel;   // 14,15 move to this channel next packet
+    unsigned int set_bandwidth; // 16,17 set signal bandwidth
+    unsigned int set_tx_gain;   // 18,19 set transmit gain
+    unsigned int set_bch_0;     // 20,21 set primary backup channel
+    unsigned int set_bch_1;     // 22,23 set secondary backup channel
 };
 
 typedef struct crdata {
@@ -50,10 +56,10 @@ typedef struct crdata {
     int mode;
 
     // cognitive radio parameters
-    float fc;               // carrier frequency
-    float fs_tx;            // tx symbol rate (32e6/interp)
-    float fs_rx;            // rx symbol rate (16e6/decim)
-    unsigned short tx_gain; // from 0 to 20,000
+    float fc;                   // carrier frequency
+    float fs_tx;                // tx symbol rate (32e6/interp)
+    float fs_rx;                // rx symbol rate (16e6/decim)
+    unsigned short tx_gain;     // from 0 to 20,000
     unsigned int ack_timeout;   // time to wait for acknowledgement (ms)
     unsigned int ce_sleep;      // time for ce to sleep (ms)
 
@@ -104,6 +110,11 @@ bool pm_wait_for_ack_packet(crdata * p, unsigned int pid);
 
 void pm_assemble_header(pm_header _h, unsigned char * _header);
 void pm_disassemble_header(unsigned char * _header, pm_header * _h);
+
+float pm_get_channel_frequency(unsigned int _channel)
+{
+    return 1e6f*(450.0f + _channel*0.1f);
+}
 
 void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
 void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
@@ -193,7 +204,7 @@ int main (int argc, char **argv)
     }
     printf("node id: %d\n", data.node_id);
 
-    data.fc = 462.5625e6;
+    data.fc = pm_get_channel_frequency(0);
     data.tx_gain = 8000;
     data.ack_timeout = 100; // (ms)
     data.ce_sleep = 500;   // (ms)
@@ -586,12 +597,11 @@ void * pm_process(void*userdata)
                     p->num_ack_timeouts++;
                 tx_attempt++;
 
-                //if ((tx_attempt%10)==0) {
-                if (0) {
-                    // change frequency
-                    channel = rand() % 8;
-                    channel_frequency = (460.0f + 0.5f * channel)*1e6;
-                    printf("node switching to channel %u (%5.1f MHz)\n", channel, channel_frequency*1e-6);
+                if ((tx_attempt%10)==0) {
+                    // change frequency (rendezvous channel)
+                    channel = 32*(rand() % 8);
+                    channel_frequency = pm_get_channel_frequency(channel);
+                    printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
                     usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
                     usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
 
