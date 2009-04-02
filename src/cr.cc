@@ -623,7 +623,7 @@ void * pm_process(void*userdata)
                 p->tx_pm_header.do_set_control  = 1;
 
                 p->tx_pm_header.ctrl_channel    = rand()%256;
-                p->tx_pm_header.ctrl_bandwidth  = 2;
+                p->tx_pm_header.ctrl_bandwidth  = rand()%256;
                 p->tx_pm_header.ctrl_txgain     = 3;
                 p->tx_pm_header.ctrl_bch0       = 4;
             }
@@ -672,6 +672,12 @@ void * pm_process(void*userdata)
                 printf("*** CONTROL : switching to channel %u\n", channel);
                 cr_set_tx_frequency(p, channel_frequency);
                 cr_set_rx_frequency(p, channel_frequency);
+
+                float bandwidth = 1e3f*( 3.0f*(p->tx_pm_header.ctrl_bandwidth) + 65.0f);
+                printf("*** CONTROL : node switching to bandwidth %3u (%8.4f kHz)\n", p->tx_pm_header.ctrl_bandwidth, bandwidth*1e-3f);
+                cr_set_tx_symbol_rate(p, bandwidth);
+                cr_set_rx_symbol_rate(p, bandwidth);
+
             }
 
             break;
@@ -727,6 +733,12 @@ void * pm_process(void*userdata)
                 printf("*** CONTROL : node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
                 cr_set_tx_frequency(p, channel_frequency);
                 cr_set_rx_frequency(p, channel_frequency);
+
+                float bandwidth = 1e3f*( 3.0f*(p->rx_pm_header.ctrl_bandwidth) + 65.0f);
+                printf("*** CONTROL : node switching to bandwidth %3u (%8.4f kHz)\n",
+                        p->rx_pm_header.ctrl_bandwidth, bandwidth*1e-3f);
+                cr_set_tx_symbol_rate(p, bandwidth);
+                cr_set_rx_symbol_rate(p, bandwidth);
             }
 
             break;
