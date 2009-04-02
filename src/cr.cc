@@ -477,7 +477,7 @@ void cr_set_parameters_by_id(crdata * _p, unsigned int _channel_id, unsigned int
 
     if (_p->txgain_id != _txgain_id) {
         _p->txgain_id = _txgain_id;
-        float txgain = pm_get_bandwidth(_p->bandwidth_id);
+        float txgain = pm_get_txgain(_p->bandwidth_id);
         printf("*** CONTROL : node switching to txgain %3u (%8.2f)\n",
                 _p->txgain_id, txgain);
 
