@@ -117,8 +117,8 @@ float pm_get_channel_frequency(unsigned int _channel)
     return 1e6f*(450.0f + _channel*0.1f);
 }
 
-void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _db, float _frequency);
-void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _db, float _frequency);
+void cr_set_tx_frequency(crdata * _p, float _tx_frequency);
+void cr_set_rx_frequency(crdata * _p, float _rx_frequency);
 
 void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate);
 void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate);
@@ -281,8 +281,8 @@ int main (int argc, char **argv)
     //data.db->set_gain(gmax);    // note: not a good idea to set to max
 
     // set frequency
-    usrp_set_tx_frequency(data.utx, data.txdb, data.fc);
-    usrp_set_rx_frequency(data.urx, data.rxdb, data.fc);
+    cr_set_tx_frequency(&data, data.fc);
+    cr_set_rx_frequency(&data, data.fc);
 
     // enable automatic transmit/receive
     data.txdb->set_auto_tr(true);
@@ -331,27 +331,27 @@ int main (int argc, char **argv)
     return 0;
 }
 
-void usrp_set_tx_frequency(usrp_standard_tx * _utx, db_base * _txdb, float _frequency)
+void cr_set_tx_frequency(crdata * _p, float _tx_frequency)
 {
     // set the daughterboard frequency
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
-    float db_lo_freq_set = _frequency + db_lo_offset;
-    _txdb->set_db_freq(db_lo_freq_set, db_lo_freq);
-    float ddc_freq = _frequency - db_lo_freq;
-    _utx->set_tx_freq(USRP_CHANNEL, ddc_freq);
+    float db_lo_freq_set = _tx_frequency + db_lo_offset;
+    _p->txdb->set_db_freq(db_lo_freq_set, db_lo_freq);
+    float ddc_freq = _tx_frequency - db_lo_freq;
+    _p->utx->set_tx_freq(USRP_CHANNEL, ddc_freq);
 }
 
 
-void usrp_set_rx_frequency(usrp_standard_rx * _urx, db_base * _rxdb, float _frequency)
+void cr_set_rx_frequency(crdata * _p, float _rx_frequency)
 {
     // set the daughterboard frequency
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
-    float db_lo_freq_set = _frequency + db_lo_offset;
-    _rxdb->set_db_freq(db_lo_freq_set, db_lo_freq);
-    float ddc_freq = _frequency - db_lo_freq;
-    _urx->set_rx_freq(USRP_CHANNEL, ddc_freq);
+    float db_lo_freq_set = _rx_frequency + db_lo_offset;
+    _p->rxdb->set_db_freq(db_lo_freq_set, db_lo_freq);
+    float ddc_freq = _rx_frequency - db_lo_freq;
+    _p->urx->set_rx_freq(USRP_CHANNEL, ddc_freq);
 }
 
 void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate)
@@ -633,8 +633,8 @@ void * pm_process(void*userdata)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
                     printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
-                    usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
-                    usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+                    cr_set_tx_frequency(p, channel_frequency);
+                    cr_set_rx_frequency(p, channel_frequency);
 
                 };
             } while (!p->packet_received && p->radio_active);
@@ -644,8 +644,8 @@ void * pm_process(void*userdata)
                 channel = p->tx_pm_header.ctrl_channel;
                 channel_frequency = pm_get_channel_frequency(channel);
                 printf("*** CONTROL : switching to channel %u\n", channel);
-                usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
-                usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+                cr_set_tx_frequency(p, channel_frequency);
+                cr_set_rx_frequency(p, channel_frequency);
             }
 
             break;
@@ -666,8 +666,8 @@ void * pm_process(void*userdata)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
                     printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
-                    usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
-                    usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+                    cr_set_tx_frequency(p, channel_frequency);
+                    cr_set_rx_frequency(p, channel_frequency);
 
                 };
 
@@ -699,8 +699,8 @@ void * pm_process(void*userdata)
                 channel = p->rx_pm_header.ctrl_channel;
                 channel_frequency = pm_get_channel_frequency(channel);
                 printf("*** CONTROL : node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
-                usrp_set_tx_frequency(p->utx, p->txdb, channel_frequency);
-                usrp_set_rx_frequency(p->urx, p->rxdb, channel_frequency);
+                cr_set_tx_frequency(p, channel_frequency);
+                cr_set_rx_frequency(p, channel_frequency);
             }
 
             break;
