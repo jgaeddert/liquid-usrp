@@ -97,6 +97,9 @@ typedef struct crdata {
     bool rx_header_valid;
     bool rx_payload_valid;
     pm_header rx_pm_header;
+
+    // number of dropped packets before taking action
+    unsigned int pm_attempt_timeout;
 };
 
 void * tx_process(void*);   // transmitter
@@ -211,6 +214,7 @@ int main (int argc, char **argv)
     data.tx_gain = 8000;
     data.ack_timeout = 100; // (ms)
     data.ce_sleep = 500;   // (ms)
+    data.pm_attempt_timeout = 10;   // number of packets dropped before taking action
 
     //
     data.num_rx_packets = 0;
@@ -243,6 +247,10 @@ int main (int argc, char **argv)
     // set ack timeout (empirical relationship)
     data.ack_timeout = (unsigned int) (6000.0e3f / data.fs_tx);
     printf("setting ACK timeout to %u ms\n", data.ack_timeout);
+
+    // set packet manager attempt timeout (empirical value)
+    data.pm_attempt_timeout = 800 / (data.ack_timeout);
+    printf("setting pm attempt timeout to %u\n", data.pm_attempt_timeout);
 
     // Set other properties
     data.urx->set_pga(0,0);         // adc pga gain
@@ -643,7 +651,7 @@ void * pm_process(void*userdata)
 
                 pm_attempt++;
 
-                if ((pm_attempt%10)==0) {
+                if ((pm_attempt % (p->pm_attempt_timeout))==0) {
                     // disable control
                     p->tx_pm_header.do_set_control = 0;
 
@@ -679,7 +687,7 @@ void * pm_process(void*userdata)
                     p->num_ack_timeouts++;
                 pm_attempt++;
 
-                if ((pm_attempt%10)==0) {
+                if ((pm_attempt % (p->pm_attempt_timeout))==0) {
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
                     channel_frequency = pm_get_channel_frequency(channel);
