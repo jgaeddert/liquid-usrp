@@ -63,6 +63,10 @@ typedef struct crdata {
     unsigned int ack_timeout;   // time to wait for acknowledgement (ms)
     unsigned int ce_sleep;      // time for ce to sleep (ms)
 
+    unsigned int channel_id;
+    unsigned int bandwidth_id;
+    unsigned int txgain_id;
+
     unsigned int num_rx_packets;
     unsigned int num_valid_rx_packets;
     unsigned int num_ack_timeouts;
@@ -120,6 +124,16 @@ float pm_get_channel_frequency(unsigned int _channel)
     return 1e6f*(450.0f + _channel*0.1f);
 }
 
+float pm_get_bandwidth(unsigned int _bandwidth_id)
+{
+    return 1e3f*( 3.0f*(_bandwidth_id) + 65.0f);
+}
+
+float pm_get_txgain(unsigned int _txgain_id)
+{
+    return 60.0f*((float)_txgain_id) + 10.0f;
+}
+
 void cr_set_tx_frequency(crdata * _p, float _tx_frequency);
 void cr_set_rx_frequency(crdata * _p, float _rx_frequency);
 
@@ -127,6 +141,8 @@ void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate);
 void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate);
 
 void cr_set_tx_gain(crdata * _p, float _tx_gain);
+
+void cr_set_parameters_by_id(crdata * _p, unsigned int _channel_id, unsigned int _bandwidth_id, unsigned int _txgain_id);
 
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid,
@@ -434,6 +450,40 @@ void cr_set_tx_gain(crdata * _p, float _tx_gain)
     }
 
     _p->tx_gain = gain;
+}
+
+void cr_set_parameters(crdata * _p, unsigned int _channel_id, unsigned int _bandwidth_id, unsigned int _txgain_id)
+{
+    // set channel
+    if (_p->channel_id != _channel_id) {
+        _p->channel_id = _channel_id;
+        float frequency = pm_get_channel_frequency(_p->channel_id);
+        printf("*** CONTROL : switching to channel %3u (%8.4f MHz)\n",
+            _p->channel_id, frequency*1e-6f);
+
+        cr_set_tx_frequency(_p, frequency);
+        cr_set_rx_frequency(_p, frequency);
+    }
+
+    if (_p->bandwidth_id != _bandwidth_id) {
+        _p->bandwidth_id = _bandwidth_id;
+        float bandwidth = pm_get_bandwidth(_p->bandwidth_id);
+        printf("*** CONTROL : node switching to bandwidth %3u (%8.4f kHz)\n",
+            _p->bandwidth_id, bandwidth*1e-3f);
+
+        cr_set_tx_symbol_rate(_p, bandwidth);
+        cr_set_rx_symbol_rate(_p, bandwidth);
+    }
+
+    if (_p->txgain_id != _txgain_id) {
+        _p->txgain_id = _txgain_id;
+        float txgain = pm_get_bandwidth(_p->bandwidth_id);
+        printf("*** CONTROL : node switching to txgain %3u (%8.2f)\n",
+                _p->txgain_id, txgain);
+
+        cr_set_tx_gain(_p, txgain);
+    }
+
 }
 
 void * tx_process(void*userdata)
