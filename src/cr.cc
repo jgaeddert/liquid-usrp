@@ -452,7 +452,7 @@ void cr_set_tx_gain(crdata * _p, float _tx_gain)
     _p->tx_gain = gain;
 }
 
-void cr_set_parameters(crdata * _p, unsigned int _channel_id, unsigned int _bandwidth_id, unsigned int _txgain_id)
+void cr_set_parameters_by_id(crdata * _p, unsigned int _channel_id, unsigned int _bandwidth_id, unsigned int _txgain_id)
 {
     // set channel
     if (_p->channel_id != _channel_id) {
@@ -656,7 +656,7 @@ void * pm_process(void*userdata)
             "master" : "slave");
 
     unsigned int pid=0, pm_attempt, channel=0;
-    float channel_frequency;
+    //float channel_frequency;
     while (p->radio_active) {
 
         pid = (pid+1) & 0xffff;
@@ -674,7 +674,7 @@ void * pm_process(void*userdata)
 
                 p->tx_pm_header.ctrl_channel    = rand()%256;
                 p->tx_pm_header.ctrl_bandwidth  = rand()%256;
-                p->tx_pm_header.ctrl_txgain     = 3;
+                p->tx_pm_header.ctrl_txgain     = 100 + (rand()%128);
                 p->tx_pm_header.ctrl_bch0       = 4;
             }
 
@@ -707,27 +707,17 @@ void * pm_process(void*userdata)
 
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
-                    channel_frequency = pm_get_channel_frequency(channel);
-                    printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
-                    cr_set_tx_frequency(p, channel_frequency);
-                    cr_set_rx_frequency(p, channel_frequency);
-
+                    cr_set_parameters_by_id(p, channel, 0, 128);
+                    
                 };
             } while (!p->packet_received && p->radio_active);
 
             if (p->tx_pm_header.do_set_control) {
                 // switch parameters
-                channel = p->tx_pm_header.ctrl_channel;
-                channel_frequency = pm_get_channel_frequency(channel);
-                printf("*** CONTROL : switching to channel %u\n", channel);
-                cr_set_tx_frequency(p, channel_frequency);
-                cr_set_rx_frequency(p, channel_frequency);
-
-                float bandwidth = 1e3f*( 3.0f*(p->tx_pm_header.ctrl_bandwidth) + 65.0f);
-                printf("*** CONTROL : node switching to bandwidth %3u (%8.4f kHz)\n", p->tx_pm_header.ctrl_bandwidth, bandwidth*1e-3f);
-                cr_set_tx_symbol_rate(p, bandwidth);
-                cr_set_rx_symbol_rate(p, bandwidth);
-
+                cr_set_parameters_by_id(p,
+                    p->tx_pm_header.ctrl_channel,
+                    p->tx_pm_header.ctrl_bandwidth,
+                    p->tx_pm_header.ctrl_txgain);
             }
 
             break;
@@ -746,11 +736,7 @@ void * pm_process(void*userdata)
                 if ((pm_attempt % (p->pm_attempt_timeout))==0) {
                     // change frequency (rendezvous channel)
                     channel = 32*(rand() % 8);
-                    channel_frequency = pm_get_channel_frequency(channel);
-                    printf("node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
-                    cr_set_tx_frequency(p, channel_frequency);
-                    cr_set_rx_frequency(p, channel_frequency);
-
+                    cr_set_parameters_by_id(p, channel, 0, 128);
                 };
 
             } while (!p->packet_received && p->radio_active);
@@ -777,18 +763,10 @@ void * pm_process(void*userdata)
 
                 usleep(2*1000*(p->ack_timeout));
 
-                // change frequency (rendezvous channel)
-                channel = p->rx_pm_header.ctrl_channel;
-                channel_frequency = pm_get_channel_frequency(channel);
-                printf("*** CONTROL : node switching to channel %3u (%8.4f MHz)\n", channel, channel_frequency*1e-6);
-                cr_set_tx_frequency(p, channel_frequency);
-                cr_set_rx_frequency(p, channel_frequency);
-
-                float bandwidth = 1e3f*( 3.0f*(p->rx_pm_header.ctrl_bandwidth) + 65.0f);
-                printf("*** CONTROL : node switching to bandwidth %3u (%8.4f kHz)\n",
-                        p->rx_pm_header.ctrl_bandwidth, bandwidth*1e-3f);
-                cr_set_tx_symbol_rate(p, bandwidth);
-                cr_set_rx_symbol_rate(p, bandwidth);
+                cr_set_parameters_by_id(p,
+                    p->rx_pm_header.ctrl_channel,
+                    p->rx_pm_header.ctrl_bandwidth,
+                    p->rx_pm_header.ctrl_txgain);
             }
 
             break;
