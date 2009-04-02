@@ -123,6 +123,8 @@ void cr_set_rx_frequency(crdata * _p, float _rx_frequency);
 void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate);
 void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate);
 
+void cr_set_tx_gain(crdata * _p, float _tx_gain);
+
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid,
                     void * _userdata)
@@ -408,6 +410,22 @@ void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate)
 
     printf("setting rx symbol rate to %8.2f kHz (decim:  %3u)\n",
             _p->fs_rx * 1e-3f, _p->rx_decim);
+}
+
+void cr_set_tx_gain(crdata * _p, float _tx_gain)
+{
+    unsigned short gain;
+    if (_tx_gain < 10.0f) {
+        printf("warning: cr_set_tx_gain(), gain setting is below minimum\n");
+        gain = 10;
+    } else if (_tx_gain > 16000.0f) {
+        printf("warning: cr_set_tx_gain(), gain setting exceeds maximum\n");
+        gain = 16000;
+    } else {
+        gain = (unsigned short) _tx_gain;
+    }
+
+    _p->tx_gain = gain;
 }
 
 void * tx_process(void*userdata)
