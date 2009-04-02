@@ -406,6 +406,14 @@ void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate)
 
     printf("setting tx symbol rate to %8.2f kHz (interp: %3u)\n",
             _p->fs_tx * 1e-3f, _p->tx_interp);
+
+    // set ack timeout (empirical relationship)
+    _p->ack_timeout = (unsigned int) (6000.0e3f / _p->fs_tx);
+    printf("setting ACK timeout to %u ms\n", _p->ack_timeout);
+
+    // set packet manager attempt timeout (empirical value)
+    _p->pm_attempt_timeout = 800 / (_p->ack_timeout);
+    printf("setting pm attempt timeout to %u\n", _p->pm_attempt_timeout);
 }
 
 void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate)
@@ -477,7 +485,7 @@ void cr_set_parameters_by_id(crdata * _p, unsigned int _channel_id, unsigned int
 
     if (_p->txgain_id != _txgain_id) {
         _p->txgain_id = _txgain_id;
-        float txgain = pm_get_txgain(_p->bandwidth_id);
+        float txgain = pm_get_txgain(_p->txgain_id);
         printf("*** CONTROL : node switching to txgain %3u (%8.2f)\n",
                 _p->txgain_id, txgain);
 
