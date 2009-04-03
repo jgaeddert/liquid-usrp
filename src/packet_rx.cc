@@ -154,6 +154,9 @@ int main (int argc, char **argv)
     if (rx_db0 == USRP_DBID_FLEX_400_RX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_RX_MIMO_B\n");
         rx_db0_control = new db_flex400_rx_mimo_b(urx,0);
+    } else if (rx_db0 == USRP_DBID_FLEX_400_RX) {
+        printf("usrp daughterboard: USRP_DBID_FLEX_400_RX\n");
+        rx_db0_control = new db_flex400_rx(urx,0);
     } else {
         printf("use usrp db flex 400 rx MIMO B\n");
         return 0;
@@ -177,6 +180,9 @@ int main (int argc, char **argv)
     if (tx_db0 == USRP_DBID_FLEX_400_TX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_TX_MIMO_B\n");
         tx_db0_control = new db_flex400_tx_mimo_b(utx,0);
+	} else if (tx_db0 == USRP_DBID_FLEX_400_TX) {
+        printf("usrp daughterboard: USRP_DBID_FLEX_400\n");
+        tx_db0_control = new db_flex400_tx(utx,0);
     } else {
         printf("use usrp db flex 400 tx MIMO B\n");
         return 0;

@@ -374,6 +374,8 @@ void cr_set_tx_frequency(crdata * _p, float _tx_frequency)
     _p->txdb->set_db_freq(db_lo_freq_set, db_lo_freq);
     float ddc_freq = _tx_frequency - db_lo_freq;
     _p->utx->set_tx_freq(USRP_CHANNEL, ddc_freq);
+
+    _p->fc = _tx_frequency;
 }
 
 
@@ -412,16 +414,22 @@ void cr_set_tx_symbol_rate(crdata * _p, float _tx_rate)
     // set value in usrp
     _p->utx->set_interp_rate( _p->tx_interp );
 
+#if VERBOSE
     printf("setting tx symbol rate to %8.2f kHz (interp: %3u)\n",
             _p->fs_tx * 1e-3f, _p->tx_interp);
+#endif
 
     // set ack timeout (empirical relationship)
     _p->ack_timeout = (unsigned int) (6000.0e3f / _p->fs_tx);
+#if VERBOSE
     printf("setting ACK timeout to %u ms\n", _p->ack_timeout);
+#endif
 
     // set packet manager attempt timeout (empirical value)
     _p->pm_attempt_timeout = 800 / (_p->ack_timeout);
+#if VERBOSE
     printf("setting pm attempt timeout to %u\n", _p->pm_attempt_timeout);
+#endif
 }
 
 void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate)
@@ -448,8 +456,10 @@ void cr_set_rx_symbol_rate(crdata * _p, float _rx_rate)
     // set value in usrp
     _p->urx->set_decim_rate( _p->rx_decim );
 
+#if VERBOSE
     printf("setting rx symbol rate to %8.2f kHz (decim:  %3u)\n",
             _p->fs_rx * 1e-3f, _p->rx_decim);
+#endif
 }
 
 void cr_set_tx_gain(crdata * _p, float _tx_gain)
@@ -474,8 +484,10 @@ void cr_set_parameters_by_id(crdata * _p, unsigned int _channel_id, unsigned int
     if (_p->channel_id != _channel_id) {
         _p->channel_id = _channel_id;
         float frequency = pm_get_channel_frequency(_p->channel_id);
+#if VERBOSE
         printf("*** CONTROL : switching to channel %3u (%8.4f MHz)\n",
             _p->channel_id, frequency*1e-6f);
+#endif
 
         cr_set_tx_frequency(_p, frequency);
         cr_set_rx_frequency(_p, frequency);
@@ -484,8 +496,10 @@ void cr_set_parameters_by_id(crdata * _p, unsigned int _channel_id, unsigned int
     if (_p->bandwidth_id != _bandwidth_id) {
         _p->bandwidth_id = _bandwidth_id;
         float bandwidth = pm_get_bandwidth(_p->bandwidth_id);
+#if VERBOSE
         printf("*** CONTROL : node switching to bandwidth %3u (%8.4f kHz)\n",
             _p->bandwidth_id, bandwidth*1e-3f);
+#endif
 
         cr_set_tx_symbol_rate(_p, bandwidth);
         cr_set_rx_symbol_rate(_p, bandwidth);
@@ -494,8 +508,10 @@ void cr_set_parameters_by_id(crdata * _p, unsigned int _channel_id, unsigned int
     if (_p->txgain_id != _txgain_id) {
         _p->txgain_id = _txgain_id;
         float txgain = pm_get_txgain(_p->txgain_id);
+#if VERBOSE
         printf("*** CONTROL : node switching to txgain %3u (%8.2f)\n",
                 _p->txgain_id, txgain);
+#endif
 
         cr_set_tx_gain(_p, txgain);
     }
@@ -695,11 +711,13 @@ void * pm_process(void*userdata)
                 printf("transmitting packet %u (attempt %u)\n", pid, pm_attempt);
 #endif
                 if (p->tx_pm_header.do_set_control) {
+#if VERBOSE
                     printf("***** sending control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
                         p->tx_pm_header.ctrl_channel,
                         p->tx_pm_header.ctrl_bandwidth,
                         p->tx_pm_header.ctrl_txgain,
                         p->tx_pm_header.ctrl_bch0);
+#endif
                 }
                 pm_send_data_packet(p,pid);
 
@@ -707,8 +725,10 @@ void * pm_process(void*userdata)
                 if (!p->packet_received)
                     p->num_ack_timeouts++;
 
+#if VERBOSE
                 if (p->packet_received && p->tx_pm_header.do_set_control)
                     printf("****** control received ack\n");
+#endif
 
                 pm_attempt++;
 
@@ -981,6 +1001,7 @@ void * ce_process(void*userdata)
     crdata * p = (crdata*) userdata;
 
     float throughput;
+    bool run_cognition_cycle;
     //unsigned int i;
     //for (i=0; i<100; i++) {
     while (true) {
@@ -993,22 +1014,34 @@ void * ce_process(void*userdata)
         p->ce_waiting = true;
         pthread_cond_wait(&(p->control_ready),&(p->control_mutex));
 
+        if ((rand()%4)==0 && p->mode == OPMODE_MASTER)
+            run_cognition_cycle = true;
+        else
+            run_cognition_cycle = false;
+
         // measure throughput
         throughput = 64*8*(p->num_valid_rx_packets)/((p->ce_sleep)/1000.0f);
-        printf("ce: throughput: %8.3f kb/s, [%4u / %4u] %4u timeout(s)\n",
+        printf("ce %1s %8.3f kb/s, packets [%4u / %4u] %4u timeout(s), fc : %8.2fMHz, fd : %8.2fkHz\n",
+                run_cognition_cycle ? "*" : " ",
                 throughput*1e-3,
                 p->num_valid_rx_packets,
                 p->num_rx_packets,
-                p->num_ack_timeouts);
+                p->num_ack_timeouts,
+                p->fc * 1e-6f,
+                p->fs_tx * 1e-3f);
 
         p->num_rx_packets = 0;
         p->num_valid_rx_packets = 0;
         p->num_ack_timeouts = 0;
 
         // randomly send control signal
-        if ((rand()%10)==0) {
+        if (run_cognition_cycle) {
             p->tx_pm_header.do_set_control  = 1;
 
+            //
+#if VERBOSE
+            printf("## EXECUTE COGNITION CYCLE ##\n");
+#endif
             p->tx_pm_header.ctrl_channel    = rand()%256;
             p->tx_pm_header.ctrl_bandwidth  = rand()%256;
             p->tx_pm_header.ctrl_txgain     = 100 + (rand()%128);
