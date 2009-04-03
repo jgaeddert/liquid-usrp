@@ -86,9 +86,12 @@ typedef struct crdata {
     // threading
     pthread_cond_t  tx_data_ready;
     pthread_cond_t  rx_data_ready;
+    pthread_cond_t  control_ready;
     pthread_mutex_t tx_data_mutex;
     pthread_mutex_t rx_data_mutex;
+    pthread_mutex_t control_mutex;
     bool radio_active;
+    bool ce_waiting;
 
     // data buffers
     unsigned char tx_header[24];
@@ -317,10 +320,13 @@ int main (int argc, char **argv)
     // initialize mutexes, etc.
     pthread_mutex_init(&(data.tx_data_mutex),NULL);
     pthread_mutex_init(&(data.rx_data_mutex),NULL);
+    pthread_mutex_init(&(data.control_mutex),NULL);
     pthread_cond_init(&(data.tx_data_ready),NULL);
     pthread_cond_init(&(data.rx_data_ready),NULL);
+    pthread_cond_init(&(data.control_ready),NULL);
 
     data.radio_active = true;
+    data.ce_waiting = false;
 
     // create thread objects
     void * status;
@@ -352,8 +358,10 @@ int main (int argc, char **argv)
     // clean up objects
     pthread_mutex_destroy(&(data.tx_data_mutex));
     pthread_mutex_destroy(&(data.rx_data_mutex));
+    pthread_mutex_destroy(&(data.control_mutex));
     pthread_cond_destroy(&(data.tx_data_ready));
     pthread_cond_destroy(&(data.rx_data_ready));
+    pthread_cond_destroy(&(data.control_ready));
     return 0;
 }
 
@@ -676,18 +684,13 @@ void * pm_process(void*userdata)
             // set control parameters
             p->tx_pm_header.do_set_control = 0;
 
-            // randomly send control signal
-            if ((rand()%500)==0) {
-                p->tx_pm_header.do_set_control  = 1;
-
-                p->tx_pm_header.ctrl_channel    = rand()%256;
-                p->tx_pm_header.ctrl_bandwidth  = rand()%256;
-                p->tx_pm_header.ctrl_txgain     = 100 + (rand()%128);
-                p->tx_pm_header.ctrl_bch0       = 4;
-            }
-
             // continue transmitting until packet is received
             do {
+
+                // lock control mutex
+                usleep(500);  // sleep a short time to give ce a chance to lock control mutex
+                pthread_mutex_lock(&(p->control_mutex));
+
 #if VERBOSE
                 printf("transmitting packet %u (attempt %u)\n", pid, pm_attempt);
 #endif
@@ -718,6 +721,14 @@ void * pm_process(void*userdata)
                     cr_set_parameters_by_id(p, channel, 0, 128);
                     
                 };
+
+                pthread_mutex_unlock(&(p->control_mutex));
+                if (p->ce_waiting) {
+                    //printf("  ==> pm sees ce is waiting; signaling condition\n");
+                    pthread_cond_signal(&(p->control_ready));
+                    p->ce_waiting = false;
+                }
+
             } while (!p->packet_received && p->radio_active);
 
             if (p->tx_pm_header.do_set_control) {
@@ -816,8 +827,8 @@ void pm_send_ack_packet(crdata * p, unsigned int pid)
     p->tx_pm_header.type = PACKET_TYPE_ACK;
     pm_assemble_header(p->tx_pm_header, p->tx_header);
 
-    pthread_mutex_unlock(&(p->tx_data_mutex));
     pthread_cond_signal(&(p->tx_data_ready));
+    pthread_mutex_unlock(&(p->tx_data_mutex));
 
 }
 
@@ -977,6 +988,10 @@ void * ce_process(void*userdata)
         usleep((p->ce_sleep)*1000);
 
         // TODO: lock internal mutex
+        pthread_mutex_lock(&(p->control_mutex));
+
+        p->ce_waiting = true;
+        pthread_cond_wait(&(p->control_ready),&(p->control_mutex));
 
         // measure throughput
         throughput = 64*8*(p->num_valid_rx_packets)/((p->ce_sleep)/1000.0f);
@@ -990,7 +1005,18 @@ void * ce_process(void*userdata)
         p->num_valid_rx_packets = 0;
         p->num_ack_timeouts = 0;
 
+        // randomly send control signal
+        if ((rand()%10)==0) {
+            p->tx_pm_header.do_set_control  = 1;
+
+            p->tx_pm_header.ctrl_channel    = rand()%256;
+            p->tx_pm_header.ctrl_bandwidth  = rand()%256;
+            p->tx_pm_header.ctrl_txgain     = 100 + (rand()%128);
+            p->tx_pm_header.ctrl_bch0       = 4;
+        }
+
         // TODO: unlock internal mutex
+        pthread_mutex_unlock(&(p->control_mutex));
     }
 
     // lock mutex
