@@ -791,6 +791,7 @@ void * pm_process(void*userdata)
 
             // set control parameters
             if (p->rx_pm_header.do_set_control) {
+#if VERBOSE
                 printf("***** receiving control signal: ch: %u, bw: %u, gain: %u, bch0: %u\n",
                     p->rx_pm_header.ctrl_channel,
                     p->rx_pm_header.ctrl_bandwidth,
@@ -798,6 +799,7 @@ void * pm_process(void*userdata)
                     p->rx_pm_header.ctrl_bch0);
 
                 printf("*** sending extra ACK\n");
+#endif
                 pm_send_ack_packet(p,p->rx_pm_header.pid);
 
                 usleep(2*1000*(p->ack_timeout));
@@ -1008,12 +1010,6 @@ void * ce_process(void*userdata)
         // sleep for several seconds
         usleep((p->ce_sleep)*1000);
 
-        // TODO: lock internal mutex
-        pthread_mutex_lock(&(p->control_mutex));
-
-        p->ce_waiting = true;
-        pthread_cond_wait(&(p->control_ready),&(p->control_mutex));
-
         if ((rand()%4)==0 && p->mode == OPMODE_MASTER)
             run_cognition_cycle = true;
         else
@@ -1033,6 +1029,15 @@ void * ce_process(void*userdata)
         p->num_rx_packets = 0;
         p->num_valid_rx_packets = 0;
         p->num_ack_timeouts = 0;
+
+        if (p->mode != OPMODE_MASTER)
+            continue;
+
+        // TODO: lock internal mutex
+        pthread_mutex_lock(&(p->control_mutex));
+
+        p->ce_waiting = true;
+        pthread_cond_wait(&(p->control_ready),&(p->control_mutex));
 
         // randomly send control signal
         if (run_cognition_cycle) {

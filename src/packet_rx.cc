@@ -98,7 +98,7 @@ int main (int argc, char **argv)
     int    mode = 0;
     int    noverruns = 0;
     bool   overrun;
-    int    total_reads = 1000;
+    int    total_reads = 100000;
     int    i;
     const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
