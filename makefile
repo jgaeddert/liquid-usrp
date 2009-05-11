@@ -2,7 +2,7 @@
 # USRP tests makefile
 #
 
-LDFLAGS	= -lusrp -pthread -lliquid
+LDFLAGS	= -lusrp -pthread -lliquid -lfftw3f
 
 local_src	:=		\
 	basic.cc		\
@@ -23,7 +23,8 @@ local_progs	:=		\
 	src/test_usrp_standard_tx.cc \
 	src/packet_tx.cc \
 	src/packet_rx.cc	\
-	src/cr.cc
+	src/cr.cc		\
+	src/tx_ofdmoqam.cc
 
 sources		= $(addprefix src/,$(local_src))
 objects		= $(patsubst %.cc,%.cc.o,$(sources))
