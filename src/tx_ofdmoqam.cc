@@ -164,6 +164,7 @@ int main (int argc, char **argv)
     std::complex<float> x[k];
     std::complex<float> X[k];
     std::complex<float> y;
+    std::complex<float> pilot_tone;
 
     modem linmod = modem_create(ms, bps);
     unsigned int s;
@@ -175,6 +176,9 @@ int main (int argc, char **argv)
     utx->start();        // Start data transfer
 
     unsigned int t;
+
+    nco nco_pilot = nco_create();
+    nco_set_frequency(nco_pilot, M_PI*0.55f);
  
     unsigned int j, n;
     // Do USRP Samples Reading 
@@ -198,6 +202,12 @@ int main (int argc, char **argv)
             for (n=0; n<k; n++) {
                 I = (short) (x[n].real() * k * 1000);
                 Q = (short) (x[n].imag() * k * 1000);
+
+                nco_cexpf(nco_pilot, &pilot_tone);
+                nco_step(nco_pilot);
+
+                I += (short)(pilot_tone.real() * 1000);
+                Q += (short)(pilot_tone.imag() * 1000);
                 //printf("%4u : %6d + j%6d\n", t, I, Q);
                 //I = 1000;
                 //Q = 0;
@@ -255,6 +265,7 @@ int main (int argc, char **argv)
     // clean it up
     ofdmoqam_destroy(cs);
     modem_destroy(linmod);
+    nco_destroy(nco_pilot);
     delete utx;
     return 0;
 }
