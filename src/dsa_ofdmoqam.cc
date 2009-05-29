@@ -51,6 +51,12 @@
  
 int main (int argc, char **argv)
 {
+    // ofdm/oqam options
+    unsigned int num_subcarriers=128;   // number of ofdm/oqam channels
+    unsigned int m=6;               // filter delay
+    modulation_scheme ms=MOD_QAM;   // modulation scheme
+    unsigned int bps=2;             // modulation depth
+
     usrp_standard_tx * utx;
     usrp_standard_rx * urx;
     int tx_db_id;
@@ -68,20 +74,14 @@ int main (int argc, char **argv)
     //int    total_writes = 100000;
     unsigned int    i;
 
-    // ofdm/oqam options
-    unsigned int num_channels=32;   // number of ofdm/oqam channels
-    unsigned int m=6;               // filter delay
-    modulation_scheme ms=MOD_QAM;   // modulation scheme
-    unsigned int bps=2;             // modulation depth
-
     // USRP buffer
     //int    buf[SAMPLES_PER_READ];
     //int    bufsize = SAMPLES_PER_READ*4; // Should be multiple of 512 Bytes
-    const unsigned int tx_buf_len = 512; // ensure multiple of num_channels
+    const unsigned int tx_buf_len = 512; // ensure multiple of num_subcarriers
     short tx_buf[tx_buf_len];
 
     int    decim_rate = 256;            // 8 -> 32 MB/sec
-    int    interp_rate = 64;
+    int    interp_rate = 56;
     utx = usrp_standard_tx::make(0, interp_rate);
     urx = usrp_standard_rx::make(0, decim_rate);
  
@@ -121,9 +121,11 @@ int main (int argc, char **argv)
 
      // Set Number of channels
     utx->set_nchannels(nchannels);
+    urx->set_nchannels(nchannels);
  
     // Set ADC PGA gain
-    //utx->set_pga(0,gain);
+    urx->set_pga(0,0);         // adc pga gain
+    urx->set_mux(0x32103210);  // Board A only
  
     // Set FPGA Mux
     //utx->set_mux(0x32103210); // Board A only
@@ -161,17 +163,15 @@ int main (int argc, char **argv)
     printf("ddc freq: %f MHz (actual %f MHz)\n", ddc_freq_set/1e6, ddc_freq/1e6);
 
     // create channelizer
-    unsigned int k=2*num_channels;
+    unsigned int k=2*num_subcarriers;
     ofdmoqam cs = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_SYNTHESIZER);
 
     // set channelizer gain
     float gain[k];
     for (i=0; i<k; i++)
         gain[i] = (i<k/4) || (i>3*k/4) ? 1.0f : 0.0f;
-    gain[3] = 0.0f;
-    gain[4] = 0.0f;
-    gain[5] = 0.0f;
-    gain[6] = 0.0f;
+    for (i=9; i<18; i++)
+        gain[i] = 0.0f;
 
     std::complex<float> x[k];
     std::complex<float> X[k];
@@ -188,9 +188,6 @@ int main (int argc, char **argv)
 
     unsigned int t;
 
-    unsigned int pilot_channel = 3*k/4 - 2;
-    unsigned int pilot_symbol = 1;
- 
     unsigned int j, n;
     // Do USRP Samples Reading 
     //for (i = 0; i < total_writes; i++) {
@@ -207,16 +204,12 @@ int main (int argc, char **argv)
                 X[n] = y*gain[n];
             }
 
-            // set pilot symbol
-            //X[pilot_channel] = pilot_symbol ? 1.0f : -1.0f;
-            pilot_symbol = 1-pilot_symbol;
-
             // execute synthesizer
             ofdmoqam_execute(cs, X, x);
 
             for (n=0; n<k; n++) {
-                I = (short) (x[n].real() * k * 1000);
-                Q = (short) (x[n].imag() * k * 1000);
+                I = (short) (x[n].real() * k * 500);
+                Q = (short) (x[n].imag() * k * 500);
 
                 //printf("%4u : %6d + j%6d\n", t, I, Q);
                 //I = 1000;
