@@ -55,7 +55,8 @@ int main (int argc, char **argv)
 {
     // ofdm/oqam options
     unsigned int num_subcarriers=128;   // number of ofdm/oqam channels
-    unsigned int m=6;               // filter delay
+    unsigned int m=6;                   // filter delay
+    float beta=0.90f;                   // excess bandwidth factor
     modulation_scheme ms=MOD_QAM;   // modulation scheme
     unsigned int bps=2;             // modulation depth
     float eta=1e-2;                // DSA sensitivity
@@ -187,20 +188,22 @@ int main (int argc, char **argv)
 
     // create channelizer
     unsigned int k=num_subcarriers;
-    ofdmoqam cs = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_SYNTHESIZER);
-    ofdmoqam ca = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_ANALYZER);
-    unsigned int k0 = 0.3*k;    // lo guard
-    unsigned int k1 = 0.7*k;    // hi guard
+    ofdmoqam cs = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_SYNTHESIZER);
+    ofdmoqam ca = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_ANALYZER);
+    unsigned int k0 = 0.2*k;    // lo guard
+    unsigned int k1 = 0.8*k;    // hi guard
 
     // set channelizer gain
     float gain[k];
     unsigned int ki;
+#if 0
     for (i=0; i<k; i++) {
         ki = (i + k/2) % k;
         gain[i] = (ki<k0) || (ki>k1) ? 0.0f : 1.0f;
         //printf("%3u >> %3u : %3u : %3u : %f\n", i, k0, ki, k1, gain[i]);
-        gain[i] = 1.0f;
+        //gain[i] = 1.0f;
     }
+#endif
 
     std::complex<float> x[k];
     std::complex<float> X[k];
@@ -267,7 +270,6 @@ int main (int argc, char **argv)
                 // if (t < m) continue;
                 // else       t++;
                 for (n=0; n<k; n++) {
-                    ki = (n+k/2)%k;
                     sensing[n] *= 1-eta;
                     sensing[n] += eta * abs(X[n]);
                 }
@@ -279,8 +281,8 @@ int main (int argc, char **argv)
         //printf("receiver disabled\n");
         
         // compute warped sensing vector
-        printf("----------\n");
         for (n=0; n<k; n++) {
+
             unsigned int wp = (n+1)   % k;
             unsigned int wn = (n-1+k) % k;
             sensing_warped[n] = sensing[n] + 
@@ -289,9 +291,16 @@ int main (int argc, char **argv)
 
             // set gain
             gain[n] = (sensing_warped[n] < 1.0f) ? 1.0f : 0.0f;
-
-            // print results
-            printf("%3u : %12.8f %c\n", n, sensing_warped[n], (gain[n]>0.5f) ? '*' : ' ');
+            ki = (n+k/2)%k;
+            if ( (ki<k0) || (ki>k1) )
+                gain[n] = 0.0f;
+        }
+            
+        // print results
+        printf("----------\n");
+        for (n=0; n<k; n++) {
+            ki = (n+k/2)%k;
+            printf("%3u : %12.8f %c\n", ki, sensing_warped[ki], (gain[ki]>0.5f) ? '*' : ' ');
         }
 
         printf("rms : %12.8f dB\n", 20*log10(rms));
@@ -325,8 +334,6 @@ int main (int argc, char **argv)
                     s = modem_gen_rand_sym(linmod);
                     modem_modulate(linmod, s, &y);
 
-                    ki = (n+k/2) % k;
-                    //X[ki] = y*gain[ki];
                     X[n] = y*gain[n];
                 }
 
