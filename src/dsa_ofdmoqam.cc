@@ -56,6 +56,8 @@ int main (int argc, char **argv)
     unsigned int m=6;               // filter delay
     modulation_scheme ms=MOD_QAM;   // modulation scheme
     unsigned int bps=2;             // modulation depth
+    float eta=1e-2f;                // DSA sensitivity
+    float gamma=1.0f;               // DSA threshold
 
     usrp_standard_tx * utx;
     usrp_standard_rx * urx;
@@ -64,9 +66,10 @@ int main (int argc, char **argv)
     db_base * txdb;
     db_base * rxdb;
 
-    int    nchannels = 1;
     int    nunderruns = 0;
     bool   underrun;
+    bool overrun;
+    int num_overruns=0;
     //int    total_writes = 100000;
     unsigned int    i;
 
@@ -78,8 +81,8 @@ int main (int argc, char **argv)
     const unsigned int rx_buf_len = 512;
     short rx_buf[rx_buf_len];
 
-    int    decim_rate = 256;            // 8 -> 32 MB/sec
-    int    interp_rate = 56;
+    int    decim_rate = 128;            // 8 -> 32 MB/sec
+    int    interp_rate = decim_rate/2;
     utx = usrp_standard_tx::make(0, interp_rate);
     urx = usrp_standard_rx::make(0, decim_rate);
  
@@ -118,8 +121,8 @@ int main (int argc, char **argv)
 
 
      // Set Number of channels
-    utx->set_nchannels(nchannels);
-    urx->set_nchannels(nchannels);
+    utx->set_nchannels(1);
+    urx->set_nchannels(1);
  
     // Set ADC PGA gain
     urx->set_pga(0,0);         // adc pga gain
@@ -145,11 +148,12 @@ int main (int argc, char **argv)
     printf("gmin/gmax/gstep: %f/%f/%f\n", gmin,gmax,gstep);
     txdb->set_gain(gmax);
 
-    // set the daughterboard frequency
+    // TX: set the daughterboard frequency
     float fmin, fmax, fstep;
     txdb->get_freq_range(fmin,fmax,fstep);
     printf("fmin/fmax/fstep: %f/%f/%f\n", fmin,fmax,fstep);
     float frequency = 462.5e6;
+//    float frequency = 485.0e6f;
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
     float db_lo_freq_set = frequency + db_lo_offset;
@@ -160,9 +164,29 @@ int main (int argc, char **argv)
     float ddc_freq = utx->tx_freq(USRP_CHANNEL);
     printf("ddc freq: %f MHz (actual %f MHz)\n", ddc_freq_set/1e6, ddc_freq/1e6);
 
+
+    // RX: set the daughterboard frequency
+    rxdb->get_freq_range(fmin,fmax,fstep);
+    printf("fmin/fmax/fstep: %f/%f/%f\n", fmin,fmax,fstep);
+    db_lo_offset = -8e6;
+    db_lo_freq = 0.0f;
+    db_lo_freq_set = frequency + db_lo_offset;
+    rxdb->set_db_freq(db_lo_freq_set, db_lo_freq);
+    printf("(rx) lo frequency: %f MHz (actual: %f MHz)\n", db_lo_freq_set/1e6, db_lo_freq/1e6);
+    ddc_freq_set = frequency - db_lo_freq;
+    urx->set_rx_freq(USRP_CHANNEL, ddc_freq_set);
+    ddc_freq = urx->rx_freq(USRP_CHANNEL);
+    printf("(rx) ddc freq: %f MHz (actual %f MHz)\n", ddc_freq_set/1e6, ddc_freq/1e6);
+
+    // enable automatic transmit/receive
+    bool autotxrx = false;
+    txdb->set_auto_tr(autotxrx);
+    rxdb->set_auto_tr(autotxrx);
+
     // create channelizer
-    unsigned int k=2*num_subcarriers;
+    unsigned int k=num_subcarriers;
     ofdmoqam cs = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_SYNTHESIZER);
+    ofdmoqam ca = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_ANALYZER);
     unsigned int k0 = 0.3*k;    // lo guard
     unsigned int k1 = 0.7*k;    // hi guard
 
@@ -172,11 +196,15 @@ int main (int argc, char **argv)
     for (i=0; i<k; i++) {
         ki = (i + k/2) % k;
         gain[i] = (ki<k0) || (ki>k1) ? 0.0f : 1.0f;
+        //printf("%3u >> %3u : %3u : %3u : %f\n", i, k0, ki, k1, gain[i]);
+        gain[i] = 1.0f;
     }
 
     std::complex<float> x[k];
     std::complex<float> X[k];
     std::complex<float> y;
+    std::complex<float> buffer[rx_buf_len/2];
+    float sensing[k];
 
     modem linmod = modem_create(ms, bps);
     unsigned int s;
@@ -191,6 +219,7 @@ int main (int argc, char **argv)
     // Do USRP Samples Reading 
 
     while (true) {
+    //printf("transmitter enabled\n");
     utx->start();        // Start data transfer
 
     for (i = 0; i < 8000; i++) {
@@ -206,15 +235,16 @@ int main (int argc, char **argv)
                 modem_modulate(linmod, s, &y);
 
                 ki = (n+k/2) % k;
-                X[ki] = y*gain[ki];
+                //X[ki] = y*gain[ki];
+                X[n] = y*gain[n];
             }
 
             // execute synthesizer
             ofdmoqam_execute(cs, X, x);
 
             for (n=0; n<k; n++) {
-                I = (short) (x[n].real() * k * 500);
-                Q = (short) (x[n].imag() * k * 500);
+                I = (short) (x[n].real() * k * 1000);
+                Q = (short) (x[n].imag() * k * 1000);
 
                 //printf("%4u : %6d + j%6d\n", t, I, Q);
                 //I = 1000;
@@ -224,29 +254,6 @@ int main (int argc, char **argv)
                 tx_buf[t++] = host_to_usrp_short(Q);
             }
         }
-
-        //printf("t : %u (%u)\n", t, tx_buf_len);
-
-#if 0
-        // generate random frame data
-        for (j=0; j<tx_buf_len; j+=2*k) {
-            symbol.real() = rand()%2 ? 1.0f : -1.0f;
-            symbol.imag() = rand()%2 ? 1.0f : -1.0f;
-
-            s = modem_gen_rand_sym(linmod);
-            modem_modulate(linmod, s, &symbol);
-
-            // run interpolator
-            interp_crcf_execute(interpolator, symbol, interp_buffer);
-            for (n=0; n<k; n++) {
-                I = (short) (interp_buffer[n].real() * 1000);
-                Q = (short) (interp_buffer[n].imag() * 1000);
-
-                tx_buf[j+2*n+0] = host_to_usrp_short(I);
-                tx_buf[j+2*n+1] = host_to_usrp_short(Q);
-            }
-        }
-#endif
 
         //utx->write(&buf, bufsize, &underrun); 
         int rc = utx->write(tx_buf, tx_buf_len*sizeof(short), &underrun); 
@@ -268,22 +275,67 @@ int main (int argc, char **argv)
  
  
     utx->stop();  // Stop data transfer
-    printf("USRP Transfer Stopped\n");
+    //printf("transmitter disabled\n");
 
     // start receiver
-    usleep(100e3);
+    usleep(10e3);
+    
+    urx->start();
+    //printf("receiver enabled\n");
+    // clear channelizer internal filter state
+    //ofdmoqam_clear(ca);
+    for (i=0; i<k; i++)
+        sensing[i] = 0.0f;
+    for (i=0; i<500; i++) {
+        urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
 
+        // convert to float
+        std::complex<float> sample;
+        for (n=0; n<rx_buf_len; n+=2) {
+            sample.real() = (float) ( rx_buf[n+0]) * 0.01f;
+            sample.imag() = (float) (-rx_buf[n+1]) * 0.01f;
+
+            buffer[n/2] = sample;
+        }
+
+        // run analysis
+        for (j=0; j<rx_buf_len/2; j+=k) {
+            memmove(x,&buffer[j],k*sizeof(std::complex<float>));
+            ofdmoqam_execute(ca,buffer,X);
+#if 0
+            X[4] = 4.0f;
+            X[5] = 4.0f;
+            X[6] = 4.0f;
+#endif
+
+            // if (t < m) continue;
+            // else       t++;
+            for (n=0; n<k; n++) {
+                ki = (n+k/2)%k;
+                sensing[n] *= 1-eta;
+                sensing[n] += eta * abs(X[n]);
+            }
+        }
+
+
+    }
+    urx->stop();
+    //printf("receiver disabled\n");
 
     // set gain
-    for (n=k0; n<k1; n++) {
+    printf("----------\n");
+    //for (n=k0; n<k1; n++) {
+    for (n=0; n<k; n++) {
         ki = (n+k/2)%k;
-        gain[ki] = rand()%4 ? 1.0 : 0.0f;
+        gain[n] = (sensing[n] < gamma) ? 1.0f : 0.0f;
+        printf("%3u : %12.8f\n", n, sensing[n]);
     }
 
     } // while (true)
 
     // clean it up
     ofdmoqam_destroy(cs);
+    ofdmoqam_destroy(ca);
     modem_destroy(linmod);
     delete utx;
     return 0;
