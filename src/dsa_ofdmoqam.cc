@@ -84,8 +84,8 @@ int main (int argc, char **argv)
     const unsigned int rx_buf_len = 512;
     short rx_buf[rx_buf_len];
 
-    int    decim_rate = 128;            // 8 -> 32 MB/sec
-    int    interp_rate = decim_rate/2;
+    int    interp_rate = 64;
+    int    decim_rate = interp_rate/2;            // 8 -> 32 MB/sec
     utx = usrp_standard_tx::make(0, interp_rate);
     urx = usrp_standard_rx::make(0, decim_rate);
  
@@ -279,22 +279,21 @@ int main (int argc, char **argv)
         //printf("receiver disabled\n");
         
         // compute warped sensing vector
+        printf("----------\n");
         for (n=0; n<k; n++) {
             unsigned int wp = (n+1)   % k;
             unsigned int wn = (n-1+k) % k;
             sensing_warped[n] = sensing[n] + 
                 0.15*(sensing[wp] + sensing[wn]);
             sensing_warped[n] /= gamma;
+
+            // set gain
+            gain[n] = (sensing_warped[n] < 1.0f) ? 1.0f : 0.0f;
+
+            // print results
+            printf("%3u : %12.8f %c\n", n, sensing_warped[n], (gain[n]>0.5f) ? '*' : ' ');
         }
 
-        // set gain
-        printf("----------\n");
-        //for (n=k0; n<k1; n++) {
-        for (n=0; n<k; n++) {
-            ki = (n+k/2)%k;
-            gain[n] = (sensing_warped[n] < 1.0f) ? 1.0f : 0.0f;
-            printf("%3u : %12.8f\n", n, sensing_warped[n]);
-        }
         printf("rms : %12.8f dB\n", 20*log10(rms));
 
 #if DEBUG
@@ -308,7 +307,13 @@ int main (int argc, char **argv)
         //printf("transmitter enabled\n");
         utx->start();        // Start data transfer
 
-        for (i = 0; i < 8000; i++) {
+        // flush ofdmoqam buffers
+        for (i=0; i<k; i++)
+            X[i] = 0.0f;
+        for (i=0; i<2*m; i++)
+            ofdmoqam_execute(cs,X,x);
+
+        for (i = 0; i < 2500; i++) {
         //while (true) {
             t=0;
 
