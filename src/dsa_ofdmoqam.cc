@@ -52,7 +52,7 @@
 int main (int argc, char **argv)
 {
     // ofdm/oqam options
-    unsigned int num_subcarriers=128;   // number of ofdm/oqam channels
+    unsigned int num_subcarriers=32;   // number of ofdm/oqam channels
     unsigned int m=6;               // filter delay
     modulation_scheme ms=MOD_QAM;   // modulation scheme
     unsigned int bps=2;             // modulation depth
@@ -64,10 +64,6 @@ int main (int argc, char **argv)
     db_base * txdb;
     db_base * rxdb;
 
-    //bool   loopback_p = false;
-    //bool   counting_p = false;
-    //bool   width_8_p = false;
-    //double center_freq = 0;
     int    nchannels = 1;
     int    nunderruns = 0;
     bool   underrun;
@@ -79,6 +75,8 @@ int main (int argc, char **argv)
     //int    bufsize = SAMPLES_PER_READ*4; // Should be multiple of 512 Bytes
     const unsigned int tx_buf_len = 512; // ensure multiple of num_subcarriers
     short tx_buf[tx_buf_len];
+    const unsigned int rx_buf_len = 512;
+    short rx_buf[rx_buf_len];
 
     int    decim_rate = 256;            // 8 -> 32 MB/sec
     int    interp_rate = 56;
@@ -165,13 +163,16 @@ int main (int argc, char **argv)
     // create channelizer
     unsigned int k=2*num_subcarriers;
     ofdmoqam cs = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_SYNTHESIZER);
+    unsigned int k0 = 0.3*k;    // lo guard
+    unsigned int k1 = 0.7*k;    // hi guard
 
     // set channelizer gain
     float gain[k];
-    for (i=0; i<k; i++)
-        gain[i] = (i<k/4) || (i>3*k/4) ? 1.0f : 0.0f;
-    for (i=9; i<18; i++)
-        gain[i] = 0.0f;
+    unsigned int ki;
+    for (i=0; i<k; i++) {
+        ki = (i + k/2) % k;
+        gain[i] = (ki<k0) || (ki>k1) ? 0.0f : 1.0f;
+    }
 
     std::complex<float> x[k];
     std::complex<float> X[k];
@@ -182,16 +183,18 @@ int main (int argc, char **argv)
 
     // generate data buffer
     short I, Q;
-    printf("USRP Transfer Started\n");
     txdb->set_enable(true);
-    utx->start();        // Start data transfer
 
     unsigned int t;
 
     unsigned int j, n;
     // Do USRP Samples Reading 
-    //for (i = 0; i < total_writes; i++) {
+
     while (true) {
+    utx->start();        // Start data transfer
+
+    for (i = 0; i < 8000; i++) {
+    //while (true) {
         t=0;
 
         // generate data for USRP buffer
@@ -201,7 +204,9 @@ int main (int argc, char **argv)
             for (n=0; n<k; n++) {
                 s = modem_gen_rand_sym(linmod);
                 modem_modulate(linmod, s, &y);
-                X[n] = y*gain[n];
+
+                ki = (n+k/2) % k;
+                X[ki] = y*gain[ki];
             }
 
             // execute synthesizer
@@ -264,6 +269,18 @@ int main (int argc, char **argv)
  
     utx->stop();  // Stop data transfer
     printf("USRP Transfer Stopped\n");
+
+    // start receiver
+    usleep(100e3);
+
+
+    // set gain
+    for (n=k0; n<k1; n++) {
+        ki = (n+k/2)%k;
+        gain[ki] = rand()%4 ? 1.0 : 0.0f;
+    }
+
+    } // while (true)
 
     // clean it up
     ofdmoqam_destroy(cs);
