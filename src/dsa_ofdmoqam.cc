@@ -53,8 +53,11 @@
  
 int main (int argc, char **argv)
 {
-    // ofdm/oqam options
-    unsigned int num_subcarriers=128;   // number of ofdm/oqam channels
+    // options
+    float frequency = 462.5e6;
+    float bandwidth = 2.0e6f;
+    float fguard = 0.2f;
+    unsigned int num_subcarriers=64;   // number of ofdm/oqam channels
     unsigned int m=6;                   // filter delay
     float beta=0.90f;                   // excess bandwidth factor
     modulation_scheme ms=MOD_QAM;   // modulation scheme
@@ -70,7 +73,7 @@ int main (int argc, char **argv)
     db_base * txdb;
     db_base * rxdb;
 
-    int    nunderruns = 0;
+    int    num_underruns = 0;
     bool   underrun;
     bool overrun;
     int num_overruns=0;
@@ -85,8 +88,11 @@ int main (int argc, char **argv)
     const unsigned int rx_buf_len = 512;
     short rx_buf[rx_buf_len];
 
-    int    interp_rate = 64;
-    int    decim_rate = interp_rate/2;            // 8 -> 32 MB/sec
+    unsigned int    interp_rate;// = 64;
+    interp_rate = (unsigned int) (128e6f / bandwidth);
+    interp_rate = (interp_rate >> 2) << 2;
+
+    unsigned int    decim_rate = interp_rate/2;            // 8 -> 32 MB/sec
     utx = usrp_standard_tx::make(0, interp_rate);
     urx = usrp_standard_rx::make(0, decim_rate);
  
@@ -156,8 +162,6 @@ int main (int argc, char **argv)
     float fmin, fmax, fstep;
     txdb->get_freq_range(fmin,fmax,fstep);
     printf("fmin/fmax/fstep: %f/%f/%f\n", fmin,fmax,fstep);
-    float frequency = 462.5e6;
-//    float frequency = 485.0e6f;
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
     float db_lo_freq_set = frequency + db_lo_offset;
@@ -190,8 +194,8 @@ int main (int argc, char **argv)
     unsigned int k=num_subcarriers;
     ofdmoqam cs = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_SYNTHESIZER);
     ofdmoqam ca = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_ANALYZER);
-    unsigned int k0 = 0.2*k;    // lo guard
-    unsigned int k1 = 0.8*k;    // hi guard
+    unsigned int k0 = k*fguard;     // lo guard
+    unsigned int k1 = k*(1-fguard); // hi guard
 
     // set channelizer gain
     float gain[k];
@@ -248,6 +252,11 @@ int main (int argc, char **argv)
         for (i=0; i<k; i++) sensing[i] = 1.0f;
         for (i=0; i<200; i++) {
             urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
+            if (overrun) {
+                printf ("USRP rx overrun\n");
+                num_overruns++;
+            }
+
 
             // convert to float
             std::complex<float> sample;
@@ -358,7 +367,7 @@ int main (int argc, char **argv)
                 
             if (underrun) {
                 printf ("USRP tx underrun\n");
-                nunderruns++;
+                num_underruns++;
             }
 
             if (rc < 0) {
