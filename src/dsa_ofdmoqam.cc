@@ -25,9 +25,9 @@
   * Boston, MA 02110-1301, USA.
   */
  
-// tx_ofdmoqam.cc
+// dsa_ofdmoqam.cc
 //
-// transmits OFDM/OQAM signal
+// dynamic spectrum access via OFDM/OQAM
  
 #include <math.h>
 #include <iostream>
@@ -40,6 +40,8 @@
 #include "usrp_bytesex.h"
 #include "flex.h"
  
+#define DEBUG 0
+
 /*
  SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
  2 bytes for Q. Since the reading length from USRP should be multiple of 512 
@@ -52,13 +54,14 @@
 int main (int argc, char **argv)
 {
     // ofdm/oqam options
-    unsigned int num_subcarriers=32;   // number of ofdm/oqam channels
+    unsigned int num_subcarriers=128;   // number of ofdm/oqam channels
     unsigned int m=6;               // filter delay
     modulation_scheme ms=MOD_QAM;   // modulation scheme
     unsigned int bps=2;             // modulation depth
-    float eta=1e-2f;                // DSA sensitivity
+    float eta=1e-2;                // DSA sensitivity
     float gamma=1.0f;               // DSA threshold
 
+    gamma *= num_subcarriers / 32;
     usrp_standard_tx * utx;
     usrp_standard_rx * urx;
     int tx_db_id;
@@ -178,10 +181,9 @@ int main (int argc, char **argv)
     ddc_freq = urx->rx_freq(USRP_CHANNEL);
     printf("(rx) ddc freq: %f MHz (actual %f MHz)\n", ddc_freq_set/1e6, ddc_freq/1e6);
 
-    // enable automatic transmit/receive
-    bool autotxrx = false;
-    txdb->set_auto_tr(autotxrx);
-    rxdb->set_auto_tr(autotxrx);
+    // enable automatic transmit/receive (sets receive RF chain to "TX/RF" port on USRP)
+    txdb->set_auto_tr(true);
+    rxdb->set_auto_tr(true);
 
     // create channelizer
     unsigned int k=num_subcarriers;
@@ -205,6 +207,9 @@ int main (int argc, char **argv)
     std::complex<float> y;
     std::complex<float> buffer[rx_buf_len/2];
     float sensing[k];
+    float sensing_warped[k];
+    for (i=0; i<k; i++)
+        sensing[i] = 0.0f;
 
     modem linmod = modem_create(ms, bps);
     unsigned int s;
@@ -219,118 +224,145 @@ int main (int argc, char **argv)
     // Do USRP Samples Reading 
 
     while (true) {
-    //printf("transmitter enabled\n");
-    utx->start();        // Start data transfer
 
-    for (i = 0; i < 8000; i++) {
-    //while (true) {
-        t=0;
+        // start receiver
+        //usleep(10e3);
+        
+#if DEBUG
+        FILE * fid = fopen("dsa_rx.m","w");
+        t = 0;
+        fprintf(fid,"%% auto-generated file\n\n");
+        fprintf(fid,"x = [];\n");
+#endif
+        float rms = 0.0f;
 
-        // generate data for USRP buffer
-        for (j=0; j<tx_buf_len; j+=2*k) {
+        urx->start();
+        //printf("receiver enabled\n");
+        // clear channelizer internal filter state
+        //ofdmoqam_clear(ca);
 
-            // generate frame data
-            for (n=0; n<k; n++) {
-                s = modem_gen_rand_sym(linmod);
-                modem_modulate(linmod, s, &y);
+        // clear sensing data
+        for (i=0; i<k; i++) sensing[i] = 1.0f;
+        for (i=0; i<200; i++) {
+            urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
 
-                ki = (n+k/2) % k;
-                //X[ki] = y*gain[ki];
-                X[n] = y*gain[n];
+            // convert to float
+            std::complex<float> sample;
+            for (n=0; n<rx_buf_len; n+=2) {
+                sample.real() = (float) ( rx_buf[n+0]) * 0.01f;
+                sample.imag() = (float) (-rx_buf[n+1]) * 0.01f;
+
+                buffer[n/2] = sample;
+#if DEBUG
+                fprintf(fid,"x(%4u) = %12.4e + j*%12.4e;\n", t++, sample.real(), sample.imag());
+#endif
+                rms += abs(sample);
             }
 
-            // execute synthesizer
-            ofdmoqam_execute(cs, X, x);
+            // run analysis
+            for (j=0; j<rx_buf_len/2; j+=k) {
+                memmove(x,&buffer[j],k*sizeof(std::complex<float>));
+                ofdmoqam_execute(ca,buffer,X);
 
-            for (n=0; n<k; n++) {
-                I = (short) (x[n].real() * k * 1000);
-                Q = (short) (x[n].imag() * k * 1000);
-
-                //printf("%4u : %6d + j%6d\n", t, I, Q);
-                //I = 1000;
-                //Q = 0;
-
-                tx_buf[t++] = host_to_usrp_short(I);
-                tx_buf[t++] = host_to_usrp_short(Q);
+                // if (t < m) continue;
+                // else       t++;
+                for (n=0; n<k; n++) {
+                    ki = (n+k/2)%k;
+                    sensing[n] *= 1-eta;
+                    sensing[n] += eta * abs(X[n]);
+                }
             }
+
+
+        }
+        urx->stop();
+        //printf("receiver disabled\n");
+        
+        // compute warped sensing vector
+        for (n=0; n<k; n++) {
+            unsigned int wp = (n+1)   % k;
+            unsigned int wn = (n-1+k) % k;
+            sensing_warped[n] = sensing[n] + 
+                0.15*(sensing[wp] + sensing[wn]);
+            sensing_warped[n] /= gamma;
         }
 
-        //utx->write(&buf, bufsize, &underrun); 
-        int rc = utx->write(tx_buf, tx_buf_len*sizeof(short), &underrun); 
-            
-        if (underrun) {
-            printf ("USRP tx underrun\n");
-            nunderruns++;
+        // set gain
+        printf("----------\n");
+        //for (n=k0; n<k1; n++) {
+        for (n=0; n<k; n++) {
+            ki = (n+k/2)%k;
+            gain[n] = (sensing_warped[n] < 1.0f) ? 1.0f : 0.0f;
+            printf("%3u : %12.8f\n", n, sensing_warped[n]);
         }
+        printf("rms : %12.8f dB\n", 20*log10(rms));
 
-        if (rc < 0) {
-            printf("error occurred with USRP\n");
-            exit(0);
-        } else if (rc != tx_buf_len*sizeof(short)) {
-            printf("error: did not write proper length\n");
-            exit(0);
-        }
- 
-    }
- 
- 
-    utx->stop();  // Stop data transfer
-    //printf("transmitter disabled\n");
-
-    // start receiver
-    usleep(10e3);
-    
-    urx->start();
-    //printf("receiver enabled\n");
-    // clear channelizer internal filter state
-    //ofdmoqam_clear(ca);
-    for (i=0; i<k; i++)
-        sensing[i] = 0.0f;
-    for (i=0; i<500; i++) {
-        urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
-
-        // convert to float
-        std::complex<float> sample;
-        for (n=0; n<rx_buf_len; n+=2) {
-            sample.real() = (float) ( rx_buf[n+0]) * 0.01f;
-            sample.imag() = (float) (-rx_buf[n+1]) * 0.01f;
-
-            buffer[n/2] = sample;
-        }
-
-        // run analysis
-        for (j=0; j<rx_buf_len/2; j+=k) {
-            memmove(x,&buffer[j],k*sizeof(std::complex<float>));
-            ofdmoqam_execute(ca,buffer,X);
-#if 0
-            X[4] = 4.0f;
-            X[5] = 4.0f;
-            X[6] = 4.0f;
+#if DEBUG
+        fclose(fid);
+        printf("results written to dsa_rx.m\n");
+        exit(0);
 #endif
 
-            // if (t < m) continue;
-            // else       t++;
-            for (n=0; n<k; n++) {
-                ki = (n+k/2)%k;
-                sensing[n] *= 1-eta;
-                sensing[n] += eta * abs(X[n]);
+
+#if 1
+        //printf("transmitter enabled\n");
+        utx->start();        // Start data transfer
+
+        for (i = 0; i < 8000; i++) {
+        //while (true) {
+            t=0;
+
+            // generate data for USRP buffer
+            for (j=0; j<tx_buf_len; j+=2*k) {
+
+                // generate frame data
+                for (n=0; n<k; n++) {
+                    s = modem_gen_rand_sym(linmod);
+                    modem_modulate(linmod, s, &y);
+
+                    ki = (n+k/2) % k;
+                    //X[ki] = y*gain[ki];
+                    X[n] = y*gain[n];
+                }
+
+                // execute synthesizer
+                ofdmoqam_execute(cs, X, x);
+
+                for (n=0; n<k; n++) {
+                    I = (short) (x[n].real() * k * 1000);
+                    Q = (short) (x[n].imag() * k * 1000);
+
+                    //printf("%4u : %6d + j%6d\n", t, I, Q);
+                    //I = 1000;
+                    //Q = 0;
+
+                    tx_buf[t++] = host_to_usrp_short(I);
+                    tx_buf[t++] = host_to_usrp_short(Q);
+                }
             }
+
+            //utx->write(&buf, bufsize, &underrun); 
+            int rc = utx->write(tx_buf, tx_buf_len*sizeof(short), &underrun); 
+                
+            if (underrun) {
+                printf ("USRP tx underrun\n");
+                nunderruns++;
+            }
+
+            if (rc < 0) {
+                printf("error occurred with USRP\n");
+                exit(0);
+            } else if (rc != tx_buf_len*sizeof(short)) {
+                printf("error: did not write proper length\n");
+                exit(0);
+            }
+     
         }
-
-
-    }
-    urx->stop();
-    //printf("receiver disabled\n");
-
-    // set gain
-    printf("----------\n");
-    //for (n=k0; n<k1; n++) {
-    for (n=0; n<k; n++) {
-        ki = (n+k/2)%k;
-        gain[n] = (sensing[n] < gamma) ? 1.0f : 0.0f;
-        printf("%3u : %12.8f\n", n, sensing[n]);
-    }
-
+     
+     
+        utx->stop();  // Stop data transfer
+        //printf("transmitter disabled\n");
+#endif
     } // while (true)
 
     // clean it up
