@@ -76,10 +76,11 @@ int main (int argc, char **argv)
     unsigned int bps=2;             // modulation depth
     float eta=1e-2;                // DSA sensitivity
     float gamma=1.0f;               // DSA threshold
+    unsigned int tx_enable_threshold = 10;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhn:g:m:f:b:t:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhn:g:m:f:b:t:c:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':
@@ -102,6 +103,9 @@ int main (int argc, char **argv)
             break;
         case 't':
             gamma = atof(optarg);
+            break;
+        case 'c':
+            tx_enable_threshold = (unsigned int) atoi(optarg);
             break;
         default:    /* print help() */  return 0;
         }
@@ -133,6 +137,12 @@ int main (int argc, char **argv)
         exit(0);
     } else if (bandwidth < 250e3f) {
         printf("error: bandwidth too small (250 kHz minimum)\n");
+        exit(0);
+    } else if (tx_enable_threshold < 1) {
+        printf("error: tx_enable memory must be greater than zero\n");
+        exit(0);
+    } else if (tx_enable_threshold > 50) {
+        printf("error: tx_enable memory exceeds maximum (50)\n");
         exit(0);
     }
 
@@ -288,8 +298,11 @@ int main (int argc, char **argv)
     std::complex<float> buffer[rx_buf_len/2];
     float sensing[k];
     float sensing_warped[k];
-    for (i=0; i<k; i++)
+    unsigned int tx_enable[k];
+    for (i=0; i<k; i++) {
         sensing[i] = 0.0f;
+        tx_enable[i] = 0;
+    }
 
     modem linmod = modem_create(ms, bps);
     unsigned int s;
@@ -374,7 +387,18 @@ int main (int argc, char **argv)
             sensing_warped[n] /= gamma;
 
             // set gain
-            gain[n] = (sensing_warped[n] < 1.0f) ? 1.0f : 0.0f;
+            //gain[n] = (sensing_warped[n] < 1.0f) ? 1.0f : 0.0f;
+            if (sensing_warped[n] > 1.0f) {
+                tx_enable[n] = tx_enable_threshold;
+            } else if (tx_enable[n] != 0) {
+                tx_enable[n]--;
+            }
+
+            if (tx_enable[n] == 0)
+                gain[n] = 1.0f;
+            else
+                gain[n] = 0.0f;
+
             ki = (n+k/2)%k;
             if ( (ki<k0) || (ki>k1) )
                 gain[n] = 0.0f;
@@ -384,7 +408,7 @@ int main (int argc, char **argv)
         printf("----------\n");
         for (n=0; n<k; n++) {
             ki = (n+k/2)%k;
-            printf("%3u : %12.8f %c\n", ki, sensing_warped[ki], (gain[ki]>0.5f) ? '*' : ' ');
+            printf("%3u : %12.8f %3u %c\n", ki, sensing_warped[ki], tx_enable[ki], (gain[ki]>0.5f) ? '*' : ' ');
         }
 
         printf("rms : %12.8f dB\n", 20*log10(rms));
