@@ -32,6 +32,7 @@
 #include <math.h>
 #include <iostream>
 #include <complex>
+#include <getopt.h>
 #include <liquid/liquid.h>
 
 #include "usrp_standard.h"
@@ -50,7 +51,18 @@
  */
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
- 
+
+void print_usage() {
+    printf("usage:\n");
+    printf("    u/h     :   display this usage/help file\n");
+    printf("    n[]     :   num subcarriers (32 < n < 256)\n");
+    printf("    g[]     :   guard subcarriers (0 < g < 0.5)\n");
+    printf("    m[]     :   filter delay (1 < m < 12)\n");
+    printf("    f[]     :   center frequency (Hz)\n");
+    printf("    b[]     :   bandwidth (Hz)\n");
+    printf("    t[]     :   DSA sensitivity\n");
+};
+
 int main (int argc, char **argv)
 {
     // options
@@ -64,6 +76,65 @@ int main (int argc, char **argv)
     unsigned int bps=2;             // modulation depth
     float eta=1e-2;                // DSA sensitivity
     float gamma=1.0f;               // DSA threshold
+
+    //
+    int d;
+    while ((d = getopt(argc,argv,"uhn:g:m:f:b:t:")) != EOF) {
+        switch (d) {
+        case 'u':
+        case 'h':
+            print_usage();
+            return 0;
+        case 'n':
+            num_subcarriers = (unsigned int) atoi(optarg);
+            break;
+        case 'g':
+            fguard = atof(optarg);
+            break;
+        case 'm':
+            m = (unsigned int) atoi(optarg);
+            break;
+        case 'f':
+            frequency = atof(optarg);
+            break;
+        case 'b':
+            bandwidth = atof(optarg);
+            break;
+        case 't':
+            gamma = atof(optarg);
+            break;
+        default:    /* print help() */  return 0;
+        }
+    }
+
+    if ((num_subcarriers%2) != 0) {
+        printf("error: must have even number of subcarriers\n");
+        exit(0);
+    } else if (num_subcarriers>512) {
+        printf("error: max number of subcarriers (512) exceeded\n");
+        exit(0);
+    } else if (num_subcarriers<4) {
+        printf("error: must have at least 4 subcarriers\n");
+        exit(0);
+    } else if (m < 1) {
+        printf("error: filter delay too small (1 minimum)\n");
+        exit(0);
+    } else if (m > 12) {
+        printf("error: filter delay too large (12 maximum)\n");
+        exit(0);
+    } else if (fguard > 0.5f) {
+        printf("error: guard too large (0.5 max)\n");
+        exit(0);
+    } else if (fguard < 0.0f) {
+        printf("error: guard must be positive\n");
+        exit(0);
+    } else if (bandwidth > 4e6f) {
+        printf("error: bandwidth exceeds maximum (4MHz)\n");
+        exit(0);
+    } else if (bandwidth < 250e3f) {
+        printf("error: bandwidth too small (250 kHz minimum)\n");
+        exit(0);
+    }
 
     gamma *= num_subcarriers / 32;
     usrp_standard_tx * utx;
@@ -91,8 +162,10 @@ int main (int argc, char **argv)
     unsigned int    interp_rate;// = 64;
     interp_rate = (unsigned int) (128e6f / bandwidth);
     interp_rate = (interp_rate >> 2) << 2;
+    printf("interp rate: %u\n", interp_rate);
 
     unsigned int    decim_rate = interp_rate/2;            // 8 -> 32 MB/sec
+    printf("decim rate: %u\n", decim_rate);
     utx = usrp_standard_tx::make(0, interp_rate);
     urx = usrp_standard_rx::make(0, decim_rate);
  
@@ -226,6 +299,8 @@ int main (int argc, char **argv)
     txdb->set_enable(true);
 
     unsigned int t;
+    unsigned int num_blocks = (unsigned int) (2500.0f * bandwidth / 2.0e6f);
+    printf("num blocks : %8u\n", num_blocks);
 
     unsigned int j, n;
     // Do USRP Samples Reading 
@@ -250,7 +325,7 @@ int main (int argc, char **argv)
 
         // clear sensing data
         for (i=0; i<k; i++) sensing[i] = 1.0f;
-        for (i=0; i<200; i++) {
+        for (i=0; i<num_blocks/10; i++) {
             urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
             if (overrun) {
                 printf ("USRP rx overrun\n");
@@ -331,7 +406,7 @@ int main (int argc, char **argv)
         for (i=0; i<2*m; i++)
             ofdmoqam_execute(cs,X,x);
 
-        for (i = 0; i < 2500; i++) {
+        for (i = 0; i < num_blocks; i++) {
         //while (true) {
             t=0;
 
