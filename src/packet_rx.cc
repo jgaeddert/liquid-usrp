@@ -45,10 +45,15 @@
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
  
+static bool verbose;
+
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid,
                     void * _userdata)
 {
+    if (!verbose)
+        return 0;
+
     std::cout << "********* callback invoked, ";// << std::endl;
     if ( !_header_valid ) {
         printf("header crc : FAIL\n");
@@ -69,7 +74,6 @@ void usage() {
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
 }
-
 
 int main (int argc, char **argv)
 {
@@ -93,7 +97,7 @@ int main (int argc, char **argv)
  
 
     // command-line options
-    bool verbose = true;
+    verbose = true;
 
     float min_bandwidth = (32e6 / 512.0);
     float max_bandwidth = (32e6 /   4.0);
@@ -102,8 +106,6 @@ int main (int argc, char **argv)
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
 
-    unsigned int packet_spacing=8;
- 
     //
     int d;
     while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
@@ -145,9 +147,6 @@ int main (int argc, char **argv)
         return 0;
     } else if (bandwidth < min_bandwidth) {
         printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
-        return 0;
-    } if (packet_spacing < 1) {
-        printf("error: packet spacing must be greater than 0\n");
         return 0;
     }
 
