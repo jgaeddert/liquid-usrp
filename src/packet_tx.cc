@@ -29,6 +29,7 @@
 #include <math.h>
 #include <iostream>
 #include <complex>
+#include <getopt.h>
 #include <liquid/liquid.h>
 
 #include "usrp_standard.h"
@@ -45,30 +46,17 @@
  */
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
- 
-// Dummy Function to process USRP data
-void process_data(int *buffer)
-{
-/*
-Each buffer element, for example buffer[0] contains 4 bytes 
-2 bytes For (I) and 2 bytes for (Q). 
-*/
- 
-    unsigned int i;
-    short I,Q;
-    float e=0.0f;
-    for (i=0; i<SAMPLES_PER_READ; i++) {
-        I =  buffer[i] & 0x0000ffff;
-        Q = (buffer[i] & 0xffff0000) >> 16;
-        //printf("(%5d+j%5d), ", I, Q);
-        e += fabsf(I) + fabsf(Q);
-    }
-    //printf("\n");
-    e /= SAMPLES_PER_READ;
-    printf("e: %8.4f\n", e);
 
+void usage() {
+    printf("packet_tx:\n");
+    printf("  f     :   center frequency [Hz]\n");
+    printf("  b     :   bandwidth [Hz]\n");
+    printf("  t     :   run time [seconds]\n");
+    printf("  q     :   quiet\n");
+    printf("  v     :   verbose\n");
+    printf("  u,h   :   usage/help\n");
 }
- 
+
 int main (int argc, char **argv)
 {
     //bool   loopback_p = false;
@@ -85,16 +73,73 @@ int main (int argc, char **argv)
     const int tx_buf_len = 2*2*2048;
     short tx_buf[tx_buf_len];
 
+    bool verbose = true;
+
+    float frequency = 462.0e6;
+    float bandwidth = 100e3f;
+    float num_seconds = 5.0f;
+
+    float min_bandwidth = (32e6 / 512.0);
+    float max_bandwidth = (32e6 /   4.0);
+
 #if 0 
     if (loopback_p)    mode |= usrp_standard_tx::FPGA_MODE_LOOPBACK;
    
     if (counting_p)    mode |= usrp_standard_tx::FPGA_MODE_COUNTING;
 #endif
  
-#if 1
+    //
+    int d;
+    while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
+        switch (d) {
+        case 'f':
+            frequency = atof(optarg);
+            break;
+        case 'b':
+            bandwidth = atof(optarg);
+            break;
+        case 't':
+            num_seconds = atof(optarg);
+            break;
+        case 'q':
+            verbose = false;
+            break;
+        case 'v':
+            verbose = true;
+            break;
+        case 'u':
+        case 'h':
+        default:
+            usage();
+            return 0;
+        }
+    }
+
+    // compute interpolation rate
+    unsigned int interp_rate = (unsigned int)(32e6 / bandwidth);
+    
+    // ensure multiple of 4
+    interp_rate = (interp_rate >> 2) << 2;
+
+    // update actual bandwidth
+    bandwidth = 32e6f / (float)(interp_rate);
+
+    if (bandwidth > max_bandwidth) {
+        printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
+        return 0;
+    } else if (bandwidth < min_bandwidth) {
+        printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
+        return 0;
+    }
+
+    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
+
+
     int    which_board = 0;
     //int    decim = 256;            // 8 -> 32 MB/sec
-    int    interp_rate = 512;
+    //int    interp_rate = 512;
     int    fusb_block_size = 0;
     int    fusb_nblocks = 0;
     //int    gain = 0;
@@ -102,9 +147,6 @@ int main (int argc, char **argv)
     usrp_standard_tx *utx = 
         usrp_standard_tx::make (which_board, interp_rate, 1, -1, //mode,
                 fusb_block_size, fusb_nblocks);
-#else
-    usrp_standard_tx *utx = usrp_standard_tx::make(0, 512);
-#endif
  
     if (utx == 0) {
         fprintf (stderr, "Error: usrp_standard_tx::make\n");
@@ -171,7 +213,7 @@ int main (int argc, char **argv)
     float fmin, fmax, fstep;
     tx_db0_control->get_freq_range(fmin,fmax,fstep);
     printf("fmin/fmax/fstep: %f/%f/%f\n", fmin,fmax,fstep);
-    float frequency = 462e6;
+    //float frequency = 462e6;
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
     float db_lo_freq_set = frequency + db_lo_offset;
@@ -182,17 +224,17 @@ int main (int argc, char **argv)
     float ddc_freq = utx->tx_freq(USRP_CHANNEL);
     printf("ddc freq: %f MHz (actual %f MHz)\n", ddc_freq_set/1e6, ddc_freq/1e6);
 
-    // create interpolator
-    unsigned int k=2; // samples per symbol
+    // framegen parameters
+    //unsigned int k=2; // samples per symbol
     unsigned int m=3; // delay
     float beta=0.7f;  // excess bandwidth factor
 
     resamp2_crcf interpolator = resamp2_crcf_create(37);
-    unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
-    unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
-    unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
+    //unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
+    //unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
+    //unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
     std::complex<float> interp_buffer[2*2048];
-    std::complex<float> * block_ptr;
+    //std::complex<float> * block_ptr;
 
     // framing
     std::complex<float> frame[2048];
@@ -217,7 +259,8 @@ int main (int argc, char **argv)
             for (j=0; j<24; j++)    header[j]  = rand() % 256;
             for (j=0; j<64; j++)    payload[j] = rand() % 256;
             header[0] = pid;
-            printf("packet id: %u\n", pid);
+            if (verbose)
+                printf("packet id: %u\n", pid);
             pid = (pid+1)%256;
 
             framegen64_execute(framegen, header, payload, frame);
