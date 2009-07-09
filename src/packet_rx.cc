@@ -45,29 +45,6 @@
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
  
-// Dummy Function to process USRP data
-void process_data(short *buffer, int buffer_length)
-{
-/*
-Each buffer element, for example buffer[0] contains 4 bytes 
-2 bytes For (I) and 2 bytes for (Q). 
-*/
- 
-    int i;
-    short I,Q;
-    float e=0.0f;
-    for (i=0; i<buffer_length; i+=2) {
-        I = buffer[i+0];
-        Q = buffer[i+1];
-        //printf("(%5d+j%5d), ", I, Q);
-        e += fabsf(I) + fabsf(Q);
-    }
-    //printf("\n");
-    e /= buffer_length/2;
-    printf("e: %8.4f\n", e);
-
-}
-
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid,
                     void * _userdata)
@@ -83,13 +60,24 @@ static int callback(unsigned char * _header,  int _header_valid,
     return 0;
 }
 
+void usage() {
+    printf("packet_tx:\n");
+    printf("  f     :   center frequency [Hz]\n");
+    printf("  b     :   bandwidth [Hz]\n");
+    printf("  t     :   run time [seconds]\n");
+    printf("  q     :   quiet\n");
+    printf("  v     :   verbose\n");
+    printf("  u,h   :   usage/help\n");
+}
+
+
 int main (int argc, char **argv)
 {
     bool   loopback_p = false;
     bool   counting_p = false;
     bool   width_8_p = false;
     int    which_board = 0;
-    int    decim = 256;            // 8 -> 32 MB/sec
+    //int    decim = 256;            // 8 -> 32 MB/sec
     double center_freq = 0;
     int    fusb_block_size = 0;
     int    fusb_nblocks = 0;
@@ -102,15 +90,79 @@ int main (int argc, char **argv)
     int    i;
     const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
-     
  
+
+    // command-line options
+    bool verbose = true;
+
+    float min_bandwidth = (32e6 / 512.0);
+    float max_bandwidth = (32e6 /   4.0);
+
+    float frequency = 462.0e6;
+    float bandwidth = min_bandwidth;
+    float num_seconds = 5.0f;
+
+    unsigned int packet_spacing=8;
+ 
+    //
+    int d;
+    while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
+        switch (d) {
+        case 'f':
+            frequency = atof(optarg);
+            break;
+        case 'b':
+            bandwidth = atof(optarg);
+            break;
+        case 't':
+            num_seconds = atof(optarg);
+            break;
+        case 'q':
+            verbose = false;
+            break;
+        case 'v':
+            verbose = true;
+            break;
+        case 'u':
+        case 'h':
+        default:
+            usage();
+            return 0;
+        }
+    }
+
+    // compute interpolation rate
+    unsigned int decim_rate = (unsigned int)(16e6 / bandwidth);
+    
+    // ensure multiple of 2
+    decim_rate = (decim_rate >> 1) << 1;
+
+    // update actual bandwidth
+    bandwidth = 16e6f / (float)(decim_rate);
+
+    if (bandwidth > max_bandwidth) {
+        printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
+        return 0;
+    } else if (bandwidth < min_bandwidth) {
+        printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
+        return 0;
+    } if (packet_spacing < 1) {
+        printf("error: packet spacing must be greater than 0\n");
+        return 0;
+    }
+
+    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
+
+
     if (loopback_p)    mode |= usrp_standard_rx::FPGA_MODE_LOOPBACK;
    
     if (counting_p)    mode |= usrp_standard_rx::FPGA_MODE_COUNTING;
  
  
  
-    usrp_standard_rx *urx =  usrp_standard_rx::make (which_board, decim, 1, -1, mode,
+    usrp_standard_rx *urx =  usrp_standard_rx::make (which_board, decim_rate, 1, -1, mode,
                 fusb_block_size, fusb_nblocks);
  
     if (urx == 0) {
@@ -146,7 +198,7 @@ int main (int argc, char **argv)
     //urx->set_mux(0x32103210); // Board A only
  
     // Set DDC decimation rate
-    urx->set_decim_rate(decim);
+    urx->set_decim_rate(decim_rate);
   
     // Set DDC phase 
     urx->set_ddc_phase(0,0);
@@ -193,7 +245,7 @@ int main (int argc, char **argv)
     urx->set_rx_freq(USRP_CHANNEL, 0.0);
 
     // set the daughterboard frequency
-    float frequency = 462e6;
+    //float frequency = 462e6;
     float db_lo_offset = -8e6;
     float db_lo_freq = 0.0f;
     float db_lo_freq_set = frequency + db_lo_offset;

@@ -75,12 +75,14 @@ int main (int argc, char **argv)
 
     bool verbose = true;
 
-    float frequency = 462.0e6;
-    float bandwidth = 100e3f;
-    float num_seconds = 5.0f;
-
     float min_bandwidth = (32e6 / 512.0);
     float max_bandwidth = (32e6 /   4.0);
+
+    float frequency = 462.0e6;
+    float bandwidth = min_bandwidth;
+    float num_seconds = 5.0f;
+
+    unsigned int packet_spacing=8;
 
 #if 0 
     if (loopback_p)    mode |= usrp_standard_tx::FPGA_MODE_LOOPBACK;
@@ -129,6 +131,9 @@ int main (int argc, char **argv)
         return 0;
     } else if (bandwidth < min_bandwidth) {
         printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
+        return 0;
+    } if (packet_spacing < 1) {
+        printf("error: packet spacing must be greater than 0\n");
         return 0;
     }
 
@@ -254,7 +259,7 @@ int main (int argc, char **argv)
     // Do USRP Samples Reading 
     for (i = 0; i < total_writes; i++) {
         // generate the frame / transmit silence
-        if ((i%4)==0) {
+        if ((i%packet_spacing)==0) {
             // generate random data
             for (j=0; j<24; j++)    header[j]  = rand() % 256;
             for (j=0; j<64; j++)    payload[j] = rand() % 256;
