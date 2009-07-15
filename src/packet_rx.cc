@@ -35,6 +35,7 @@
 #include "usrp_prims.h"
 #include "usrp_dbid.h"
 #include "flex.h"
+#include "usrp_rx_gain_correction.h"
  
 /*
  SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
@@ -90,7 +91,7 @@ int main (int argc, char **argv)
     int    mode = 0;
     int    noverruns = 0;
     bool   overrun;
-    int    total_reads = 100000;
+    int    total_reads = 200;
     int    i;
     const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
@@ -267,6 +268,7 @@ int main (int argc, char **argv)
     printf("USRP Transfer Started\n");
  
     int n;
+    float g = usrp_rx_gain_correction(decim_rate);
     // Do USRP Samples Reading 
     for (i = 0; i < total_reads; i++) {
         urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
@@ -282,8 +284,8 @@ int main (int argc, char **argv)
         // convert to float
         std::complex<float> sample;
         for (n=0; n<rx_buf_len; n+=2) {
-            sample.real() = (float) ( rx_buf[n+0]) * 0.01f;
-            sample.imag() = (float) (-rx_buf[n+1]) * 0.01f;
+            sample.real() = (float) ( rx_buf[n+0]) * g * 0.01f;
+            sample.imag() = (float) (-rx_buf[n+1]) * g * 0.01f;
 
             buffer[n/2] = sample;
         }

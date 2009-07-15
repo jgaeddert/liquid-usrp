@@ -11,7 +11,8 @@ local_src	:=		\
 	flex.cc			\
 	lf.cc			\
 	tvrx.cc			\
-	usrp_io.cc
+	usrp_io.cc		\
+	usrp_rx_gain_correction.cc
 
 local_progs	:=		\
 	src/usrp_init_test.cc	\
@@ -25,7 +26,8 @@ local_progs	:=		\
 	src/packet_rx.cc	\
 	src/cr.cc		\
 	src/tx_ofdmoqam.cc	\
-	src/dsa_ofdmoqam.cc
+	src/dsa_ofdmoqam.cc	\
+	src/usrp_rx_gain_correction_test.cc
 
 sources		= $(addprefix src/,$(local_src))
 objects		= $(patsubst %.cc,%.cc.o,$(sources))

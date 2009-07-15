@@ -66,7 +66,7 @@ int main (int argc, char **argv)
     int    nchannels = 1;
     int    nunderruns = 0;
     bool   underrun;
-    int    total_writes = 100000;
+    int    total_writes = 10000;
     int    i;
     //int    buf[SAMPLES_PER_READ];
     //int    bufsize = SAMPLES_PER_READ*4; // Should be multiple of 512 Bytes
