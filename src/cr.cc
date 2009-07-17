@@ -16,6 +16,7 @@
 #include "usrp_dbid.h"
 #include "usrp_bytesex.h"
 #include "flex.h"
+#include "usrp_rx_gain_correction.h"
 
 #define VERBOSE             0
 
@@ -634,6 +635,7 @@ void * rx_process(void*userdata)
     int n;
     while (p->radio_active) {
         // read data
+        float g = usrp_rx_gain_correction(p->rx_decim);
         p->urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 
             
         if (overrun) {
@@ -644,8 +646,8 @@ void * rx_process(void*userdata)
         // convert to float
         std::complex<float> sample;
         for (n=0; n<rx_buf_len; n+=2) {
-            sample.real() = (float) ( rx_buf[n+0]) * 0.01f;
-            sample.imag() = (float) (-rx_buf[n+1]) * 0.01f;
+            sample.real() = (float) ( rx_buf[n+0]) * g * 0.01f;
+            sample.imag() = (float) (-rx_buf[n+1]) * g * 0.01f;
 
             buffer[n/2] = sample;
         }
