@@ -2,7 +2,7 @@
 # USRP tests makefile
 #
 
-LDFLAGS	= -lusrp -pthread -lliquid -lfftw3f
+LDFLAGS	= -lusrp -pthread -lliquid -lfftw3f -lfec
 
 local_src	:=		\
 	basic.cc		\
@@ -22,6 +22,8 @@ local_progs	:=		\
 	src/tx.cc \
 	src/tx_rrc.cc \
 	src/test_usrp_standard_tx.cc \
+	src/flexframe_tx.cc 	\
+	src/flexframe_rx.cc	\
 	src/packet_tx.cc \
 	src/packet_rx.cc	\
 	src/cr.cc		\
