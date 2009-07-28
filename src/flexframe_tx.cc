@@ -86,10 +86,10 @@ int main (int argc, char **argv)
 
     unsigned int packet_spacing=8;
     unsigned int payload_len=64;
-    modulation_scheme mod_scheme = MOD_PSK;
-    unsigned int mod_depth = 1;
     fec_scheme fec0 = FEC_NONE;
     fec_scheme fec1 = FEC_HAMMING74;
+    modulation_scheme mod_scheme = MOD_PSK;
+    unsigned int mod_depth = 1;
 
 #if 0 
     if (loopback_p)    mode |= usrp_standard_tx::FPGA_MODE_LOOPBACK;
@@ -239,11 +239,15 @@ int main (int argc, char **argv)
     float ddc_freq = utx->tx_freq(USRP_CHANNEL);
     printf("ddc freq: %f MHz (actual %f MHz)\n", ddc_freq_set/1e6, ddc_freq/1e6);
 
+    // packetizer
+    packetizer p = packetizer_create(payload_len,fec0,fec1);
+    unsigned int packet_len = packetizer_get_packet_length(payload_len,fec0,fec1);
+
     // create flexframegen object
     flexframegenprops_s fgprops;
     fgprops.rampup_len = 64;
     fgprops.phasing_len = 64;
-    fgprops.payload_len = payload_len;
+    fgprops.payload_len = packet_len;
     fgprops.mod_scheme = mod_scheme;
     fgprops.mod_bps = mod_depth;
     fgprops.rampdn_len = 64;
@@ -277,6 +281,7 @@ int main (int argc, char **argv)
     // data buffers
     unsigned char header[8];
     unsigned char payload[payload_len];
+    unsigned char packet[packet_len];
 
     // generate data buffer
     short I, Q;
@@ -292,6 +297,9 @@ int main (int argc, char **argv)
             // generate random data
             // TODO : encode using forward error-correction codec
             for (j=0; j<payload_len; j++)    payload[j] = rand() % 256;
+            // assemble packet
+            packetizer_encode(p,payload,packet);
+            // write header
             header[0] = (pid >> 8) & 0xff;
             header[1] = (pid     ) & 0xff;
             header[2] = (payload_len >> 8) & 0xff;
@@ -302,8 +310,7 @@ int main (int argc, char **argv)
                 printf("packet id: %u\n", pid);
             pid = (pid+1)%(1<<16);
 
-            flexframegen_execute(fg, header, payload, frame);
-            //framegen64_execute(framegen, header, payload, frame);
+            flexframegen_execute(fg, header, packet, frame);
 
             // interpolate using matched filter
             for (j=0; j<framebuf_len; j++) {
@@ -355,6 +362,7 @@ int main (int argc, char **argv)
     printf("USRP Transfer Stopped\n");
 
     // clean it up
+    packetizer_destroy(p);
     flexframegen_destroy(fg);
     resamp2_crcf_destroy(interpolator);
     interp_crcf_destroy(mfinterp);

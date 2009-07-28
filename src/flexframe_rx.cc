@@ -51,6 +51,10 @@ static bool verbose;
 typedef struct {
     unsigned char * header;
     unsigned char * payload;
+    fec_scheme fec0;
+    fec_scheme fec1;
+    unsigned int payload_len;
+    packetizer p;
 } framedata;
 
 static int callback(unsigned char * _rx_header,
@@ -65,13 +69,38 @@ static int callback(unsigned char * _rx_header,
     std::cout << "********* callback invoked, ";// << std::endl;
     if ( !_rx_header_valid ) {
         printf("header crc : FAIL\n");
-    /*
-    } else if ( !_payload_valid ) {
-        printf("payload crc : FAIL\n");
-    } else {
-    */
-        printf("packet id: %u\n", (unsigned int ) _rx_header[0]);
+        return 0;
     }
+    unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
+    printf("packet id: %u\n", packet_id);
+    unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
+    fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
+    fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
+
+    // TODO: validate fec0,fec1 before indexing fec_scheme_str
+    printf("    payload len : %u\n", payload_len);
+    printf("    fec0        : %s\n", fec_scheme_str[fec0]);
+    printf("    fec1        : %s\n", fec_scheme_str[fec1]);
+
+    framedata * fd = (framedata*) _userdata;
+    // create new packetizer if necessary
+    if (fd->payload_len != payload_len  ||
+        fd->fec0        != fec0         ||
+        fd->fec1        != fec1)
+    {
+        packetizer_destroy(fd->p);
+        fd->p = packetizer_create(payload_len, fec0, fec1);
+        fd->payload_len = payload_len;
+        fd->fec0 = fec0;
+        fd->fec1 = fec1;
+    }
+
+    // decode packet
+    unsigned char msg_dec[payload_len];
+    bool crc_pass = packetizer_decode(fd->p, _rx_payload, msg_dec);
+    if (!crc_pass)
+        printf("    >>> payload crc fail\n");
+
     return 0;
 }
 
@@ -263,7 +292,15 @@ int main (int argc, char **argv)
     urx->set_rx_freq(USRP_CHANNEL, ddc_freq);
 
     // framing
-    flexframesync fs = flexframesync_create(NULL,callback,NULL);
+    packetizer p = packetizer_create(0,FEC_NONE,FEC_NONE);
+    framedata fd;
+    fd.header = NULL;
+    fd.payload = NULL;
+    fd.fec0 = FEC_NONE;
+    fd.fec1 = FEC_NONE;
+    fd.payload_len = 0;
+    fd.p = p;
+    flexframesync fs = flexframesync_create(NULL,callback,(void*)&fd);
 
     // create decimator
     resamp2_crcf decimator = resamp2_crcf_create(37);
@@ -318,6 +355,7 @@ int main (int argc, char **argv)
 
     // clean it up
     flexframesync_destroy(fs);
+    packetizer_destroy(p);
     resamp2_crcf_destroy(decimator);
 
     delete urx;
