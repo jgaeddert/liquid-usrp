@@ -88,6 +88,8 @@ int main (int argc, char **argv)
     unsigned int payload_len=64;
     modulation_scheme mod_scheme = MOD_PSK;
     unsigned int mod_depth = 1;
+    fec_scheme fec0 = FEC_NONE;
+    fec_scheme fec1 = FEC_HAMMING74;
 
 #if 0 
     if (loopback_p)    mode |= usrp_standard_tx::FPGA_MODE_LOOPBACK;
@@ -137,8 +139,11 @@ int main (int argc, char **argv)
     } else if (bandwidth < min_bandwidth) {
         printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
         return 0;
-    } if (packet_spacing < 1) {
+    } else if (packet_spacing < 1) {
         printf("error: packet spacing must be greater than 0\n");
+        return 0;
+    } else if (payload_len > (1<<16)) {
+        printf("error: maximum payload length exceeded: %u > %u\n", payload_len, 1<<16);
         return 0;
     }
 
@@ -286,12 +291,16 @@ int main (int argc, char **argv)
         if ((i%packet_spacing)==0) {
             // generate random data
             // TODO : encode using forward error-correction codec
-            for (j=0; j<8; j++)              header[j]  = rand() % 256;
             for (j=0; j<payload_len; j++)    payload[j] = rand() % 256;
-            header[0] = pid;
+            header[0] = (pid >> 8) & 0xff;
+            header[1] = (pid     ) & 0xff;
+            header[2] = (payload_len >> 8) & 0xff;
+            header[3] = (payload_len     ) & 0xff;
+            header[4] = (unsigned char)(fec0);
+            header[5] = (unsigned char)(fec1);
             if (verbose)
                 printf("packet id: %u\n", pid);
-            pid = (pid+1)%256;
+            pid = (pid+1)%(1<<16);
 
             flexframegen_execute(fg, header, payload, frame);
             //framegen64_execute(framegen, header, payload, frame);
