@@ -248,7 +248,7 @@ int main (int argc, char **argv)
     // framing buffers
     unsigned int frame_len = flexframegen_getframelen(fg);
     div_t dt = div(frame_len,512);
-    unsigned int framebuf_len = 512*dt.quot + (dt.rem > 0 ? 512 : 0);
+    unsigned int framebuf_len = 512*(dt.quot+1);// + (dt.rem > 0 ? 512 : 0);
     std::complex<float> frame[frame_len];
     std::complex<float> mfbuffer[2*framebuf_len];
     std::complex<float> interp_buffer[4*framebuf_len];
