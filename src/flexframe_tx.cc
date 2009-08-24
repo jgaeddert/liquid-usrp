@@ -47,6 +47,17 @@
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
 
+static unsigned char payload_test[64] = {
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7
+};
+
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
@@ -84,12 +95,12 @@ int main (int argc, char **argv)
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
 
-    unsigned int packet_spacing=8;
+    unsigned int packet_spacing=2;
     unsigned int payload_len=64;
     fec_scheme fec0 = FEC_NONE;
     fec_scheme fec1 = FEC_HAMMING74;
     modulation_scheme mod_scheme = MOD_PSK;
-    unsigned int mod_depth = 1;
+    unsigned int mod_depth = 3;
 
 #if 0 
     if (loopback_p)    mode |= usrp_standard_tx::FPGA_MODE_LOOPBACK;
@@ -242,6 +253,7 @@ int main (int argc, char **argv)
     // packetizer
     packetizer p = packetizer_create(payload_len,fec0,fec1);
     unsigned int packet_len = packetizer_get_packet_length(payload_len,fec0,fec1);
+    packetizer_print(p);
 
     // create flexframegen object
     flexframegenprops_s fgprops;
@@ -254,14 +266,16 @@ int main (int argc, char **argv)
     flexframegen fg = flexframegen_create(&fgprops);
     flexframegen_print(fg);
 
+
     // framing buffers
     unsigned int frame_len = flexframegen_getframelen(fg);
     div_t dt = div(frame_len,512);
     unsigned int framebuf_len = 512*(dt.quot+1);// + (dt.rem > 0 ? 512 : 0);
+    if (framebuf_len < 1024) framebuf_len = 1024;
     std::complex<float> frame[frame_len];
     std::complex<float> mfbuffer[2*framebuf_len];
     std::complex<float> interp_buffer[4*framebuf_len];
-    const unsigned int tx_buf_len = 4*framebuf_len;
+    const unsigned int tx_buf_len = 8*framebuf_len;
     short tx_buf[tx_buf_len];
 
     printf("frame length        :   %u\n", frame_len);
@@ -296,9 +310,11 @@ int main (int argc, char **argv)
         if ((i%packet_spacing)==0) {
             // generate random data
             // TODO : encode using forward error-correction codec
-            for (j=0; j<payload_len; j++)    payload[j] = rand() % 256;
+            for (j=0; j<payload_len; j++)
+                payload[j] = rand() % 256;
             // assemble packet
-            packetizer_encode(p,payload,packet);
+            //packetizer_encode(p,payload,packet);
+            packetizer_encode(p,payload_test,packet);
             // write header
             header[0] = (pid >> 8) & 0xff;
             header[1] = (pid     ) & 0xff;
@@ -307,7 +323,16 @@ int main (int argc, char **argv)
             header[4] = (unsigned char)(fec0);
             header[5] = (unsigned char)(fec1);
             if (verbose)
-                printf("packet id: %u\n", pid);
+                printf("packet id: %6u\n", pid);
+                //printf("packet id: %6u, packet len : %6u\n", pid, packet_len);
+            /*
+            for (j=0; j<payload_len; j++)
+                printf("%.2x ",payload[j]);
+            printf("\n");
+            for (j=0; j<packet_len; j++)
+                printf("%.2x ",packet[j]);
+            printf("\n");
+            */
             pid = (pid+1)%(1<<16);
 
             flexframegen_execute(fg, header, packet, frame);
@@ -328,7 +353,7 @@ int main (int argc, char **argv)
         for (j=0; j<2*framebuf_len; j++)
             resamp2_crcf_interp_execute(interpolator, mfbuffer[j], &interp_buffer[2*j]);
 
-        for (n=0; n<tx_buf_len; n++) {
+        for (n=0; n<4*framebuf_len; n++) {
             // prepare data
             I = (short) (interp_buffer[n].real() * 8000);
             Q = (short) (interp_buffer[n].imag() * 8000);
