@@ -47,6 +47,16 @@
 #define USRP_CHANNEL        (0)
  
 static bool verbose;
+static unsigned char payload_test[64] = {
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
+    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7
+};
 
 typedef struct {
     unsigned char * header;
@@ -72,15 +82,22 @@ static int callback(unsigned char * _rx_header,
         return 0;
     }
     unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
-    printf("packet id: %u\n", packet_id);
+    printf("packet id: %6u\n", packet_id);
     unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
     fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
     fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
 
+    /*
     // TODO: validate fec0,fec1 before indexing fec_scheme_str
     printf("    payload len : %u\n", payload_len);
     printf("    fec0        : %s\n", fec_scheme_str[fec0]);
     printf("    fec1        : %s\n", fec_scheme_str[fec1]);
+    */
+
+    if (payload_len != 64) {
+        printf("error: expecting payload to be 64 bytes long\n");
+        exit(0);
+    }
 
     framedata * fd = (framedata*) _userdata;
     // create new packetizer if necessary
@@ -88,6 +105,7 @@ static int callback(unsigned char * _rx_header,
         fd->fec0        != fec0         ||
         fd->fec1        != fec1)
     {
+        printf("re-creating packetizer\n");
         packetizer_destroy(fd->p);
         fd->p = packetizer_create(payload_len, fec0, fec1);
         fd->payload_len = payload_len;
@@ -99,7 +117,25 @@ static int callback(unsigned char * _rx_header,
     unsigned char msg_dec[payload_len];
     bool crc_pass = packetizer_decode(fd->p, _rx_payload, msg_dec);
     if (!crc_pass)
-        printf("    >>> payload crc fail\n");
+        printf("  <<< payload crc fail >>>\n");
+
+    unsigned int j;
+    for (j=0; j<64; j++)
+        printf("%c", (msg_dec[j]==payload_test[j] ? '.' : 'x'));
+    printf("\n");
+
+    /*
+    packetizer_print(fd->p);
+    printf("payload len: %u\n", _rx_payload_len);
+    unsigned int i;
+    for (i=0; i<_rx_payload_len; i++)
+        printf("%.2x ", _rx_payload[i]);
+    printf("\n");
+
+    for (i=0; i<payload_len; i++)
+        printf("%.2x ", msg_dec[i]);
+    printf("\n");
+    */
 
     return 0;
 }
@@ -129,7 +165,7 @@ int main (int argc, char **argv)
     int    mode = 0;
     int    noverruns = 0;
     bool   overrun;
-    int    total_reads = 200;
+    int    total_reads = 2000;
     int    i;
     const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
