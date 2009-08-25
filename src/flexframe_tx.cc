@@ -47,17 +47,6 @@
 #define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
 
-static unsigned char payload_test[64] = {
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7
-};
-
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
@@ -99,8 +88,8 @@ int main (int argc, char **argv)
     unsigned int payload_len=64;
     fec_scheme fec0 = FEC_NONE;
     fec_scheme fec1 = FEC_HAMMING74;
-    modulation_scheme mod_scheme = MOD_PSK;
-    unsigned int mod_depth = 3;
+    modulation_scheme mod_scheme = MOD_QAM;
+    unsigned int mod_depth = 4;
 
 #if 0 
     if (loopback_p)    mode |= usrp_standard_tx::FPGA_MODE_LOOPBACK;
@@ -313,8 +302,7 @@ int main (int argc, char **argv)
             for (j=0; j<payload_len; j++)
                 payload[j] = rand() % 256;
             // assemble packet
-            //packetizer_encode(p,payload,packet);
-            packetizer_encode(p,payload_test,packet);
+            packetizer_encode(p,payload,packet);
             // write header
             header[0] = (pid >> 8) & 0xff;
             header[1] = (pid     ) & 0xff;
