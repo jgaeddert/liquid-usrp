@@ -47,16 +47,6 @@
 #define USRP_CHANNEL        (0)
  
 static bool verbose;
-static unsigned char payload_test[64] = {
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7,
-    0x12, 0x34, 0x45, 0xe3, 0xa5, 0x0d, 0x91, 0xf7
-};
 
 typedef struct {
     unsigned char * header;
@@ -94,11 +84,6 @@ static int callback(unsigned char * _rx_header,
     printf("    fec1        : %s\n", fec_scheme_str[fec1]);
     */
 
-    if (payload_len != 64) {
-        printf("error: expecting payload to be 64 bytes long\n");
-        exit(0);
-    }
-
     framedata * fd = (framedata*) _userdata;
     // create new packetizer if necessary
     if (fd->payload_len != payload_len  ||
@@ -118,11 +103,6 @@ static int callback(unsigned char * _rx_header,
     bool crc_pass = packetizer_decode(fd->p, _rx_payload, msg_dec);
     if (!crc_pass)
         printf("  <<< payload crc fail >>>\n");
-
-    unsigned int j;
-    for (j=0; j<64; j++)
-        printf("%c", (msg_dec[j]==payload_test[j] ? '.' : 'x'));
-    printf("\n");
 
     /*
     packetizer_print(fd->p);
