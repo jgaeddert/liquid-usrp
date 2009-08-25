@@ -85,7 +85,7 @@ int main (int argc, char **argv)
     float num_seconds = 5.0f;
 
     unsigned int packet_spacing=2;
-    unsigned int payload_len=64;
+    unsigned int payload_len=200;
     fec_scheme fec0 = FEC_NONE;
     fec_scheme fec1 = FEC_HAMMING74;
     modulation_scheme mod_scheme = MOD_QAM;
