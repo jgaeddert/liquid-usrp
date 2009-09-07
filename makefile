@@ -29,6 +29,8 @@ local_progs	:=		\
 	src/cr.cc		\
 	src/tx_ofdmoqam.cc	\
 	src/dsa_ofdmoqam.cc	\
+	src/ofdmframe64_tx.cc	\
+	src/ofdmframe64_rx.cc	\
 	src/usrp_rx_gain_correction_test.cc
 
 sources		= $(addprefix src/,$(local_src))
