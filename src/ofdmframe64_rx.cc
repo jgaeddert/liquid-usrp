@@ -55,7 +55,7 @@ static int callback(std::complex<float> * _y,
 {
     printf("callback invoked\n");
     num_symbols_received++;
-    if (num_symbols_received == 16) {
+    if (num_symbols_received == 7) {
         num_symbols_received = 0;
         return -1;
     } else {
@@ -88,7 +88,7 @@ int main (int argc, char **argv)
     int    mode = 0;
     int    noverruns = 0;
     bool   overrun;
-    int    total_reads = 200;
+    int    total_reads = 2000;
     int    i;
     const int    rx_buf_len = 512*2; // Should be multiple of 512 Bytes
     short  rx_buf[rx_buf_len];
@@ -268,7 +268,9 @@ int main (int argc, char **argv)
  
     int n;
     float g = usrp_rx_gain_correction(decim_rate);
-
+    //g *= 0.46852;
+    g *= 0.56852;
+    g *= 1.6f;
     // Do USRP Samples Reading 
     for (i = 0; i < total_reads; i++) {
         urx->read(rx_buf, rx_buf_len*sizeof(short), &overrun); 

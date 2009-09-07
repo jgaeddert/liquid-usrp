@@ -294,8 +294,8 @@ int main (int argc, char **argv)
 
         for (n=0; n<4096; n++) {
             // prepare data
-            I = (short) (interp_buffer[n].real() * 8000);
-            Q = (short) (interp_buffer[n].imag() * 8000);
+            I = (short) (interp_buffer[n].real() * 4000);
+            Q = (short) (interp_buffer[n].imag() * 4000);
 
             tx_buf[2*n+0] = host_to_usrp_short(I);
             tx_buf[2*n+1] = host_to_usrp_short(Q);
