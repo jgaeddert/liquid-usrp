@@ -270,11 +270,11 @@ int main (int argc, char **argv)
         ofdmframe64gen_writelongsequence(framegen, &frame[n]);
         n+=160;
         // write symbols
-        while (n<1800) {
+        while (n<2000) {
             // modulate random data
             for (j=0; j<48; j++) {
-                syms[j].real() = (rand() % 2 ? 0.707f : -0.707f) ;
-                syms[j].imag() = (rand() % 2 ? 0.707f : -0.707f) ;
+                unsigned int s = modem_gen_rand_sym(mod);
+                modem_modulate(mod,s,&syms[j]);
             }
             ofdmframe64gen_writesymbol(framegen, syms, &frame[n]);
             n += 80;
@@ -294,8 +294,8 @@ int main (int argc, char **argv)
 
         for (n=0; n<4096; n++) {
             // prepare data
-            I = (short) (interp_buffer[n].real() * 4000);
-            Q = (short) (interp_buffer[n].imag() * 4000);
+            I = (short) (interp_buffer[n].real() * 2000);
+            Q = (short) (interp_buffer[n].imag() * 2000);
 
             tx_buf[2*n+0] = host_to_usrp_short(I);
             tx_buf[2*n+1] = host_to_usrp_short(Q);
