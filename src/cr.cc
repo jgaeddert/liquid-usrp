@@ -531,7 +531,7 @@ void * tx_process(void*userdata)
     //unsigned int k=2; // samples per symbol
     unsigned int m=2; // delay
     float beta=0.7f;  // excess bandwidth factor
-    resamp2_crcf interpolator = resamp2_crcf_create(13);
+    resamp2_crcf interpolator = resamp2_crcf_create(13,0.0f,40.0f);
     //unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
     //unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
     //unsigned int num_flush = 16; // number of blocks to use for flushing (off time)
@@ -624,7 +624,7 @@ void * rx_process(void*userdata)
     framesync64 framesync = framesync64_create(m,beta,callback,(void*)p);
 
     // create decimator
-    resamp2_crcf decimator = resamp2_crcf_create(13);
+    resamp2_crcf decimator = resamp2_crcf_create(13,0.0f,40.0f);
     std::complex<float> buffer[rx_buf_len/2];
     std::complex<float> decim_out[rx_buf_len/4];
  

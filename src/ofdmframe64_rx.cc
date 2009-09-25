@@ -258,7 +258,7 @@ int main (int argc, char **argv)
     // TODO : add gain control
 
     // create decimator
-    resamp2_crcf decimator = resamp2_crcf_create(37);
+    resamp2_crcf decimator = resamp2_crcf_create(37,0.0f,60.0f);
     std::complex<float> buffer[rx_buf_len/2];
     std::complex<float> decim_out[rx_buf_len/4];
  

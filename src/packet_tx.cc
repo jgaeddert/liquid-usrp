@@ -234,7 +234,7 @@ int main (int argc, char **argv)
     unsigned int m=3; // delay
     float beta=0.7f;  // excess bandwidth factor
 
-    resamp2_crcf interpolator = resamp2_crcf_create(37);
+    resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
     //unsigned int block_size = tx_buf_len/2;     // number of cplx samp / tx
     //unsigned int num_blocks = 2048/block_size;  // number of cplx blocks / fr.
     //unsigned int num_flush = 16; // number of blocks to use for flushing (off time)

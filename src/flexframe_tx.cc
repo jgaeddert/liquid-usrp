@@ -279,7 +279,7 @@ int main (int argc, char **argv)
     interp_crcf mfinterp = interp_crcf_create(2,h,h_len);
 
     // create half-band interpolator
-    resamp2_crcf interpolator = resamp2_crcf_create(37);
+    resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
 
     // data buffers
     unsigned char header[8];

@@ -319,7 +319,7 @@ int main (int argc, char **argv)
     flexframesync fs = flexframesync_create(NULL,callback,(void*)&fd);
 
     // create decimator
-    resamp2_crcf decimator = resamp2_crcf_create(37);
+    resamp2_crcf decimator = resamp2_crcf_create(37,0.0f,60.0f);
     std::complex<float> buffer[rx_buf_len/2];
     std::complex<float> decim_out[rx_buf_len/4];
  
