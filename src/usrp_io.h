@@ -42,10 +42,10 @@ public:
     void set_rx_freq(int _channel, float _freq);
 
     // decimation/interpolation
-    unsigned int get_tx_interp()    { return usrp_tx->interp_rate(); }
-    unsigned int get_rx_decim()     { return usrp_rx->decim_rate(); }
-    void set_tx_interp(int _interp) { usrp_tx->set_interp_rate(_interp); }
-    void set_rx_decim(int _decim)   { usrp_rx->set_decim_rate(_decim); }
+    unsigned int get_tx_interp();
+    unsigned int get_rx_decim();
+    void set_tx_interp(int _interp);
+    void set_rx_decim(int _decim);
 
     // other properties
     void enable_auto_tx(int _channel)   { tx_db0->set_auto_tr(true);  }

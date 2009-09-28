@@ -10,6 +10,10 @@
 #include "lf.h"
 #include "dbsrx.h"
 #include "tvrx.h"
+#include "usrp_rx_gain_correction.h"
+
+#define USRP_IO_RX_GAIN     (0.01f / 32768.0f)
+#define USRP_IO_TX_GAIN     (8000.0f)
 
 // default constructor
 usrp_io::usrp_io()
@@ -30,10 +34,6 @@ usrp_io::usrp_io()
 
     port_tx = gport_create(2048, sizeof(std::complex<float>));
     port_rx = gport_create(2048, sizeof(std::complex<float>));
-
-    // nominal gain levels
-    rx_gain = 1.0f / 8000.0f;
-    tx_gain = 8000.0f;
 }
 
 usrp_io::~usrp_io()
@@ -115,6 +115,30 @@ void usrp_io::set_rx_freq(int _channel, float _freq)
     // TODO: store local oscillator and ddc frequencies internally
 }
 
+// decimation/interpolation
+unsigned int usrp_io::get_tx_interp()
+{
+    return usrp_tx->interp_rate();
+}
+
+unsigned int usrp_io::get_rx_decim()
+{
+    return usrp_rx->decim_rate();
+}
+
+void usrp_io::set_tx_interp(int _interp)
+{
+    usrp_tx->set_interp_rate(_interp);
+}
+
+void usrp_io::set_rx_decim(int _decim)
+{
+    usrp_rx->set_decim_rate(_decim);
+
+    // adjust gain
+    rx_gain = USRP_IO_RX_GAIN * usrp_rx_gain_correction(_decim);
+}
+
 // initialization methods
 void usrp_io::initialize()
 {
@@ -173,6 +197,10 @@ void usrp_io::initialize()
     // defaults
     usrp_rx->set_nchannels(1);
     usrp_tx->set_nchannels(1);
+
+    // gains
+    rx_gain = USRP_IO_RX_GAIN * usrp_rx_gain_correction(256);
+    tx_gain = USRP_IO_TX_GAIN;
 }
 
 // threading functions
@@ -260,8 +288,8 @@ void* usrp_io_rx_process(void * _u)
 
         // convert to complex float
         for (unsigned int i=0; i<usrp->rx_buffer_length; i++) {
-            data[i].real() =  (float)(usrp->rx_buffer[2*i+0]) * 0.01f;//usrp->rx_gain;
-            data[i].imag() = -(float)(usrp->rx_buffer[2*i+1]) * 0.01f;//usrp->rx_gain;
+            data[i].real() =  (float)(usrp->rx_buffer[2*i+0]) * usrp->rx_gain;
+            data[i].imag() = -(float)(usrp->rx_buffer[2*i+1]) * usrp->rx_gain;
         }
         gport_producer_unlock(usrp->port_rx,usrp->rx_buffer_length);
 
