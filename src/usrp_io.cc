@@ -31,18 +31,20 @@ usrp_io::usrp_io()
     port_tx = gport_create(2048, sizeof(std::complex<float>));
     port_rx = gport_create(2048, sizeof(std::complex<float>));
 
-    // gain levels
+    // nominal gain levels
     rx_gain = 1.0f / 8000.0f;
     tx_gain = 8000.0f;
 }
 
 usrp_io::~usrp_io()
 {
-    // TODO: delete usrp_rx and usrp_tx objects
-
     // destroy ports
     gport_destroy(port_tx);
     gport_destroy(port_rx);
+
+    // delete usrp_rx and usrp_tx objects
+    delete usrp_rx;
+    delete usrp_tx;
 
     delete [] tx_buffer;
     delete [] rx_buffer;
@@ -118,12 +120,6 @@ void usrp_io::set_rx_freq(int _channel, float _freq)
 
     // TODO: store local oscillator and ddc frequencies internally
 }
-
-// decimation
-void usrp_io::get_tx_decim(int _channel, int &_decim) {}
-void usrp_io::get_rx_decim(int _channel, int &_decim) {}
-void usrp_io::set_tx_decim(int _channel, int _decim) {}
-void usrp_io::set_rx_decim(int _channel, int _decim) {}
 
 // initialization methods
 void usrp_io::initialize()

@@ -41,11 +41,11 @@ public:
     void set_tx_freq(int _channel, float _freq);
     void set_rx_freq(int _channel, float _freq);
 
-    // decimation
-    void get_tx_decim(int _channel, int &_decim);
-    void get_rx_decim(int _channel, int &_decim);
-    void set_tx_decim(int _channel, int _decim);
-    void set_rx_decim(int _channel, int _decim);
+    // decimation/interpolation
+    unsigned int get_tx_interp()    { return usrp_tx->interp_rate(); }
+    unsigned int get_rx_decim()     { return usrp_rx->decim_rate(); }
+    void set_tx_interp(int _interp) { usrp_tx->set_interp_rate(_interp); }
+    void set_rx_decim(int _decim)   { usrp_rx->set_decim_rate(_decim); }
 
     // other properties
     void enable_auto_tx(int _channel)   { tx_db0->set_auto_tr(true);  }
@@ -63,7 +63,7 @@ protected:
     usrp_standard_rx * usrp_rx;
     usrp_standard_tx * usrp_tx;
 
-    // daughterboard
+    // daughterboards
     db_base * rx_db0;
     db_base * rx_db1;
     db_base * tx_db0;
@@ -74,24 +74,29 @@ protected:
     bool rx_active;
     bool tx_active;
 
-    // threads
+    // tx/rx processing threads
     pthread_t tx_thread;
     pthread_t rx_thread;
-
-    // user data
-    void * tx_userdata;
-    void * rx_userdata;
 
     // internal buffering
     unsigned int tx_buffer_length;
     unsigned int rx_buffer_length;
     short * tx_buffer;
     short * rx_buffer;
-    float rx_gain;  // receiver gain correction factor
-    float tx_gain;  // transmitter gain correction factor
 
     // intput/output data ports
     gport port_tx;
     gport port_rx;
+
+    // gain
+    float tx_gain;              // nominal tx gain
+    float rx_gain;              // nominal rx gain
+    float rx_gain_correction;   // rx gain correction factor
+
+    // frequency
+
+    // interp/decim rates
+    unsigned int tx_interp0, tx_interp1;
+    unsigned int rx_decim0, rx_decim1;
 };
 

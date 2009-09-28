@@ -11,33 +11,21 @@
 //void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata);
 //void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata);
 
-std::complex<float> x[512];
-//liquid_float_complex x[512];
-interp_crcf interp;
-
 int main() {
     // options
     float   tx_freq     = 462e6f;
     float   rx_freq     = 485e6f;
-    int     tx_decim    = 256;
+    int     tx_interp   = 512;
     int     rx_decim    = 256;
-
-    unsigned int m=2;
-    float beta=0.3f;
-    unsigned int h_len = 2*2*m + 1;
-    float h[h_len];
-    design_rrc_filter(2,m,beta,0,h);
-    
-    interp = interp_crcf_create(2,h,h_len);
 
     // create usrp object
     usrp_io * usrp = new usrp_io();
 
     // set properties
     usrp->set_tx_freq(0, tx_freq);
+    usrp->set_tx_interp(tx_interp);
     usrp->set_rx_freq(0, rx_freq);
-    usrp->set_tx_decim(0, tx_decim);
-    usrp->set_rx_decim(0, rx_decim);
+    usrp->set_rx_decim(rx_decim);
     usrp->enable_auto_tx(0);
 
     // ports
@@ -45,13 +33,8 @@ int main() {
     gport port_rx = usrp->get_rx_port(0);
 
     // start
-#if 0
-    usrp->start_tx(0,tx_nco_callback,NULL);
-    usrp->start_rx(0,rx_display_callback,NULL);
-#else
     usrp->start_tx(0);
     //usrp->start_rx(0);
-#endif
 
     // process data, wait, configure properties
     std::cout << "waiting..." << std::endl;
@@ -60,6 +43,15 @@ int main() {
     //
     // TX
     //
+
+    // interpolator options
+    unsigned int m=4;
+    float beta=0.3f;
+    unsigned int h_len = 2*2*m + 1;
+    float h[h_len];
+    design_rrc_filter(2,m,beta,0,h);
+    interp_crcf interp = interp_crcf_create(2,h,h_len);
+
     unsigned int num_symbols=16;
     std::complex<float> s[num_symbols];
     std::complex<float> * x;
