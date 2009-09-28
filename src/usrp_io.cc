@@ -21,23 +21,36 @@ usrp_io::usrp_io()
 
     initialize();
 
+    // buffering
     tx_buffer_length = 512;
     rx_buffer_length = 512;
 
-    tx_buffer = new short[tx_buffer_length];
-    rx_buffer = new short[tx_buffer_length];
+    tx_buffer = new short[2*tx_buffer_length];
+    rx_buffer = new short[2*tx_buffer_length];
+
+    port_tx = gport_create(2048, sizeof(std::complex<float>));
+    port_rx = gport_create(2048, sizeof(std::complex<float>));
+
+    // gain levels
+    rx_gain = 1.0f / 8000.0f;
+    tx_gain = 8000.0f;
 }
 
 usrp_io::~usrp_io()
 {
     // TODO: delete usrp_rx and usrp_tx objects
 
+    // destroy ports
+    gport_destroy(port_tx);
+    gport_destroy(port_rx);
+
     delete [] tx_buffer;
     delete [] rx_buffer;
 }
 
 // start/stop
-void usrp_io::start_tx(int _channel, usrp_tx_callback _callback, void * _userdata)
+//void usrp_io::start_tx(int _channel, usrp_tx_callback _callback, void * _userdata)
+void usrp_io::start_tx(int _channel)
 {
     if (_channel != 0) {
         std::cerr << "error: usrp_io::start_tx(), only channel 0 currently supported" << std::endl;
@@ -46,13 +59,14 @@ void usrp_io::start_tx(int _channel, usrp_tx_callback _callback, void * _userdat
         std::cerr << "error: usrp_io::start_tx(), tx active" << std::endl;
         throw 0;
     }
-    tx_callback0 = _callback;
+    //tx_callback0 = _callback;
     tx_active = true;
-    tx_userdata = _userdata;
+    //tx_userdata = _userdata;
     pthread_create(&tx_thread, NULL, usrp_io_tx_process, this);
 }
 
-void usrp_io::start_rx(int _channel, usrp_rx_callback _callback, void * _userdata)
+//void usrp_io::start_rx(int _channel, usrp_rx_callback _callback, void * _userdata)
+void usrp_io::start_rx(int _channel)
 {
     if (_channel != 0) {
         std::cerr << "error: usrp_io::start_rx(), only channel 0 currently supported" << std::endl;
@@ -61,9 +75,9 @@ void usrp_io::start_rx(int _channel, usrp_rx_callback _callback, void * _userdat
         std::cerr << "error: usrp_io::start_rx(), rx active" << std::endl;
         throw 0;
     }
-    rx_callback0 = _callback;
+    //rx_callback0 = _callback;
     rx_active = true;
-    rx_userdata = _userdata;
+    //rx_userdata = _userdata;
     pthread_create(&rx_thread, NULL, usrp_io_rx_process, this);
 }
 
@@ -176,7 +190,7 @@ void* usrp_io_tx_process(void * _u)
 {
     std::cout << "usrp_io_tx_process() invoked" << std::endl;
     usrp_io * usrp = (usrp_io*) _u;
-    void * userdata = usrp->tx_userdata;
+    //void * userdata = usrp->tx_userdata;
 
     // local variables
     int rc;
@@ -185,17 +199,27 @@ void* usrp_io_tx_process(void * _u)
     // start data transfer
     usrp->usrp_tx->start();
 
+    std::complex<float> * data;
+
     while (usrp->tx_active) {
         // invoke callback
-        usrp->tx_callback0(usrp->tx_buffer, usrp->tx_buffer_length, userdata);
+        //usrp->tx_callback0(usrp->tx_buffer, usrp->tx_buffer_length, userdata);
+        // wait for data
+        data = (std::complex<float>*) gport_consumer_lock(usrp->port_tx,512);
+
+        // convert to short
+        for (unsigned int i=0; i<usrp->tx_buffer_length; i++) {
+            usrp->tx_buffer[2*i+0] = (short)(data[i].real() * usrp->tx_gain);
+            usrp->tx_buffer[2*i+1] = (short)(data[i].imag() * usrp->tx_gain);
+        }
 
         // write data
-        rc = usrp->usrp_tx->write(usrp->tx_buffer, usrp->tx_buffer_length, &underrun);
+        rc = usrp->usrp_tx->write(usrp->tx_buffer, 2*usrp->tx_buffer_length, &underrun);
 
         if (rc < 0) {
             std::cerr << "error: usrp_io_tx_process(), tx error" << std::endl;
             throw 0;
-        } else if (rc != (int)(usrp->tx_buffer_length) ) {
+        } else if (rc != (int)(2*usrp->tx_buffer_length) ) {
             std::cerr << "warning: usrp_io_tx_process(), usrp attempted to write "
                       << usrp->tx_buffer_length << " values ("
                       << rc << " actually written)" << std::endl;
@@ -203,6 +227,9 @@ void* usrp_io_tx_process(void * _u)
 
         if (underrun)
             std::cerr << "underrun" << std::endl;
+
+        // unlock data
+        gport_consumer_unlock(usrp->port_tx,512);
     }
 
     // stop data transfer
@@ -216,24 +243,25 @@ void* usrp_io_rx_process(void * _u)
 {
     std::cout << "usrp_io_rx_process() invoked" << std::endl;
     usrp_io * usrp = (usrp_io*) _u;
-    void * userdata = usrp->rx_userdata;
+    //void * userdata = usrp->rx_userdata;
 
     // local variables
     int rc;
     bool overrun;
+    std::complex<float> * data;
 
     // start data transfer
     usrp->usrp_rx->start();
 
     while (usrp->rx_active) {
         // read data
-        rc = usrp->usrp_rx->read(usrp->rx_buffer, usrp->rx_buffer_length, &overrun);
+        rc = usrp->usrp_rx->read(usrp->rx_buffer, 2*usrp->rx_buffer_length, &overrun);
 
         if (rc < 0) {
             std::cerr << "error: usrp_io_rx_process(), rx error ("
                       << rc << ")" << std::endl;
             throw 0;
-        } else if (rc != (int)(usrp->rx_buffer_length) ) {
+        } else if (rc != (int)(2*usrp->rx_buffer_length) ) {
             std::cerr << "warning: usrp_io_rx_process(), usrp attempted to write "
                       << usrp->rx_buffer_length << " values ("
                       << rc << " actually written)" << std::endl;
@@ -243,7 +271,17 @@ void* usrp_io_rx_process(void * _u)
             std::cerr << "overrun" << std::endl;
 
         // invoke callback
-        usrp->rx_callback0(usrp->rx_buffer, usrp->rx_buffer_length, userdata);
+        //usrp->rx_callback0(usrp->rx_buffer, usrp->rx_buffer_length, userdata);
+
+        data = (std::complex<float>*) gport_producer_lock(usrp->port_rx,512);
+
+        // convert to complex float
+        for (unsigned int i=0; i<usrp->tx_buffer_length; i++) {
+            data[i].real() = (float)(usrp->rx_buffer[2*i+0]) * usrp->rx_gain;
+            data[i].imag() = (float)(usrp->rx_buffer[2*i+1]) * usrp->rx_gain;
+        }
+        gport_producer_unlock(usrp->port_rx,512);
+
     }
 
     // stop data transfer

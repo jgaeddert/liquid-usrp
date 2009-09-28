@@ -2,13 +2,11 @@
 //
 //
 
+#include <complex>
 #include <usrp_standard.h>
 #include <pthread.h>
+#include <liquid/liquid.h>
 #include "db_base.h"
-
-// callback function definitions
-typedef void* (*usrp_tx_callback)(short *_iq_data, unsigned int _n, void * _userdata);
-typedef void* (*usrp_rx_callback)(short *_iq_data, unsigned int _n, void * _userdata);
 
 // threading functions
 void* usrp_io_tx_process(void * _u);
@@ -26,8 +24,8 @@ public:
     ~usrp_io();
 
     // start/stop
-    void start_tx(int _channel, usrp_tx_callback _callback, void * _userdata);
-    void start_rx(int _channel, usrp_rx_callback _callback, void * _userdata);
+    void start_tx(int _channel);
+    void start_rx(int _channel);
     void stop_tx(int _channel) { tx_active = false; }
     void stop_rx(int _channel) { rx_active = false; }
 
@@ -53,6 +51,10 @@ public:
     void enable_auto_tx(int _channel)   { tx_db0->set_auto_tr(true);  }
     void disable_auto_tx(int _channel)  { tx_db0->set_auto_tr(false); }
 
+    // port handling
+    gport get_tx_port(int _channel) { return port_tx; }
+    gport get_rx_port(int _channel) { return port_rx; }
+
 protected:
     // initialization methods
     void initialize();
@@ -76,12 +78,6 @@ protected:
     pthread_t tx_thread;
     pthread_t rx_thread;
 
-    // callback functions
-    usrp_tx_callback tx_callback0;
-    //usrp_tx_callback tx_callback1;
-    usrp_rx_callback rx_callback0;
-    //usrp_rx_callback rx_callback1;
-
     // user data
     void * tx_userdata;
     void * rx_userdata;
@@ -91,5 +87,11 @@ protected:
     unsigned int rx_buffer_length;
     short * tx_buffer;
     short * rx_buffer;
+    float rx_gain;  // receiver gain correction factor
+    float tx_gain;  // transmitter gain correction factor
+
+    // intput/output data ports
+    gport port_tx;
+    gport port_rx;
 };
 

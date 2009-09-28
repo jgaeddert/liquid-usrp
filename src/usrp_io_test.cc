@@ -8,8 +8,8 @@
 #include <liquid/liquid.h>
 #include "usrp_io.h"
 
-void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata);
-void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata);
+//void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata);
+//void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata);
 
 std::complex<float> x[512];
 //liquid_float_complex x[512];
@@ -40,13 +40,43 @@ int main() {
     usrp->set_rx_decim(0, rx_decim);
     usrp->enable_auto_tx(0);
 
+    // ports
+    gport port_tx = usrp->get_tx_port(0);
+    gport port_rx = usrp->get_rx_port(0);
+
     // start
+#if 0
     usrp->start_tx(0,tx_nco_callback,NULL);
     usrp->start_rx(0,rx_display_callback,NULL);
+#else
+    usrp->start_tx(0);
+    //usrp->start_rx(0);
+#endif
 
     // process data, wait, configure properties
     std::cout << "waiting..." << std::endl;
-    usleep(50000000);
+    //usleep(50000000);
+
+    //
+    // TX
+    //
+    unsigned int num_symbols=16;
+    std::complex<float> s[num_symbols];
+    std::complex<float> * x;
+    unsigned int i;
+    //for (unsigned int n=0; n<1000000; n++) {
+    while (1) {
+        // get data from port
+        x = (std::complex<float>*) gport_producer_lock(port_tx,2*num_symbols);
+        for (i=0; i<num_symbols; i++) {
+            s[i].real() = rand()%2 ? 1.0f : -1.0f;
+            s[i].imag() = rand()%2 ? 1.0f : -1.0f;
+            interp_crcf_execute(interp, s[i], &x[2*i]);
+        }
+
+        // release port
+        gport_producer_unlock(port_tx,2*num_symbols);
+    }
     std::cout << "done." << std::endl;
 
     // stop
@@ -58,6 +88,8 @@ int main() {
     // delete usrp object
     delete usrp;
 }
+
+#if 0
 
 void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata)
 {
@@ -103,3 +135,4 @@ void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata)
     return NULL;
 }
 
+#endif
