@@ -139,7 +139,6 @@ int main (int argc, char **argv)
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-    printf("decim rate  :   %u\n", decim_rate);
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
