@@ -12,7 +12,7 @@
 #include "tvrx.h"
 #include "usrp_rx_gain_correction.h"
 
-#define USRP_IO_RX_GAIN     (0.01f / 32768.0f)
+#define USRP_IO_RX_GAIN     (1.0f / 64.0f)
 #define USRP_IO_TX_GAIN     (8000.0f)
 
 // default constructor

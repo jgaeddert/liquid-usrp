@@ -177,9 +177,6 @@ int main (int argc, char **argv)
             resamp2_crcf_decim_execute(decimator, &data_rx[2*n], &decim_out[n]);
         }
 
-        for (n=0; n<rx_buffer_length/2; n++)
-            decim_out[n] *= g*8000.0f;
-
         // run through frame synchronizer
         framesync64_execute(framesync, decim_out, rx_buffer_length/2);
 
