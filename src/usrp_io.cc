@@ -25,8 +25,8 @@ usrp_io::usrp_io()
     tx_buffer_length = 512;
     rx_buffer_length = 512;
 
-    tx_buffer = new short[2*tx_buffer_length];
-    rx_buffer = new short[2*tx_buffer_length];
+    tx_buffer = new short[2*tx_buffer_length*sizeof(short)];
+    rx_buffer = new short[2*tx_buffer_length*sizeof(short)];
 
     port_tx = gport_create(2048, sizeof(std::complex<float>));
     port_rx = gport_create(2048, sizeof(std::complex<float>));
@@ -201,12 +201,12 @@ void* usrp_io_tx_process(void * _u)
         }
 
         // write data
-        rc = usrp->usrp_tx->write(usrp->tx_buffer, 2*usrp->tx_buffer_length, &underrun);
+        rc = usrp->usrp_tx->write(usrp->tx_buffer, 2*usrp->tx_buffer_length*sizeof(short), &underrun);
 
         if (rc < 0) {
             std::cerr << "error: usrp_io_tx_process(), tx error" << std::endl;
             throw 0;
-        } else if (rc != (int)(2*usrp->tx_buffer_length) ) {
+        } else if (rc != (int)(2*usrp->tx_buffer_length*sizeof(short)) ) {
             std::cerr << "warning: usrp_io_tx_process(), usrp attempted to write "
                       << usrp->tx_buffer_length << " values ("
                       << rc << " actually written)" << std::endl;
@@ -216,7 +216,7 @@ void* usrp_io_tx_process(void * _u)
             std::cerr << "underrun" << std::endl;
 
         // unlock data
-        gport_consumer_unlock(usrp->port_tx,usrp->tx_buffer_length);
+        gport_consumer_unlock(usrp->port_tx, usrp->tx_buffer_length);
     }
 
     // stop data transfer
@@ -241,13 +241,13 @@ void* usrp_io_rx_process(void * _u)
 
     while (usrp->rx_active) {
         // read data
-        rc = usrp->usrp_rx->read(usrp->rx_buffer, 2*usrp->rx_buffer_length, &overrun);
+        rc = usrp->usrp_rx->read(usrp->rx_buffer, 2*usrp->rx_buffer_length*sizeof(short), &overrun);
 
         if (rc < 0) {
             std::cerr << "error: usrp_io_rx_process(), rx error ("
                       << rc << ")" << std::endl;
             throw 0;
-        } else if (rc != (int)(2*usrp->rx_buffer_length) ) {
+        } else if (rc != (int)(2*usrp->rx_buffer_length*sizeof(short)) ) {
             std::cerr << "warning: usrp_io_rx_process(), usrp attempted to write "
                       << usrp->rx_buffer_length << " values ("
                       << rc << " actually written)" << std::endl;
@@ -259,9 +259,9 @@ void* usrp_io_rx_process(void * _u)
         data = (std::complex<float>*) gport_producer_lock(usrp->port_rx,usrp->rx_buffer_length);
 
         // convert to complex float
-        for (unsigned int i=0; i<usrp->tx_buffer_length; i++) {
-            data[i].real() = (float)(usrp->rx_buffer[2*i+0]) * usrp->rx_gain;
-            data[i].imag() = (float)(usrp->rx_buffer[2*i+1]) * usrp->rx_gain;
+        for (unsigned int i=0; i<usrp->rx_buffer_length; i++) {
+            data[i].real() =  (float)(usrp->rx_buffer[2*i+0]) * 0.01f;//usrp->rx_gain;
+            data[i].imag() = -(float)(usrp->rx_buffer[2*i+1]) * 0.01f;//usrp->rx_gain;
         }
         gport_producer_unlock(usrp->port_rx,usrp->rx_buffer_length);
 
