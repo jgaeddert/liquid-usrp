@@ -34,13 +34,6 @@
 
 #include "usrp_io.h"
  
-/*
- SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
- 2 bytes for Q. Since the reading length from USRP should be multiple of 512 
- bytes see "usrp_basic.h", then we have to read multiple of 128 samples each 
- time (4 bytes * 128 sample = 512 bytes)  
- */
-#define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
 
 void usage() {
@@ -111,12 +104,12 @@ int main (int argc, char **argv)
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
-    uio->set_tx_freq(0, frequency);
+    uio->set_tx_freq(USRP_CHANNEL, frequency);
     uio->set_tx_interp(interp_rate);
-    uio->enable_auto_tx(0);
+    uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port
-    gport port_tx = uio->get_tx_port(0);
+    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
 
     // framegen parameters
     //unsigned int k=2; // samples per symbol
@@ -137,7 +130,7 @@ int main (int argc, char **argv)
     unsigned int j, n, pid=0;
 
     // start usrp data transfer
-    uio->start_tx(0);
+    uio->start_tx(USRP_CHANNEL);
 
     unsigned int i;
     for (i=0; i<num_blocks; i++) {
@@ -172,7 +165,7 @@ int main (int argc, char **argv)
 
     }
  
-    uio->stop_tx(0);  // Stop data transfer
+    uio->stop_tx(USRP_CHANNEL);  // Stop data transfer
     printf("usrp data transfer complete\n");
 
     // clean it up
