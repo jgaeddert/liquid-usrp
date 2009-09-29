@@ -116,6 +116,9 @@ int main (int argc, char **argv)
     printf("symbol_rate :   %12.8f [kHz]\n", symbol_rate*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
+    // 
+    unsigned int num_blocks = (unsigned int)((4.0f*symbol_rate*num_seconds)/(512));
+
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_tx_freq(0, frequency);
@@ -154,12 +157,11 @@ int main (int argc, char **argv)
     unsigned int n; // sample counter
     unsigned int s; // data symbol
     
-    int    total_writes = 1000000;
-    int    i;
+    unsigned int i;
 
     // start USRP data transfer
     uio->start_tx(0);
-    for (i = 0; i < total_writes; i++) {
+    for (i=0; i<num_blocks; i++) {
 
         // retrieve tx data buffer
         data_tx = (std::complex<float>*) gport_producer_lock(port_tx,512);

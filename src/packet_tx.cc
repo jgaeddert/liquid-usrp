@@ -47,6 +47,7 @@ void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
+    printf("  p     :   packet spacing\n");
     printf("  t     :   run time [seconds]\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
@@ -55,9 +56,6 @@ void usage() {
 
 int main (int argc, char **argv)
 {
-    int    total_writes = 10000;
-    int    i;
-
     // command-line options
     bool verbose = true;
 
@@ -68,27 +66,18 @@ int main (int argc, char **argv)
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
 
-    unsigned int packet_spacing=8;
+    unsigned int packet_spacing=1;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:p:t:qvuh")) != EOF) {
         switch (d) {
-        case 'f':
-            frequency = atof(optarg);
-            break;
-        case 'b':
-            bandwidth = atof(optarg);
-            break;
-        case 't':
-            num_seconds = atof(optarg);
-            break;
-        case 'q':
-            verbose = false;
-            break;
-        case 'v':
-            verbose = true;
-            break;
+        case 'f':   frequency = atof(optarg);       break;
+        case 'b':   bandwidth = atof(optarg);       break;
+        case 'p':   packet_spacing = atoi(optarg);  break;
+        case 't':   num_seconds = atof(optarg);     break;
+        case 'q':   verbose = false;                break;
+        case 'v':   verbose = true;                 break;
         case 'u':
         case 'h':
         default:
@@ -121,6 +110,8 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
+    unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(4096));
+
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_tx_freq(0, frequency);
@@ -146,15 +137,15 @@ int main (int argc, char **argv)
     unsigned char header[24];
     unsigned char payload[64];
 
-    // generate data buffer
-    printf("USRP Transfer Started\n");
-    uio->start_tx(0);        // Start data transfer
- 
     unsigned int j, n, pid=0;
-    // Do USRP Samples Reading 
-    for (i = 0; i < total_writes; i++) {
+
+    // start usrp data transfer
+    uio->start_tx(0);
+
+    unsigned int i;
+    for (i=0; i<num_blocks; i++) {
         // generate the frame / transmit silence
-        if ((i%packet_spacing)==0) {
+        if ((i%(packet_spacing+1))==0) {
             // generate random data
             for (j=0; j<24; j++)    header[j]  = rand() % 256;
             for (j=0; j<64; j++)    payload[j] = rand() % 256;
@@ -185,7 +176,7 @@ int main (int argc, char **argv)
     }
  
     uio->stop_tx(0);  // Stop data transfer
-    printf("USRP Transfer Stopped\n");
+    printf("usrp data transfer complete\n");
 
     // clean it up
     resamp2_crcf_destroy(interpolator);
