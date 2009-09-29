@@ -101,9 +101,6 @@ int main (int argc, char **argv)
     } else if (bandwidth < min_bandwidth) {
         printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
         return 0;
-    } if (packet_spacing < 1) {
-        printf("error: packet spacing must be greater than 0\n");
-        return 0;
     }
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
