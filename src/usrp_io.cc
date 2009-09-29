@@ -43,8 +43,9 @@ usrp_io::~usrp_io()
     gport_destroy(port_rx);
 
     // delete usrp_rx and usrp_tx objects
-    delete usrp_rx;
-    delete usrp_tx;
+    // TODO : figure out why this segfaults
+    //delete usrp_rx;
+    //delete usrp_tx;
 
     delete [] tx_buffer;
     delete [] rx_buffer;
