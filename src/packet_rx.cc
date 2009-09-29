@@ -31,11 +31,6 @@
 #include <complex>
 #include <liquid/liquid.h>
 
-#include "usrp_standard.h"
-#include "usrp_prims.h"
-#include "usrp_dbid.h"
-#include "flex.h"
-#include "usrp_rx_gain_correction.h"
 #include "usrp_io.h"
  
 /*
@@ -161,11 +156,9 @@ int main (int argc, char **argv)
     std::complex<float> decim_out[rx_buffer_length];
  
     uio->start_rx(0);        // Start data transfer
- 
     printf("USRP Transfer Started\n");
  
     unsigned int n;
-    float g = usrp_rx_gain_correction(decim_rate);
     std::complex<float> * data_rx;
     // Do USRP Samples Reading 
     for (i = 0; i < total_reads; i++) {

@@ -32,11 +32,6 @@
 #include <getopt.h>
 #include <liquid/liquid.h>
 
-#include "usrp_standard.h"
-#include "usrp_prims.h"
-#include "usrp_dbid.h"
-#include "usrp_bytesex.h"
-#include "flex.h"
 #include "usrp_io.h"
  
 /*
