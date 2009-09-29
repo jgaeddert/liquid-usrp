@@ -75,8 +75,8 @@ int main (int argc, char **argv)
 
     bool verbose = true;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    float min_bandwidth = (32e6 * 1.60f / 512.0);
+    float max_bandwidth = (32e6 * 1.60f /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
@@ -94,21 +94,11 @@ int main (int argc, char **argv)
     int d;
     while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
         switch (d) {
-        case 'f':
-            frequency = atof(optarg);
-            break;
-        case 'b':
-            bandwidth = atof(optarg);
-            break;
-        case 't':
-            num_seconds = atof(optarg);
-            break;
-        case 'q':
-            verbose = false;
-            break;
-        case 'v':
-            verbose = true;
-            break;
+        case 'f':   frequency = atof(optarg);       break;
+        case 'b':   bandwidth = atof(optarg);       break;
+        case 't':   num_seconds = atof(optarg);     break;
+        case 'q':   verbose = false;                break;
+        case 'v':   verbose = true;                 break;
         case 'u':
         case 'h':
         default:
@@ -118,13 +108,13 @@ int main (int argc, char **argv)
     }
 
     // compute interpolation rate
-    unsigned int interp_rate = (unsigned int)(32e6 / bandwidth);
+    unsigned int interp_rate = (unsigned int)(32e6 * 1.60f / bandwidth);
     
     // ensure multiple of 4
     interp_rate = (interp_rate >> 2) << 2;
 
     // update actual bandwidth
-    bandwidth = 32e6f / (float)(interp_rate);
+    bandwidth = 32e6f * 1.60f / (float)(interp_rate);
 
     if (bandwidth > max_bandwidth) {
         printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
@@ -157,18 +147,6 @@ int main (int argc, char **argv)
         fprintf (stderr, "Error: usrp_standard_tx::make\n");
         exit (1);
     }
-
-#if 0
-    if (width_8_p) {
-        int width = 8;
-        int shift = 8;
-        bool want_q = true;
-        if (!utx->set_format(usrp_standard_tx::make_format(width, shift, want_q))) {
-            fprintf (stderr, "Error: utx->set_format\n");
-            exit (1);
-       }
-    }
-#endif
 
     // daughterboard
     int tx_db0 = utx->daughterboard_id(0);

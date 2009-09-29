@@ -97,8 +97,8 @@ int main (int argc, char **argv)
     // command-line options
     verbose = true;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    float min_bandwidth = (32e6 * 1.60f / 512.0);
+    float max_bandwidth = (32e6 * 1.60f /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
@@ -108,21 +108,11 @@ int main (int argc, char **argv)
     int d;
     while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
         switch (d) {
-        case 'f':
-            frequency = atof(optarg);
-            break;
-        case 'b':
-            bandwidth = atof(optarg);
-            break;
-        case 't':
-            num_seconds = atof(optarg);
-            break;
-        case 'q':
-            verbose = false;
-            break;
-        case 'v':
-            verbose = true;
-            break;
+        case 'f':   frequency = atof(optarg);       break;
+        case 'b':   bandwidth = atof(optarg);       break;
+        case 't':   num_seconds = atof(optarg);     break;
+        case 'q':   verbose = false;                break;
+        case 'v':   verbose = true;                 break;
         case 'u':
         case 'h':
         default:
@@ -132,13 +122,13 @@ int main (int argc, char **argv)
     }
 
     // compute interpolation rate
-    unsigned int decim_rate = (unsigned int)(16e6 / bandwidth);
+    unsigned int decim_rate = (unsigned int)(16e6 * 1.60f / bandwidth);
     
     // ensure multiple of 2
     decim_rate = (decim_rate >> 1) << 1;
 
     // update actual bandwidth
-    bandwidth = 16e6f / (float)(decim_rate);
+    bandwidth = 16e6f * 1.60f / (float)(decim_rate);
 
     if (bandwidth > max_bandwidth) {
         printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
