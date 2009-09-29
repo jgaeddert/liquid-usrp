@@ -130,6 +130,7 @@ int main (int argc, char **argv)
 
     // start usrp data transfer
     uio->start_tx(USRP_CHANNEL);
+    printf("usrp data transfer started\n");
 
     for (i=0; i<num_blocks; i++) {
 

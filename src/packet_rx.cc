@@ -155,12 +155,13 @@ int main (int argc, char **argv)
     unsigned int rx_buffer_length = 512;
     std::complex<float> decim_out[rx_buffer_length];
  
-    uio->start_rx(0);        // Start data transfer
-    printf("USRP Transfer Started\n");
+    // start data transfer
+    uio->start_rx(0);
+    printf("usrp data transfer started\n");
  
     unsigned int n;
     std::complex<float> * data_rx;
-    // Do USRP Samples Reading 
+
     for (i = 0; i < total_reads; i++) {
         // grab data from port
         data_rx = (std::complex<float>*) gport_consumer_lock(port_rx,rx_buffer_length);
@@ -178,7 +179,7 @@ int main (int argc, char **argv)
  
  
     uio->stop_rx(0);  // Stop data transfer
-    printf("USRP Transfer Stopped\n");
+    printf("usrp data transfer complete\n");
 
     // clean it up
     framesync64_destroy(framesync);
