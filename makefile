@@ -19,7 +19,7 @@ local_progs	:=		\
 	src/usrp_io_test.cc	\
 	src/gr_usrp_rx_test.cc	\
 	src/gr_usrp_tx_test.cc	\
-	src/tx.cc \
+	src/fmtx.cc 		\
 	src/tx_rrc.cc \
 	src/test_usrp_standard_tx.cc \
 	src/flexframe_tx.cc 	\
