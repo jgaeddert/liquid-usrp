@@ -33,31 +33,28 @@
 
 #include "usrp_io.h"
  
-/*
- SAMPLES_PER_READ :Each sample is consists of 4 bytes (2 bytes for I and 
- 2 bytes for Q. Since the reading length from USRP should be multiple of 512 
- bytes see "usrp_basic.h", then we have to read multiple of 128 samples each 
- time (4 bytes * 128 sample = 512 bytes)  
- */
-#define SAMPLES_PER_READ    (512)       // Must be a multiple of 128
 #define USRP_CHANNEL        (0)
  
 static bool verbose;
+
+static unsigned int num_packets_received;
+static unsigned int num_valid_packets_received;
 
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid,
                     void * _userdata)
 {
-    if (!verbose)
-        return 0;
 
-    std::cout << "********* callback invoked, ";// << std::endl;
+    if (verbose) printf("********* callback invoked, ");
+    num_packets_received++;
+
     if ( !_header_valid ) {
-        printf("header crc : FAIL\n");
+        if (verbose) printf("header crc : FAIL\n");
     } else if ( !_payload_valid ) {
-        printf("payload crc : FAIL\n");
+        if (verbose) printf("payload crc : FAIL\n");
     } else {
-        printf("packet id: %u\n", (unsigned int ) _header[0]);
+        if (verbose) printf("packet id: %u\n", (unsigned int ) _header[0]);
+        num_valid_packets_received++;
     }
     return 0;
 }
@@ -74,9 +71,6 @@ void usage() {
 
 int main (int argc, char **argv)
 {
-    int    total_reads = 200;
-    int    i;
-
     // command-line options
     verbose = true;
 
@@ -91,21 +85,11 @@ int main (int argc, char **argv)
     int d;
     while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
         switch (d) {
-        case 'f':
-            frequency = atof(optarg);
-            break;
-        case 'b':
-            bandwidth = atof(optarg);
-            break;
-        case 't':
-            num_seconds = atof(optarg);
-            break;
-        case 'q':
-            verbose = false;
-            break;
-        case 'v':
-            verbose = true;
-            break;
+        case 'f':   frequency = atof(optarg);       break;
+        case 'b':   bandwidth = atof(optarg);       break;
+        case 't':   num_seconds = atof(optarg);     break;
+        case 'q':   verbose = false;                break;
+        case 'v':   verbose = true;                 break;
         case 'u':
         case 'h':
         default:
@@ -135,14 +119,16 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
+    unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(512));
+
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
-    uio->set_rx_freq(0, frequency);
+    uio->set_rx_freq(USRP_CHANNEL, frequency);
     uio->set_rx_decim(decim_rate);
-    uio->enable_auto_tx(0);
+    uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve rx port
-    gport port_rx = uio->get_rx_port(0);
+    gport port_rx = uio->get_rx_port(USRP_CHANNEL);
 
     // framing
     unsigned int m=3;
@@ -156,13 +142,18 @@ int main (int argc, char **argv)
     std::complex<float> decim_out[rx_buffer_length];
  
     // start data transfer
-    uio->start_rx(0);
+    uio->start_rx(USRP_CHANNEL);
     printf("usrp data transfer started\n");
  
     unsigned int n;
     std::complex<float> * data_rx;
 
-    for (i = 0; i < total_reads; i++) {
+    // reset counter
+    num_packets_received = 0;
+    num_valid_packets_received = 0;
+
+    unsigned int i;
+    for (i=0; i<num_blocks; i++) {
         // grab data from port
         data_rx = (std::complex<float>*) gport_consumer_lock(port_rx,rx_buffer_length);
 
@@ -178,8 +169,17 @@ int main (int argc, char **argv)
     }
  
  
-    uio->stop_rx(0);  // Stop data transfer
+    uio->stop_rx(USRP_CHANNEL);  // Stop data transfer
     printf("usrp data transfer complete\n");
+
+    // print results
+    float data_rate = num_valid_packets_received * 8.0f * 64.0f / num_seconds;
+    float percent_valid = (num_packets_received == 0) ?
+                          0.0f :
+                          100.0f * (float)num_valid_packets_received / (float)num_packets_received;
+    printf("    packets received    : %6u\n", num_packets_received);
+    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_valid);
+    printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
 
     // clean it up
     framesync64_destroy(framesync);
