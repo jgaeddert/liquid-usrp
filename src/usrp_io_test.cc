@@ -8,13 +8,15 @@
 #include <liquid/liquid.h>
 #include "usrp_io.h"
 
-//void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata);
-//void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata);
+#define USRP_CHANNEL    (0)
+
+void * tx_handler( void * _port );
+void * rx_handler( void * _port );
 
 int main() {
     // options
     float   tx_freq     = 462e6f;
-    float   rx_freq     = 485e6f;
+    float   rx_freq     = 462.5625e6f;
     int     tx_interp   = 512;
     int     rx_decim    = 256;
 
@@ -22,28 +24,60 @@ int main() {
     usrp_io * usrp = new usrp_io();
 
     // set properties
-    usrp->set_tx_freq(0, tx_freq);
+    usrp->set_tx_freq(USRP_CHANNEL, tx_freq);
     usrp->set_tx_interp(tx_interp);
-    usrp->set_rx_freq(0, rx_freq);
+    usrp->set_rx_freq(USRP_CHANNEL, rx_freq);
     usrp->set_rx_decim(rx_decim);
-    usrp->enable_auto_tx(0);
+    usrp->enable_auto_tx(USRP_CHANNEL);
 
     // ports
-    gport port_tx = usrp->get_tx_port(0);
-    gport port_rx = usrp->get_rx_port(0);
+    gport port_tx = usrp->get_tx_port(USRP_CHANNEL);
+    gport port_rx = usrp->get_rx_port(USRP_CHANNEL);
 
-    // start
-    usrp->start_tx(0);
-    //usrp->start_rx(0);
+    // threads
+    pthread_t tx_thread;
+    pthread_t rx_thread;
+    pthread_attr_t thread_attr;
+    void * status;
+    
+    // set thread attributes
+    pthread_attr_init(&thread_attr);
+    pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
 
-    // process data, wait, configure properties
-    std::cout << "waiting..." << std::endl;
-    //usleep(50000000);
+    // attributes object no longer needed
+    pthread_attr_destroy(&thread_attr);
 
-    //
-    // TX
-    //
+    std::cout << "waiting to start threads..." << std::endl;
+    usleep(2000000);
 
+    // create threads
+    pthread_create(&tx_thread, &thread_attr, &tx_handler, (void*) port_tx);
+    pthread_create(&rx_thread, &thread_attr, &rx_handler, (void*) port_rx);
+
+    // start data transfer
+    usrp->start_tx(USRP_CHANNEL);
+    usrp->start_rx(USRP_CHANNEL);
+
+    std::cout << "waiting for threads to exit..." << std::endl;
+
+    // join threads
+    pthread_join(tx_thread, &status);
+    pthread_join(rx_thread, &status);
+
+    // stop
+    usrp->stop_rx(USRP_CHANNEL);
+    usrp->stop_tx(USRP_CHANNEL);
+
+    printf("main process complete\n");
+
+    // delete usrp object
+    delete usrp;
+}
+
+void * tx_handler ( void *_port )
+{
+    gport port = (gport) _port;
+ 
     // interpolator options
     unsigned int m=4;
     float beta=0.3f;
@@ -52,79 +86,59 @@ int main() {
     design_rrc_filter(2,m,beta,0,h);
     interp_crcf interp = interp_crcf_create(2,h,h_len);
 
-    unsigned int num_symbols=16;
+    unsigned int num_symbols=256;
     std::complex<float> s[num_symbols];
     std::complex<float> * x;
     unsigned int i;
-    //for (unsigned int n=0; n<1000000; n++) {
-    while (1) {
+    printf("tx thread running...\n");
+    for (unsigned int n=0; n<2000; n++) {
+    //while (1) {
         // get data from port
-        x = (std::complex<float>*) gport_producer_lock(port_tx,2*num_symbols);
+        x = (std::complex<float>*) gport_producer_lock(port,2*num_symbols);
         for (i=0; i<num_symbols; i++) {
             s[i].real() = rand()%2 ? 1.0f : -1.0f;
             s[i].imag() = rand()%2 ? 1.0f : -1.0f;
             interp_crcf_execute(interp, s[i], &x[2*i]);
         }
 
+        //printf("releasing port...\n");
+
         // release port
-        gport_producer_unlock(port_tx,2*num_symbols);
+        gport_producer_unlock(port,2*num_symbols);
     }
     std::cout << "done." << std::endl;
-
-    // stop
-    usrp->stop_rx(0);
-    usrp->stop_tx(0);
-
     interp_crcf_destroy(interp);
-
-    // delete usrp object
-    delete usrp;
+   
+    printf("tx_handler finished.\n");
+    pthread_exit(0); // exit thread
 }
 
-#if 0
 
-void* tx_nco_callback(short *_iq_data, unsigned int _n, void * _userdata)
+void * rx_handler ( void *_port )
 {
-    //std::cout << "tx_nco_callback() invoked" << std::endl;
+    gport p = (gport) _port;
 
-    unsigned int i;
-    std::complex<float> s;
-    //liquid_float_complex s;
+    std::complex<float> * data_rx;
+    std::complex<float> spectrogram_buffer[64];
 
-    std::complex<float> d[2];
-    //liquid_float_complex d[2];
-    for (i=0; i<_n/2; i+=2) {
-        s.real() = rand()%2 ? 1.0f : -1.0f;
-        s.imag() = rand()%2 ? 1.0f : -1.0f;
-        //s[0] = rand()%2 ? 1.0f : -1.0f;
-        //s[1] = rand()%2 ? 1.0f : -1.0f;
-        interp_crcf_execute(interp, s, &x[i]);
+    asgram sg = asgram_create(spectrogram_buffer,64);
+    asgram_set_scale(sg,20.0f);
+    asgram_set_offset(sg,80.0f);
 
-        //x[i+0] = s;
-        //x[i+1] = s;
+    for (unsigned int n=0; n<4000; n++) {
+        data_rx = (std::complex<float>*) gport_consumer_lock(p,512);
+        
+        // run ascii spectrogram
+        if (n%30 == 0) {
+            memmove(spectrogram_buffer, data_rx, 64*sizeof(std::complex<float>));
+            asgram_execute(sg);
+        }
+
+        gport_consumer_unlock(p,512);
     }
 
-    for (i=0; i<_n; i+=2) {
-        _iq_data[i+0] = (short) (4000 * (x[i].real()));
-        _iq_data[i+1] = (short) (4000 * (x[i].imag()));
-    }
-    return NULL;
+    printf("rx_handler finished.\n");
+    pthread_exit(0); // exit thread
 }
 
-void* rx_display_callback(short *_iq_data, unsigned int _n, void * _userdata)
-{
-    //std::cout << "rx_display_callback() invoked" << std::endl;
-    unsigned int i;
-    short I,Q;
-    float e=0.0f;
-    for (i=0; i<_n; i+=2) {
-        I = _iq_data[i+0];
-        Q = _iq_data[i+1];
-        e += fabsf(I) + fabsf(Q);
-    }
-    e /= _n;
-    std::cout << "energy: " << e << std::endl;
-    return NULL;
-}
 
-#endif
