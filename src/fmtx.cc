@@ -34,13 +34,28 @@
 
 #include "usrp_io.h"
 
+const static float fmtx_frs_channels[14] = {
+    462.5625e6f,
+    462.5875e6f,
+    462.6125e6f,
+    462.6375e6f,
+    462.6625e6f,
+    462.6875e6f,
+    462.7125e6f,
+    467.5625e6f,
+    467.5875e6f,
+    467.6125e6f,
+    467.6375e6f,
+    467.6625e6f,
+    467.6875e6f,
+    467.7125e6f
+};
+
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
-    printf("  s     :   symbol rate [Hz] (62.5kHz min, 8MHz max)\n");
+    printf("  c     :   FRS channel [1,14]\n");
     printf("  t     :   run time [seconds]\n");
-    printf("  m     :   filter delay [symbols]\n");
-    printf("  b     :   filter excess bandwidth factor [0.0 min, 1.0 max]\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -54,20 +69,21 @@ int main (int argc, char **argv)
     float min_symbol_rate = (32e6 / 512.0);
     float max_symbol_rate = (32e6 /   4.0);
 
-    float frequency = 462.0e6;
+    float frequency = 462.5625e6;
     float symbol_rate = min_symbol_rate;
     float num_seconds = 5.0f;
-    float beta = 0.3f;
-
+    
+    unsigned int frs_channel=1;
+    bool frs_channel_specified=false;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:s:t:b:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:c:s:t:b:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
-        case 's':   symbol_rate = atof(optarg);     break;
+        case 'c':   frs_channel = atoi(optarg);
+                    frs_channel_specified = true;   break;
         case 't':   num_seconds = atof(optarg);     break;
-        case 'b':   beta = atof(optarg);            break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
         case 'u':
@@ -93,13 +109,16 @@ int main (int argc, char **argv)
     } else if (symbol_rate < min_symbol_rate) {
         printf("error: minimum symbol_rate exceeded (%8.4f kHz)\n", min_symbol_rate*1e-3);
         return 0;
-    } else if (beta < 0.0f || beta > 1.0f) {
-        printf("error: filter excess bandwidth beta must be in [0.0,1.0]\n");
+    } else if (frs_channel < 1 || frs_channel > 14) {
+        printf("error: FRS channel out of range [1,14]\n");
         return 0;
     }
 
+    if (frs_channel_specified) {
+        frequency = fmtx_frs_channels[frs_channel-1];
+    }
+
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("symbol_rate :   %12.8f [kHz]\n", symbol_rate*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     // 
@@ -116,7 +135,7 @@ int main (int argc, char **argv)
     std::complex<float> * data_tx;
 
     // frequency modulator
-    float m = 0.01f;
+    float m = 0.03f;
     float f = 0.0f;
     freqmodem fm = freqmodem_create(m,f);
 
