@@ -48,8 +48,8 @@ public:
     void set_rx_decim(int _decim);
 
     // other properties
-    void enable_auto_tx(int _channel)   { tx_db0->set_auto_tr(true);  }
-    void disable_auto_tx(int _channel)  { tx_db0->set_auto_tr(false); }
+    void enable_auto_tx(int _channel)   { tx_db0->set_auto_tr(true);  rx_db0->set_auto_tr(true); }
+    void disable_auto_tx(int _channel)  { tx_db0->set_auto_tr(false); rx_db0->set_auto_tr(false);}
 
     // port handling
     gport get_tx_port(int _channel) { return port_tx; }
