@@ -47,6 +47,9 @@
 #define USRP_CHANNEL        (0)
  
 static bool verbose;
+static unsigned int num_packets_received;
+static unsigned int num_valid_packets_received;
+static unsigned int num_bytes_received;
 
 typedef struct {
     unsigned char * header;
@@ -63,16 +66,15 @@ static int callback(unsigned char * _rx_header,
                     unsigned int _rx_payload_len,
                     void * _userdata)
 {
-    if (!verbose)
-        return 0;
+    num_packets_received++;
+    if (verbose) printf("********* callback invoked, ");
 
-    std::cout << "********* callback invoked, ";// << std::endl;
     if ( !_rx_header_valid ) {
-        printf("header crc : FAIL\n");
+        if (verbose) printf("header crc : FAIL\n");
         return 0;
     }
     unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
-    printf("packet id: %6u\n", packet_id);
+    if (verbose) printf("packet id: %6u\n", packet_id);
     unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
     fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
     fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
@@ -90,7 +92,7 @@ static int callback(unsigned char * _rx_header,
         fd->fec0        != fec0         ||
         fd->fec1        != fec1)
     {
-        printf("re-creating packetizer\n");
+        if (verbose) printf("re-creating packetizer\n");
         packetizer_destroy(fd->p);
         fd->p = packetizer_create(payload_len, fec0, fec1);
         fd->payload_len = payload_len;
@@ -101,8 +103,12 @@ static int callback(unsigned char * _rx_header,
     // decode packet
     unsigned char msg_dec[payload_len];
     bool crc_pass = packetizer_decode(fd->p, _rx_payload, msg_dec);
-    if (!crc_pass)
-        printf("  <<< payload crc fail >>>\n");
+    if (crc_pass) {
+        num_valid_packets_received++;
+        num_bytes_received += payload_len;
+    } else {
+        if (verbose) printf("  <<< payload crc fail >>>\n");
+    }
 
     /*
     packetizer_print(fd->p);
@@ -209,6 +215,9 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
+    num_packets_received = 0;
+    num_valid_packets_received = 0;
+    num_bytes_received = 0;
 
     if (loopback_p)    mode |= usrp_standard_rx::FPGA_MODE_LOOPBACK;
    
@@ -368,6 +377,16 @@ int main (int argc, char **argv)
  
     urx->stop();  // Stop data transfer
     printf("USRP Transfer Stopped\n");
+
+    // print results
+    float data_rate = 8.0f * (float)(num_bytes_received) / num_seconds;
+    float percent_valid = (num_packets_received == 0) ?
+                          0.0f :
+                          100.0f * (float)num_valid_packets_received / (float)num_packets_received;
+    printf("    packets received    : %6u\n", num_packets_received);
+    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_valid);
+    printf("    bytes_received      : %6u\n", num_bytes_received);
+    printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
 
     // clean it up
     flexframesync_destroy(fs);
