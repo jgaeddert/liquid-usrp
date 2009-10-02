@@ -37,18 +37,25 @@
 #define USRP_CHANNEL        (0)
 
 void usage() {
-    printf("packet_tx:\n");
+    printf("flexframe_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
     printf("  t     :   run time [seconds]\n");
-    printf("  n     :   * payload length (bytes)\n");
-    printf("  m     :   * mod. scheme: <psk>, dpsk, qam,...\n");
-    printf("  p     :   * mod. depth: <1>,2,...8\n");
-    printf("  c     :   * fec scheme: <none>,v27,v29,...\n");
+    printf("  n     :   payload length (bytes)\n");
+    printf("  m     :   mod. scheme: <psk>, dpsk, ask, qam,...\n");
+    printf("  p     :   mod. depth: <1>,2,...8\n");
+    printf("  c,k   :   fec coding scheme: c (inner), k (outer)\n");
+    printf("                <none>, h74, r3,\n");
+    printf("                v27, v29, v39, v615,\n");
+    printf("                v27p23, v27p34, v27p45, v27p56, v27p67, v27p78,\n");
+    printf("                v29p23, v29p34, v29p45, v29p56, v29p67, v29p78,\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
 }
+
+// return scheme from string
+fec_scheme str2fec(const char * _str);
 
 int main (int argc, char **argv)
 {
@@ -70,12 +77,30 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:p:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:t:n:m:p:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
-        case 'p':   packet_spacing = atoi(optarg);  break;
+        case 'n':   payload_len = atoi(optarg);     break;
+        case 'm':
+            if (strcmp(optarg,"psk")==0) {
+                mod_scheme = MOD_PSK;
+            } else if (strcmp(optarg, "dpsk")==0) {
+                mod_scheme = MOD_DPSK;
+            } else if (strcmp(optarg, "ask")==0) {
+                mod_scheme = MOD_ASK;
+            } else if (strcmp(optarg, "qam")==0) {
+                mod_scheme = MOD_QAM;
+            } else {
+                printf("error: unknown mod. scheme: %s\n", optarg);
+                mod_scheme = MOD_UNKNOWN;
+            }
+            break;
+        case 'p':   mod_depth = atoi(optarg);       break;
+        //case 'p':   packet_spacing = atoi(optarg);  break;
+        case 'c':   fec0 = str2fec(optarg);         break;
+        case 'k':   fec1 = str2fec(optarg);         break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
         case 'u':
@@ -103,6 +128,12 @@ int main (int argc, char **argv)
         return 0;
     } else if (payload_len > (1<<16)) {
         printf("error: maximum payload length exceeded: %u > %u\n", payload_len, 1<<16);
+        return 0;
+    } else if (fec0 == FEC_UNKNOWN || fec1 == FEC_UNKNOWN) {
+        usage();
+        return 0;
+    } else if (mod_scheme == MOD_UNKNOWN) {
+        usage();
         return 0;
     }
 
@@ -243,4 +274,51 @@ int main (int argc, char **argv)
     delete uio;
     return 0;
 }
+
+fec_scheme str2fec(const char * _str)
+{
+    if (strcmp(_str,"none")==0) {
+        return FEC_NONE;
+    } else if (strcmp(_str, "v27")==0) {
+        return FEC_CONV_V27;
+    } else if (strcmp(_str, "v29")==0) {
+        return FEC_CONV_V29;
+    } else if (strcmp(_str, "v39")==0) {
+        return FEC_CONV_V39;
+    } else if (strcmp(_str, "v615")==0) {
+        return FEC_CONV_V615;
+    } else if (strcmp(_str, "v27p23")==0) {
+        return FEC_CONV_V27P23;
+    } else if (strcmp(_str, "v27p34")==0) {
+        return FEC_CONV_V27P34;
+    } else if (strcmp(_str, "v27p45")==0) {
+        return FEC_CONV_V27P45;
+    } else if (strcmp(_str, "v27p56")==0) {
+        return FEC_CONV_V27P56;
+    } else if (strcmp(_str, "v27p67")==0) {
+        return FEC_CONV_V27P67;
+    } else if (strcmp(_str, "v27p78")==0) {
+        return FEC_CONV_V27P78;
+    } else if (strcmp(_str, "v29p23")==0) {
+        return FEC_CONV_V29P23;
+    } else if (strcmp(_str, "v29p34")==0) {
+        return FEC_CONV_V29P34;
+    } else if (strcmp(_str, "v29p45")==0) {
+        return FEC_CONV_V29P45;
+    } else if (strcmp(_str, "v29p56")==0) {
+        return FEC_CONV_V29P56;
+    } else if (strcmp(_str, "v29p67")==0) {
+        return FEC_CONV_V29P67;
+    } else if (strcmp(_str, "v29p78")==0) {
+        return FEC_CONV_V29P78;
+    } else if (strcmp(_str, "r3")==0) {
+        return FEC_REP3;
+    } else if (strcmp(_str, "h74")==0) {
+        return FEC_HAMMING74;
+    } else {
+        printf("unknown/unsupported fec scheme : %s\n", _str);
+    }
+    return FEC_UNKNOWN;
+}
+
 
