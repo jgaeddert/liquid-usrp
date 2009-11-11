@@ -139,7 +139,7 @@ int main (int argc, char **argv)
 
     // create channelizer
     unsigned int k=2*num_channels;
-    ofdmoqam cs = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_SYNTHESIZER);
+    ofdmoqam cs = ofdmoqam_create(k, m, 0.99f, 0.0f, OFDMOQAM_SYNTHESIZER,0);
 
     // set channelizer gain
     float gain[k];
@@ -165,7 +165,7 @@ int main (int argc, char **argv)
 
     unsigned int t;
 
-    unsigned int pilot_channel = 3*k/4 - 2;
+    //unsigned int pilot_channel = 3*k/4 - 2;
     unsigned int pilot_symbol = 1;
  
     unsigned int j, n;

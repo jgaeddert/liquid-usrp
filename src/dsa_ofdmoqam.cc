@@ -275,8 +275,8 @@ int main (int argc, char **argv)
 
     // create channelizer
     unsigned int k=num_subcarriers;
-    ofdmoqam cs = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_SYNTHESIZER);
-    ofdmoqam ca = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_ANALYZER);
+    ofdmoqam cs = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_SYNTHESIZER,0);
+    ofdmoqam ca = ofdmoqam_create(k, m, beta, 0.0f, OFDMOQAM_ANALYZER,   0);
     unsigned int k0 = k*fguard;     // lo guard
     unsigned int k1 = k*(1-fguard); // hi guard
 

@@ -148,7 +148,7 @@ int main (int argc, char **argv)
         }
 
         // run channelizer
-        firpfbch_execute(cs,symbols,synthesizer_out);
+        firpfbch_synthesizer_execute(cs,symbols,synthesizer_out);
 
         // run half-band interpolator
         for (n=0; n<num_channels; n++)
