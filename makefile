@@ -20,6 +20,7 @@ local_progs	:=		\
 	src/gr_usrp_rx_test.cc	\
 	src/gr_usrp_tx_test.cc	\
 	src/fmtx.cc 		\
+	src/jammer.cc 		\
 	src/tx_rrc.cc \
 	src/test_usrp_standard_tx.cc \
 	src/flexframe_tx.cc 	\
