@@ -1,8 +1,7 @@
- // Simple C++ USRP interfacing demonstration program
- //
- //
- // This program was derived and modified from test_usrp_standard_tx.cc 
- 
+//
+// jammer.cc
+//
+
 #include <math.h>
 #include <iostream>
 #include <complex>
@@ -84,10 +83,21 @@ int main (int argc, char **argv)
     std::complex<float> * data_tx;
 
     // tone parameters
-    float df = 0.0001f;
-    float f0 = 0.0f;
-    float f1 = 0.5f;
-    float f_tone = 0.01f;
+    //  |-------------------|---|       |-------|
+    // -pi/2                0  f0       f1     pi/2
+    //                        ->|notched|<-
+    float f0 = 0.0f;        // lower notching frequency
+    float f1 = 0.5f;        // uppper notching frequency
+    float f_tone = 0.0f;    // tone frequency
+    float df = 0.0001f;     // sweep mode frequency step size
+                            // (smaller is faster)
+    enum {
+        JAMMER_MODE_HOP=0,  // randomly hop frequencies
+        JAMMER_MODE_SWEEP   // sweep frequencies
+    } mode = JAMMER_MODE_SWEEP;
+
+    // create and initialize the NCO
+    //nco nco_tone = nco_create(); // libliquid-0.1.0
     nco nco_tone = nco_create(LIQUID_NCO);
     nco_set_frequency(nco_tone,f_tone);
 
@@ -107,24 +117,35 @@ int main (int argc, char **argv)
             nco_step(nco_tone);
         }
 
+        // write data to output buffer
         gport_producer_unlock(port_tx,512);
 
-#if 0
-        // random hopping
-        do {
-            f_tone = (randf()-0.5f)*M_PI;
-        } while (f_tone>f0 && f_tone<f1);
-#else
-        // sweep
-        f_tone += df;
-        if (f_tone > f0 && f_tone < f1)
-            f_tone = f1;
-        else if (f_tone > M_PI*0.5f)
-            f_tone = -M_PI*0.5f;
-        else if (f_tone < -M_PI*0.5f)
-            f_tone = M_PI*0.5f;
-#endif
+        // 
+        if (mode == JAMMER_MODE_HOP) {
+            // random hopping mode: generate random
+            // frequency in [-pi/2,pi/2], skipping
+            // notched band
+            do {
+                f_tone = (randf()-0.5f)*M_PI;
+            } while (f_tone>f0 && f_tone<f1);
 
+        } else if (mode == JAMMER_MODE_SWEEP) {
+            // sweep mode: increment frequency, wrapping
+            // around if value is larger than pi/2, and
+            // skipping notched band
+            f_tone += df;
+
+            if (f_tone>f0 && f_tone<f1)
+                f_tone = f1;
+            else if (f_tone > M_PI*0.5f)
+                f_tone = -M_PI*0.5f;
+            else if (f_tone < -M_PI*0.5f)
+                f_tone = M_PI*0.5f;
+        } else {
+            // unknown mode (no frequency change)
+        }
+
+        // update the NCO frequency
         nco_set_frequency(nco_tone,f_tone);
     }
  
