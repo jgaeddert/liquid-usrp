@@ -3,29 +3,6 @@
  //
  // This program was derived and modified from test_usrp_standard_tx.cc 
  
- /* -*- c++ -*- */
- /*
-  * Copyright 2003,2006,2007,2008 Free Software Foundation, Inc.
-  * 
-  * This file is part of GNU Radio
-  * 
-  * GNU Radio is free software; you can redistribute it and/or modify
-  * it under the terms of the GNU General Public License as published by
-  * the Free Software Foundation; either version 3, or (at your option)
-  * any later version.
-  * 
-  * GNU Radio is distributed in the hope that it will be useful,
-  * but WITHOUT ANY WARRANTY; without even the implied warranty of
-  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  * GNU General Public License for more details.
-  * 
-  * You should have received a copy of the GNU General Public License
-  * along with GNU Radio; see the file COPYING.  If not, write to
-  * the Free Software Foundation, Inc., 51 Franklin Street,
-  * Boston, MA 02110-1301, USA.
-  */
- 
- 
 #include <math.h>
 #include <iostream>
 #include <complex>
@@ -34,27 +11,10 @@
 
 #include "usrp_io.h"
 
-const static float fmtx_frs_channels[14] = {
-    462.5625e6f,
-    462.5875e6f,
-    462.6125e6f,
-    462.6375e6f,
-    462.6625e6f,
-    462.6875e6f,
-    462.7125e6f,
-    467.5625e6f,
-    467.5875e6f,
-    467.6125e6f,
-    467.6375e6f,
-    467.6625e6f,
-    467.6875e6f,
-    467.7125e6f
-};
-
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
-    printf("  c     :   FRS channel [1,14]\n");
+    printf("  b     :   bandwidth [Hz]\n");
     printf("  t     :   run time [seconds]\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
@@ -73,17 +33,12 @@ int main (int argc, char **argv)
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
     
-    unsigned int frs_channel=1;
-    bool frs_channel_specified=false;
-
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:c:s:t:b:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:s:t:b:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
-        case 'c':   frs_channel = atoi(optarg);
-                    frs_channel_specified = true;   break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
@@ -110,13 +65,6 @@ int main (int argc, char **argv)
     } else if (bandwidth < min_bandwidth) {
         printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
         return 0;
-    } else if (frs_channel < 1 || frs_channel > 14) {
-        printf("error: FRS channel out of range [1,14]\n");
-        return 0;
-    }
-
-    if (frs_channel_specified) {
-        frequency = fmtx_frs_channels[frs_channel-1];
     }
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
@@ -135,13 +83,13 @@ int main (int argc, char **argv)
     gport port_tx = uio->get_tx_port(0);
     std::complex<float> * data_tx;
 
-    // audio NCO
+    // tone parameters
     float df = 0.0001f;
     float f0 = 0.0f;
     float f1 = 0.5f;
-    float f_audio = 0.01f;
-    nco nco_audio = nco_create(LIQUID_NCO);
-    nco_set_frequency(nco_audio,f_audio);
+    float f_tone = 0.01f;
+    nco nco_tone = nco_create(LIQUID_NCO);
+    nco_set_frequency(nco_tone,f_tone);
 
     unsigned int n; // sample counter
     unsigned int i;
@@ -153,40 +101,38 @@ int main (int argc, char **argv)
         // retrieve tx data buffer
         data_tx = (std::complex<float>*) gport_producer_lock(port_tx,512);
 
-        // generate FM data
+        // generate tone data (complex sinusoid samples)
         for (n=0; n<512; n++) {
-            //freqmodem_modulate(fm, nco_cos(nco_audio), &data_tx[n]);
-            nco_cexpf(nco_audio, &data_tx[n]);
-            nco_step(nco_audio);
+            nco_cexpf(nco_tone, &data_tx[n]);
+            nco_step(nco_tone);
         }
 
         gport_producer_unlock(port_tx,512);
 
-        //if ((rand()%10)>0)
-        //    continue;
-
 #if 0
+        // random hopping
         do {
-            f_audio = (randf()-0.5f)*M_PI;
-        } while (f_audio>f0 && f_audio<f1);
+            f_tone = (randf()-0.5f)*M_PI;
+        } while (f_tone>f0 && f_tone<f1);
 #else
-        f_audio += df;
-        if (f_audio > f0 && f_audio < f1)
-            f_audio = f1;
-        else if (f_audio > M_PI*0.5f)
-            f_audio = -M_PI*0.5f;
-        else if (f_audio < -M_PI*0.5f)
-            f_audio = M_PI*0.5f;
+        // sweep
+        f_tone += df;
+        if (f_tone > f0 && f_tone < f1)
+            f_tone = f1;
+        else if (f_tone > M_PI*0.5f)
+            f_tone = -M_PI*0.5f;
+        else if (f_tone < -M_PI*0.5f)
+            f_tone = M_PI*0.5f;
 #endif
 
-        nco_set_frequency(nco_audio,f_audio);
+        nco_set_frequency(nco_tone,f_tone);
     }
  
     uio->stop_tx(0);  // Stop data transfer
     printf("usrp data transfer complete\n");
 
-    // clean it up
-    nco_destroy(nco_audio);
+    // clean up allocated memory objects
+    nco_destroy(nco_tone);
     delete uio;
     return 0;
 }
