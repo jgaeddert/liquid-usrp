@@ -2,7 +2,8 @@
 # USRP tests makefile
 #
 
-LDFLAGS	= -lusrp -pthread -lliquid -lfftw3f -lfec
+LDFLAGS		= -lusrp -pthread -lliquid -lfftw3f -lfec
+CPPFLAGS	:= -I . -I ./include -Wall -g -O2
 
 local_src	:=		\
 	basic.cc		\
@@ -35,17 +36,17 @@ local_progs	:=		\
 	src/firpfbch_tx.cc	\
 	src/usrp_rx_gain_correction_test.cc
 
-sources		= $(addprefix src/,$(local_src))
+sources		= $(addprefix lib/,$(local_src))
 objects		= $(patsubst %.cc,%.cc.o,$(sources))
 programs	= $(patsubst %.cc,%,$(local_progs))
 
 all: $(programs)
 
 $(objects): %.cc.o : %.cc
-	g++ -Wall -g -O2 -c $< -o $@
+	g++ $(CPPFLAGS) -c $< -o $@
 
 $(programs): % : %.cc $(objects)
-	g++ -Wall -g -O2 $(objects) $(LDFLAGS) $< -o $@
+	g++ $(CPPFLAGS) $(objects) $(LDFLAGS) $< -o $@
 
 clean:
 	$(RM) $(objects)
