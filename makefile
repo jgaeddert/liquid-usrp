@@ -5,6 +5,16 @@
 LDFLAGS		= -lusrp -pthread -lliquid -lfftw3f -lfec
 CPPFLAGS	:= -I . -I ./include -Wall -g -O2
 
+local_headers	:=		\
+	basic.h			\
+	db_base.h		\
+	dbsrx.h			\
+	flex.h			\
+	lf.h			\
+	tvrx.h			\
+	usrp_io.h		\
+	usrp_rx_gain_correction.h
+
 local_src	:=		\
 	basic.cc		\
 	db_base.cc		\
@@ -39,10 +49,11 @@ local_progs	:=		\
 sources		= $(addprefix lib/,$(local_src))
 objects		= $(patsubst %.cc,%.cc.o,$(sources))
 programs	= $(patsubst %.cc,%,$(local_progs))
+headers		= $(addprefix include/,$(local_headers))
 
 all: $(programs)
 
-$(objects): %.cc.o : %.cc
+$(objects): %.cc.o : %.cc $(headers)
 	g++ $(CPPFLAGS) -c $< -o $@
 
 $(programs): % : %.cc $(objects)

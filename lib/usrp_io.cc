@@ -19,6 +19,7 @@
  */
 
 #include <iostream>
+#include <complex>
 #include <usrp_standard.h>
 #include <usrp_prims.h>
 #include <usrp_dbid.h>
@@ -157,6 +158,19 @@ void usrp_io::set_rx_decim(int _decim)
 
     // adjust gain
     rx_gain = USRP_IO_RX_GAIN * usrp_rx_gain_correction(_decim);
+}
+
+// other properties
+void usrp_io::enable_auto_tx(int _channel)
+{
+    tx_db0->set_auto_tr(true);
+    rx_db0->set_auto_tr(true);
+}
+
+void usrp_io::disable_auto_tx(int _channel)
+{
+    tx_db0->set_auto_tr(false);
+    rx_db0->set_auto_tr(false);
 }
 
 // initialization methods

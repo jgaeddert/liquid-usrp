@@ -22,11 +22,13 @@
 //
 //
 
-#include <complex>
-#include <usrp_standard.h>
 #include <pthread.h>
 #include <liquid/liquid.h>
-#include "db_base.h"
+
+// forward declaration of classes
+class db_base;          // db_base.h
+class usrp_standard_rx; // usrp_standard.h
+class usrp_standard_tx; // usrp_standard.h
 
 // threading functions
 void* usrp_io_tx_process(void * _u);
@@ -68,8 +70,8 @@ public:
     void set_rx_decim(int _decim);
 
     // other properties
-    void enable_auto_tx(int _channel)   { tx_db0->set_auto_tr(true);  rx_db0->set_auto_tr(true); }
-    void disable_auto_tx(int _channel)  { tx_db0->set_auto_tr(false); rx_db0->set_auto_tr(false);}
+    void enable_auto_tx(int _channel);
+    void disable_auto_tx(int _channel);
 
     // port handling
     gport get_tx_port(int _channel) { return port_tx; }
