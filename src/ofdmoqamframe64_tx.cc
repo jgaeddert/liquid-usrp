@@ -201,6 +201,8 @@ int main (int argc, char **argv)
             gport_producer_unlock(port_tx,512);
         }
 
+        // reset generator
+        ofdmoqamframe64gen_reset(framegen);
     }
  
  
