@@ -163,6 +163,8 @@ int main (int argc, char **argv)
             gport_producer_unlock(port_tx,512);
         }
 
+        // reset frame generator
+        ofdmframe64gen_reset(framegen);
     }
  
  
