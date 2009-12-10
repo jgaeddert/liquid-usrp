@@ -190,7 +190,15 @@ int main (int argc, char **argv)
     fd.fec1 = FEC_NONE;
     fd.payload_len = 0;
     fd.p = p;
-    flexframesync fs = flexframesync_create(NULL,callback,(void*)&fd);
+    // set properties to default
+    flexframesyncprops_s props;
+    flexframesyncprops_init_default(&props);
+    props.squelch_threshold = -29.0f;
+    props.agc_bw0 = 1e-3f;
+    props.agc_bw1 = 1e-5f;
+    props.pll_bw0 = 1e-3f;
+    props.pll_bw1 = 3e-5f;
+    flexframesync fs = flexframesync_create(&props,callback,(void*)&fd);
 
     // create decimator
     resamp2_crcf decimator = resamp2_crcf_create(37,0.0f,60.0f);

@@ -24,6 +24,6 @@ float usrp_rx_gain_correction(unsigned int _decim_rate)
     float sdB = (POLY1A*d + POLY1B) + f*(POLY2A*d + POLY2B);
     //printf("decim : %4u, d : %12.8f, f : %12.8f, s_hat : %12.8f\n", _decim_rate,d,f,sdB);
 
-    return powf(10.0f,-sdB/10.0f);
+    return 0.02f*powf(10.0f,-sdB/10.0f);
 }
 
