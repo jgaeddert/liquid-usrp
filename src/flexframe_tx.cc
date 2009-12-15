@@ -32,9 +32,10 @@ void usage() {
     printf("flexframe_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
+    printf("  g     :   transmit power gain [dB] (default -3dB)\n");
     printf("  t     :   run time [seconds]\n");
     printf("  n     :   payload length (bytes)\n");
-    printf("  m     :   mod. scheme: <psk>, dpsk, ask, qam,...\n");
+    printf("  m     :   mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
     printf("  p     :   mod. depth: <1>,2,...8\n");
     printf("  c     :   fec coding scheme (inner)\n");
     printf("  k     :   fec coding scheme (outer)\n");
@@ -60,6 +61,7 @@ int main (int argc, char **argv)
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
+    float txgain_dB = -3.0f;
 
     unsigned int packet_spacing=0;
     unsigned int payload_len=200;
@@ -70,10 +72,11 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:n:m:p:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:g:t:n:m:p:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
+        case 'g':   txgain_dB = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'n':   payload_len = atoi(optarg);     break;
         case 'm':
@@ -134,6 +137,7 @@ int main (int argc, char **argv)
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("tx gain     :   %12.8f [dB]\n", txgain_dB);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     // create usrp_io object and set properties
@@ -191,9 +195,12 @@ int main (int argc, char **argv)
     uio->start_tx(USRP_CHANNEL);
 
     std::complex<float> * data_tx;
+
+    // transmitter gain (linear)
+    float g = powf(10.0f, txgain_dB/10.0f);
  
     unsigned int i, j, n, pid=0;
-    // Do USRP Samples Reading 
+    // start transmitter
     for (i=0; i<num_blocks; i++) {
         // generate the frame / transmit silence
         if ((i%(packet_spacing+1))==0) {
@@ -227,6 +234,7 @@ int main (int argc, char **argv)
 
             // interpolate using matched filter
             for (j=0; j<frame_len; j++) {
+                frame[j] *= g;
                 std::complex<float> x = j<frame_len ? frame[j] : 0.0f;
                 interp_crcf_execute(mfinterp, x, &mfbuffer[2*j]);
             }
