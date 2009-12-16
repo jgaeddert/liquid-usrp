@@ -25,6 +25,8 @@
 #include <pthread.h>
 #include <liquid/liquid.h>
 
+#define USRPIO_USE_DC_BLOCKER 0
+
 // forward declaration of classes
 class db_base;          // db_base.h
 class usrp_standard_rx; // usrp_standard.h
@@ -114,6 +116,13 @@ protected:
     float tx_gain;              // nominal tx gain
     float rx_gain;              // nominal rx gain
     float rx_gain_correction;   // rx gain correction factor
+
+#if USRPIO_USE_DC_BLOCKER
+    // dc blocker
+    std::complex<float> m_hat;
+    float alpha;
+    float beta;
+#endif
 
     // frequency
 

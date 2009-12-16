@@ -54,6 +54,12 @@ usrp_io::usrp_io()
 
     port_tx = gport_create(2048, sizeof(std::complex<float>));
     port_rx = gport_create(2048, sizeof(std::complex<float>));
+
+#if USRPIO_USE_DC_BLOCKER
+    m_hat = 0.0f;
+    beta = 1e-3f;
+    alpha = 1.0f - beta;
+#endif
 }
 
 usrp_io::~usrp_io()
@@ -325,6 +331,14 @@ void* usrp_io_rx_process(void * _u)
             data[i].real() =  (float)(usrp->rx_buffer[2*i+0]) * usrp->rx_gain;
             data[i].imag() = -(float)(usrp->rx_buffer[2*i+1]) * usrp->rx_gain;
         }
+
+#if USRPIO_USE_DC_BLOCKER
+        // dc blocker
+        for (unsigned int i=0; i<usrp->rx_buffer_length; i++) {
+            usrp->m_hat = (usrp->alpha)*(usrp->m_hat) + (usrp->beta) * data[i];
+            data[i] -= usrp->m_hat;
+        }
+#endif
         gport_producer_unlock(usrp->port_rx,usrp->rx_buffer_length);
 
     }
