@@ -193,7 +193,7 @@ int main (int argc, char **argv)
     // set properties to default
     flexframesyncprops_s props;
     flexframesyncprops_init_default(&props);
-    props.squelch_threshold = -29.0f;
+    props.squelch_threshold = -32.0f;
     props.agc_bw0 = 1e-3f;
     props.agc_bw1 = 1e-5f;
     props.pll_bw0 = 1e-3f;
@@ -211,7 +211,7 @@ int main (int argc, char **argv)
     printf("usrp data transfer started\n");
  
     unsigned int i, n;
-    // Do USRP Samples Reading 
+    // read samples from buffer, run through frame synchronizer
     for (i=0; i<num_blocks; i++) {
         // grab data from port
         data_rx = (std::complex<float>*) gport_consumer_lock(port_rx,512);
