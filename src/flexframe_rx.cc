@@ -28,6 +28,7 @@
  
 static bool verbose;
 static unsigned int num_packets_received;
+static unsigned int num_valid_headers_received;
 static unsigned int num_valid_packets_received;
 static unsigned int num_bytes_received;
 
@@ -53,6 +54,7 @@ static int callback(unsigned char * _rx_header,
         if (verbose) printf("header crc : FAIL\n");
         return 0;
     }
+    num_valid_headers_received++;
     unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
     if (verbose) printf("packet id: %6u\n", packet_id);
     unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
@@ -179,6 +181,7 @@ int main (int argc, char **argv)
 
     num_packets_received = 0;
     num_valid_packets_received = 0;
+    num_valid_headers_received = 0;
     num_bytes_received = 0;
 
     // framing
@@ -196,6 +199,8 @@ int main (int argc, char **argv)
     props.squelch_threshold = -32.0f;
     props.agc_bw0 = 1e-3f;
     props.agc_bw1 = 1e-5f;
+    props.agc_gmin = 1e-3f;
+    props.agc_gmax = 1e4f;
     props.pll_bw0 = 1e-3f;
     props.pll_bw1 = 3e-5f;
     flexframesync fs = flexframesync_create(&props,callback,(void*)&fd);
@@ -234,11 +239,15 @@ int main (int argc, char **argv)
 
     // print results
     float data_rate = 8.0f * (float)(num_bytes_received) / num_seconds;
-    float percent_valid = (num_packets_received == 0) ?
+    float percent_headers_valid = (num_packets_received == 0) ?
+                          0.0f :
+                          100.0f * (float)num_valid_headers_received / (float)num_packets_received;
+    float percent_packets_valid = (num_packets_received == 0) ?
                           0.0f :
                           100.0f * (float)num_valid_packets_received / (float)num_packets_received;
     printf("    packets received    : %6u\n", num_packets_received);
-    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_valid);
+    printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
+    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
     printf("    bytes_received      : %6u\n", num_bytes_received);
     printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
 
