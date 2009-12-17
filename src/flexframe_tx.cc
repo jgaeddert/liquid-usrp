@@ -80,18 +80,9 @@ int main (int argc, char **argv)
         case 't':   num_seconds = atof(optarg);     break;
         case 'n':   payload_len = atoi(optarg);     break;
         case 'm':
-            if (strcmp(optarg,"psk")==0) {
-                mod_scheme = MOD_PSK;
-            } else if (strcmp(optarg, "dpsk")==0) {
-                mod_scheme = MOD_DPSK;
-            } else if (strcmp(optarg, "ask")==0) {
-                mod_scheme = MOD_ASK;
-            } else if (strcmp(optarg, "qam")==0) {
-                mod_scheme = MOD_QAM;
-            } else if (strcmp(optarg, "apsk")==0) {
-                mod_scheme = MOD_APSK;
-            } else {
-                printf("error: unknown mod. scheme: %s\n", optarg);
+            mod_scheme = liquid_getopt_str2mod(optarg);
+            if (mod_scheme == MOD_UNKNOWN) {
+                printf("error: unknown/unsupported mod. scheme: %s\n", optarg);
                 mod_scheme = MOD_UNKNOWN;
             }
             break;
