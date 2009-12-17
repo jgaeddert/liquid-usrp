@@ -37,6 +37,7 @@ void usage() {
     printf("  n     :   payload length (bytes)\n");
     printf("  m     :   mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
     printf("  p     :   mod. depth: <1>,2,...8\n");
+    printf("  s     :   packet spacing <0>\n");
     printf("  c     :   fec coding scheme (inner)\n");
     printf("  k     :   fec coding scheme (outer)\n");
     // print all available FEC schemes
@@ -72,7 +73,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:g:t:n:m:p:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:g:t:n:m:p:s:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
@@ -87,7 +88,7 @@ int main (int argc, char **argv)
             }
             break;
         case 'p':   mod_depth = atoi(optarg);       break;
-        //case 'p':   packet_spacing = atoi(optarg);  break;
+        case 's':   packet_spacing = atoi(optarg);  break;
         case 'c':   fec0 = liquid_getopt_str2fec(optarg);         break;
         case 'k':   fec1 = liquid_getopt_str2fec(optarg);         break;
         case 'q':   verbose = false;                break;
