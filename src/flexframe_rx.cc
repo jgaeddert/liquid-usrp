@@ -35,9 +35,6 @@ static unsigned int num_bytes_received;
 typedef struct {
     unsigned char * header;
     unsigned char * payload;
-    fec_scheme fec0;
-    fec_scheme fec1;
-    unsigned int payload_len;
     packetizer p;
 } framedata;
 
@@ -69,18 +66,7 @@ static int callback(unsigned char * _rx_header,
     */
 
     framedata * fd = (framedata*) _userdata;
-    // create new packetizer if necessary
-    if (fd->payload_len != payload_len  ||
-        fd->fec0        != fec0         ||
-        fd->fec1        != fec1)
-    {
-        if (verbose) printf("re-creating packetizer\n");
-        packetizer_destroy(fd->p);
-        fd->p = packetizer_create(payload_len, fec0, fec1);
-        fd->payload_len = payload_len;
-        fd->fec0 = fec0;
-        fd->fec1 = fec1;
-    }
+    fd->p = packetizer_recreate(fd->p, payload_len, fec0, fec1);
 
     // decode packet
     unsigned char msg_dec[payload_len];
@@ -189,9 +175,6 @@ int main (int argc, char **argv)
     framedata fd;
     fd.header = NULL;
     fd.payload = NULL;
-    fd.fec0 = FEC_NONE;
-    fd.fec1 = FEC_NONE;
-    fd.payload_len = 0;
     fd.p = p;
     // set properties to default
     flexframesyncprops_s props;
