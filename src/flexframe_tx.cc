@@ -38,6 +38,7 @@ void usage() {
     printf("  m     :   mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
     printf("  p     :   mod. depth: <1>,2,...8\n");
     printf("  s     :   packet spacing <0>\n");
+    printf("  r     :   ramp up/dn length <64>\n");
     printf("  c     :   fec coding scheme (inner)\n");
     printf("  k     :   fec coding scheme (outer)\n");
     // print all available FEC schemes
@@ -70,10 +71,11 @@ int main (int argc, char **argv)
     fec_scheme fec1 = FEC_HAMMING74;
     modulation_scheme mod_scheme = MOD_QAM;
     unsigned int mod_depth = 2;
+    unsigned int ramp_len = 64;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:g:t:n:m:p:s:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:g:t:n:m:p:s:r:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
@@ -89,6 +91,7 @@ int main (int argc, char **argv)
             break;
         case 'p':   mod_depth = atoi(optarg);       break;
         case 's':   packet_spacing = atoi(optarg);  break;
+        case 'r':   ramp_len = atoi(optarg);        break;
         case 'c':   fec0 = liquid_getopt_str2fec(optarg);         break;
         case 'k':   fec1 = liquid_getopt_str2fec(optarg);         break;
         case 'q':   verbose = false;                break;
@@ -148,12 +151,12 @@ int main (int argc, char **argv)
 
     // create flexframegen object
     flexframegenprops_s fgprops;
-    fgprops.rampup_len = 64;
+    fgprops.rampup_len = ramp_len;
     fgprops.phasing_len = 64;
     fgprops.payload_len = packet_len;
     fgprops.mod_scheme = mod_scheme;
     fgprops.mod_bps = mod_depth;
-    fgprops.rampdn_len = 64;
+    fgprops.rampdn_len = ramp_len;
     flexframegen fg = flexframegen_create(&fgprops);
     flexframegen_print(fg);
 
