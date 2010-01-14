@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <complex>
+#include <sys/resource.h>
 #include <liquid/liquid.h>
 
 #include "usrp_io.h"
@@ -92,6 +93,16 @@ static int callback(unsigned char * _rx_header,
     */
 
     return 0;
+}
+
+double calculate_execution_time(struct rusage _start, struct rusage _finish)
+{
+    double utime = _finish.ru_utime.tv_sec - _start.ru_utime.tv_sec
+        + 1e-6*(_finish.ru_utime.tv_usec - _start.ru_utime.tv_usec);
+    double stime = _finish.ru_stime.tv_sec - _start.ru_stime.tv_sec
+        + 1e-6*(_finish.ru_stime.tv_usec - _start.ru_stime.tv_usec);
+    //printf("utime : %12.8f, stime : %12.8f\n", utime, stime);
+    return utime + stime;
 }
 
 void usage() {
@@ -199,6 +210,9 @@ int main (int argc, char **argv)
     printf("usrp data transfer started\n");
  
     unsigned int i, n;
+    struct rusage start;
+    struct rusage finish;
+    getrusage(RUSAGE_SELF, &start);
     // read samples from buffer, run through frame synchronizer
     for (i=0; i<num_blocks; i++) {
         // grab data from port
@@ -215,7 +229,10 @@ int main (int argc, char **argv)
         // release port
         gport_consumer_unlock(port_rx,512);
     }
- 
+    getrusage(RUSAGE_SELF, &finish);
+
+    double extime = calculate_execution_time(start,finish);
+
     // stop usrp data transfer
     uio->stop_rx(USRP_CHANNEL);
     printf("usrp data transfer complete\n");
@@ -233,6 +250,8 @@ int main (int argc, char **argv)
     printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
     printf("    bytes_received      : %6u\n", num_bytes_received);
     printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
+    printf("    execution time      : %12.8f s\n", extime);
+    printf("    %% cpu               : %12.8f\n", 100.0f*extime / num_seconds);
 
     // clean it up
     flexframesync_destroy(fs);
