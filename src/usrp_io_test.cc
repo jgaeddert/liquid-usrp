@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -51,8 +52,8 @@ int main() {
     usrp->enable_auto_tx(USRP_CHANNEL);
 
     // ports
-    gport port_tx = usrp->get_tx_port(USRP_CHANNEL);
-    gport port_rx = usrp->get_rx_port(USRP_CHANNEL);
+    gport2 port_tx = usrp->get_tx_port(USRP_CHANNEL);
+    gport2 port_rx = usrp->get_rx_port(USRP_CHANNEL);
 
     // threads
     pthread_t tx_thread;
@@ -96,7 +97,7 @@ int main() {
 
 void * tx_handler ( void *_port )
 {
-    gport port = (gport) _port;
+    gport2 port = (gport2) _port;
  
     // interpolator options
     unsigned int m=4;
@@ -108,23 +109,18 @@ void * tx_handler ( void *_port )
 
     unsigned int num_symbols=256;
     std::complex<float> s[num_symbols];
-    std::complex<float> * x;
+    std::complex<float> x[2*num_symbols];
     unsigned int i;
     printf("tx thread running...\n");
     for (unsigned int n=0; n<2000; n++) {
     //while (1) {
         // get data from port
-        x = (std::complex<float>*) gport_producer_lock(port,2*num_symbols);
         for (i=0; i<num_symbols; i++) {
             s[i].real() = rand()%2 ? 1.0f : -1.0f;
             s[i].imag() = rand()%2 ? 1.0f : -1.0f;
             interp_crcf_execute(interp, s[i], &x[2*i]);
         }
-
-        //printf("releasing port...\n");
-
-        // release port
-        gport_producer_unlock(port,2*num_symbols);
+        gport2_produce(port,(void*)x,2*num_symbols);
     }
     std::cout << "done." << std::endl;
     interp_crcf_destroy(interp);
@@ -136,9 +132,9 @@ void * tx_handler ( void *_port )
 
 void * rx_handler ( void *_port )
 {
-    gport p = (gport) _port;
+    gport2 p = (gport2) _port;
 
-    std::complex<float> * data_rx;
+    std::complex<float> data_rx[512];
     std::complex<float> spectrogram_buffer[64];
 
     asgram sg = asgram_create(spectrogram_buffer,64);
@@ -146,15 +142,13 @@ void * rx_handler ( void *_port )
     asgram_set_offset(sg,80.0f);
 
     for (unsigned int n=0; n<4000; n++) {
-        data_rx = (std::complex<float>*) gport_consumer_lock(p,512);
+        gport2_consume(p,(void*)data_rx,512);
         
         // run ascii spectrogram
         if (n%30 == 0) {
             memmove(spectrogram_buffer, data_rx, 64*sizeof(std::complex<float>));
             asgram_execute(sg);
         }
-
-        gport_consumer_unlock(p,512);
     }
 
     printf("rx_handler finished.\n");

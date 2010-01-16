@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -76,8 +77,8 @@ public:
     void disable_auto_tx(int _channel);
 
     // port handling
-    gport get_tx_port(int _channel) { return port_tx; }
-    gport get_rx_port(int _channel) { return port_rx; }
+    gport2 get_tx_port(int _channel) { return port_tx; }
+    gport2 get_rx_port(int _channel) { return port_rx; }
 
 protected:
     // initialization methods
@@ -107,10 +108,12 @@ protected:
     unsigned int rx_buffer_length;
     short * tx_buffer;
     short * rx_buffer;
+    std::complex<float> * tx_port_buffer;
+    std::complex<float> * rx_port_buffer;
 
     // intput/output data ports
-    gport port_tx;
-    gport port_rx;
+    gport2 port_tx;
+    gport2 port_rx;
 
     // gain
     float tx_gain;              // nominal tx gain

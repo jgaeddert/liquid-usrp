@@ -1,6 +1,24 @@
-//
-// jammer.cc
-//
+/*
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
+ *
+ * This file is part of liquid.
+ *
+ * liquid is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * liquid is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with liquid.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 
 #include <math.h>
 #include <iostream>
@@ -79,8 +97,8 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(0);
 
     // retrieve tx port from usrp_io object
-    gport port_tx = uio->get_tx_port(0);
-    std::complex<float> * data_tx;
+    gport2 port_tx = uio->get_tx_port(0);
+    std::complex<float> data_tx[512];
 
     // tone parameters
     //  |-------------------|---|       |-------|
@@ -108,9 +126,6 @@ int main (int argc, char **argv)
     uio->start_tx(0);
     for (i=0; i<num_blocks; i++) {
 
-        // retrieve tx data buffer
-        data_tx = (std::complex<float>*) gport_producer_lock(port_tx,512);
-
         // generate tone data (complex sinusoid samples)
         for (n=0; n<512; n++) {
             nco_cexpf(nco_tone, &data_tx[n]);
@@ -118,7 +133,7 @@ int main (int argc, char **argv)
         }
 
         // write data to output buffer
-        gport_producer_unlock(port_tx,512);
+        gport2_produce(port_tx,(void*)data_tx,512);
 
         // 
         if (mode == JAMMER_MODE_HOP) {

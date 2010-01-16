@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -142,7 +143,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port
-    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
+    gport2 port_tx = uio->get_tx_port(USRP_CHANNEL);
 
     // packetizer
     packetizer p = packetizer_create(payload_len,fec0,fec1);
@@ -189,7 +190,7 @@ int main (int argc, char **argv)
     // start usrp data transfer
     uio->start_tx(USRP_CHANNEL);
 
-    std::complex<float> * data_tx;
+    std::complex<float> data_tx[512];
 
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/10.0f);
@@ -248,15 +249,13 @@ int main (int argc, char **argv)
         while (num_samples_remaining > 0) {
             p = num_samples_remaining > 256 ? 256 : num_samples_remaining;
 
-            data_tx = (std::complex<float>*) gport_producer_lock(port_tx,2*p);
-
             // interpolate using half-band interpolator
             for (j=0; j<p; j++)
                 resamp2_crcf_interp_execute(interpolator, mfbuffer[n+j], &data_tx[2*j]);
             n+=p;
             num_samples_remaining -= p;
 
-            gport_producer_unlock(port_tx,2*p);
+            gport2_produce(port_tx,(void*)data_tx,2*p);
         }
  
     }

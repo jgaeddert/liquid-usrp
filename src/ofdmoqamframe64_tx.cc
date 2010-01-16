@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -112,7 +113,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port
-    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
+    gport2 port_tx = uio->get_tx_port(USRP_CHANNEL);
 
     resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
 
@@ -135,7 +136,7 @@ int main (int argc, char **argv)
     //unsigned char header[24];
     //unsigned char payload[64];
     std::complex<float> syms[48];
-    std::complex<float> * data_tx;
+    std::complex<float> data_tx[512];
 
     unsigned int j, n;
     unsigned int i;
@@ -189,8 +190,6 @@ int main (int argc, char **argv)
 
         // send data to usrp_io in blocks
         for (n=0; n<2048; n+=256) {
-            data_tx = (std::complex<float>*) gport_producer_lock(port_tx,512);
-
             // run interpolator
             unsigned int j;
             for (j=0; j<256; j++) {
@@ -198,7 +197,7 @@ int main (int argc, char **argv)
                     frame[n+j], &data_tx[2*j]);
             }
 
-            gport_producer_unlock(port_tx,512);
+            gport2_produce(port_tx,(void*)data_tx,512);
         }
 
         // reset generator

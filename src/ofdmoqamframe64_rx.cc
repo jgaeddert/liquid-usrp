@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -120,7 +121,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(0);
 
     // retrieve rx port
-    gport port_rx = uio->get_rx_port(0);
+    gport2 port_rx = uio->get_rx_port(0);
 
     // framing
     ofdmoqamframe64sync framesync = ofdmoqamframe64sync_create(m,beta,callback,NULL);
@@ -132,7 +133,7 @@ int main (int argc, char **argv)
  
     unsigned int rx_buffer_length = 512;
     std::complex<float> decim_out[rx_buffer_length];
-    std::complex<float> * data_rx;
+    std::complex<float> data_rx[rx_buffer_length];
 
     // start usrp data transfer
     uio->start_rx(USRP_CHANNEL);
@@ -141,7 +142,7 @@ int main (int argc, char **argv)
     unsigned int i, n;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
-        data_rx = (std::complex<float>*) gport_consumer_lock(port_rx,rx_buffer_length);
+        gport2_consume(port_rx,(void*)data_rx,rx_buffer_length);
 
         // run decimator
         for (n=0; n<rx_buffer_length/2; n++) {
@@ -150,8 +151,6 @@ int main (int argc, char **argv)
 
         // run through frame synchronizer
         ofdmoqamframe64sync_execute(framesync, decim_out, rx_buffer_length/2);
-
-        gport_consumer_unlock(port_rx,rx_buffer_length);
     }
  
     uio->stop_rx(USRP_CHANNEL);  // Stop data transfer

@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -116,7 +117,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port from usrp_io object
-    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
+    gport2 port_tx = uio->get_tx_port(USRP_CHANNEL);
 
     // parameters
     //unsigned int k=2;   // samples/symbol
@@ -127,7 +128,7 @@ int main (int argc, char **argv)
 
     // create half-band interpolator
     resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
-    std::complex<float> * data_tx;
+    std::complex<float> data_tx[2*num_channels];
 
     // 
     std::complex<float> symbols[num_channels];
@@ -150,9 +151,6 @@ int main (int argc, char **argv)
     uio->start_tx(USRP_CHANNEL);
     for (i=0; i<num_blocks; i++) {
 
-        // retrieve tx data buffer
-        data_tx = (std::complex<float>*) gport_producer_lock(port_tx,2*num_channels);
-
         // generate data symbols
         for (n=0; n<num_channels; n++) {
             s = modem_gen_rand_sym(mod);
@@ -174,7 +172,7 @@ int main (int argc, char **argv)
         for (n=0; n<num_channels; n++)
             resamp2_crcf_interp_execute(interpolator,synthesizer_out[n],&data_tx[2*n]);
 
-        gport_producer_unlock(port_tx,2*num_channels);
+        gport2_produce(port_tx,(void*)data_tx,2*num_channels);
 
     }
  

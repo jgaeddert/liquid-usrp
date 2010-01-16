@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -123,8 +124,8 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(0);
 
     // retrieve tx port from usrp_io object
-    gport port_tx = uio->get_tx_port(0);
-    std::complex<float> * data_tx;
+    gport2 port_tx = uio->get_tx_port(0);
+    std::complex<float> data_tx[512];
 
     // frequency modulator
     float m = 0.03f;
@@ -143,16 +144,13 @@ int main (int argc, char **argv)
     uio->start_tx(0);
     for (i=0; i<num_blocks; i++) {
 
-        // retrieve tx data buffer
-        data_tx = (std::complex<float>*) gport_producer_lock(port_tx,512);
-
         // generate FM data
         for (n=0; n<512; n++) {
             freqmodem_modulate(fm, nco_cos(nco_audio), &data_tx[n]);
             nco_step(nco_audio);
         }
 
-        gport_producer_unlock(port_tx,512);
+        gport2_produce(port_tx,(void*)data_tx,512);
 
     }
  

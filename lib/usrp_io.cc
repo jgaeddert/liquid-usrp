@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -49,11 +50,14 @@ usrp_io::usrp_io()
     tx_buffer_length = 512;
     rx_buffer_length = 512;
 
-    tx_buffer = new short[2*tx_buffer_length*sizeof(short)];
-    rx_buffer = new short[2*tx_buffer_length*sizeof(short)];
+    tx_port_buffer = new std::complex<float>[tx_buffer_length*sizeof(short)];
+    rx_port_buffer = new std::complex<float>[rx_buffer_length*sizeof(short)];
 
-    port_tx = gport_create(2048, sizeof(std::complex<float>));
-    port_rx = gport_create(2048, sizeof(std::complex<float>));
+    tx_buffer = new short[2*tx_buffer_length*sizeof(short)];
+    rx_buffer = new short[2*rx_buffer_length*sizeof(short)];
+
+    port_tx = gport2_create(4*tx_buffer_length, sizeof(std::complex<float>));
+    port_rx = gport2_create(4*tx_buffer_length, sizeof(std::complex<float>));
 
 #if USRPIO_USE_DC_BLOCKER
     m_hat = 0.0f;
@@ -65,13 +69,11 @@ usrp_io::usrp_io()
 usrp_io::~usrp_io()
 {
     // destroy ports
-    gport_destroy(port_tx);
-    gport_destroy(port_rx);
+    gport2_destroy(port_tx);
+    gport2_destroy(port_rx);
 
-    // delete usrp_rx and usrp_tx objects
-    // TODO : figure out why this segfaults
-    //delete usrp_rx;
-    //delete usrp_tx;
+    delete [] tx_port_buffer;
+    delete [] rx_port_buffer;
 
     delete [] tx_buffer;
     delete [] rx_buffer;
@@ -256,16 +258,16 @@ void* usrp_io_tx_process(void * _u)
     // start data transfer
     usrp->usrp_tx->start();
 
-    std::complex<float> * data;
-
     while (usrp->tx_active) {
         // wait for data
-        data = (std::complex<float>*) gport_consumer_lock(usrp->port_tx,usrp->tx_buffer_length);
+        gport2_consume(usrp->port_tx,
+                       (void*)(usrp->tx_port_buffer),
+                       usrp->tx_buffer_length);
 
         // convert to short
         for (unsigned int i=0; i<usrp->tx_buffer_length; i++) {
-            usrp->tx_buffer[2*i+0] = (short)(data[i].real() * usrp->tx_gain);
-            usrp->tx_buffer[2*i+1] = (short)(data[i].imag() * usrp->tx_gain);
+            usrp->tx_buffer[2*i+0] = (short)(usrp->tx_port_buffer[i].real() * usrp->tx_gain);
+            usrp->tx_buffer[2*i+1] = (short)(usrp->tx_port_buffer[i].imag() * usrp->tx_gain);
         }
 
         // write data
@@ -282,9 +284,6 @@ void* usrp_io_tx_process(void * _u)
 
         if (underrun)
             std::cerr << "underrun" << std::endl;
-
-        // unlock data
-        gport_consumer_unlock(usrp->port_tx, usrp->tx_buffer_length);
     }
 
     // stop data transfer
@@ -302,7 +301,6 @@ void* usrp_io_rx_process(void * _u)
     // local variables
     int rc;
     bool overrun;
-    std::complex<float> * data;
 
     // start data transfer
     usrp->usrp_rx->start();
@@ -324,23 +322,22 @@ void* usrp_io_rx_process(void * _u)
         if (overrun)
             std::cerr << "overrun" << std::endl;
 
-        data = (std::complex<float>*) gport_producer_lock(usrp->port_rx,usrp->rx_buffer_length);
-
         // convert to complex float
         for (unsigned int i=0; i<usrp->rx_buffer_length; i++) {
-            data[i].real() =  (float)(usrp->rx_buffer[2*i+0]) * usrp->rx_gain;
-            data[i].imag() = -(float)(usrp->rx_buffer[2*i+1]) * usrp->rx_gain;
+            usrp->rx_port_buffer[i].real() =  (float)(usrp->rx_buffer[2*i+0]) * usrp->rx_gain;
+            usrp->rx_port_buffer[i].imag() = -(float)(usrp->rx_buffer[2*i+1]) * usrp->rx_gain;
         }
 
 #if USRPIO_USE_DC_BLOCKER
         // dc blocker
         for (unsigned int i=0; i<usrp->rx_buffer_length; i++) {
-            usrp->m_hat = (usrp->alpha)*(usrp->m_hat) + (usrp->beta) * data[i];
-            data[i] -= usrp->m_hat;
+            usrp->m_hat = (usrp->alpha)*(usrp->m_hat) + (usrp->beta) * usrp->rx_port_buffer[i];
+            usrp->rx_port_buffer[i] -= usrp->m_hat;
         }
 #endif
-        gport_producer_unlock(usrp->port_rx,usrp->rx_buffer_length);
-
+        gport2_produce(usrp->port_rx,
+                       (void*)(usrp->rx_port_buffer),
+                       usrp->rx_buffer_length);
     }
 
     // stop data transfer

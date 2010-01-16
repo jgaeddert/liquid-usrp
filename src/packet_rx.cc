@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2007, 2009 Joseph Gaeddert
- * Copyright (c) 2007, 2009 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
+ * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
+ *                                      Institute & State University
  *
  * This file is part of liquid.
  *
@@ -120,7 +121,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve rx port
-    gport port_rx = uio->get_rx_port(USRP_CHANNEL);
+    gport2 port_rx = uio->get_rx_port(USRP_CHANNEL);
 
     // framing
     unsigned int m=3;
@@ -141,7 +142,7 @@ int main (int argc, char **argv)
     printf("usrp data transfer started\n");
  
     unsigned int n;
-    std::complex<float> * data_rx;
+    std::complex<float> data_rx[rx_buffer_length];
 
     // reset counter
     num_packets_received = 0;
@@ -150,7 +151,7 @@ int main (int argc, char **argv)
     unsigned int i;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
-        data_rx = (std::complex<float>*) gport_consumer_lock(port_rx,rx_buffer_length);
+        gport2_consume(port_rx,(void*)data_rx,rx_buffer_length);
 
         // run decimator
         for (n=0; n<rx_buffer_length/2; n++) {
@@ -159,8 +160,6 @@ int main (int argc, char **argv)
 
         // run through frame synchronizer
         framesync64_execute(framesync, decim_out, rx_buffer_length/2);
-
-        gport_consumer_unlock(port_rx,rx_buffer_length);
     }
  
  
