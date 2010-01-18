@@ -105,15 +105,6 @@ int main (int argc, char **argv)
         }
     }
 
-    // compute interpolation rate
-    unsigned int interp_rate = (unsigned int)(32e6 / bandwidth);
-    
-    // ensure multiple of 4
-    interp_rate = (interp_rate >> 2) << 2;
-
-    // update actual bandwidth
-    bandwidth = 32e6f / (float)(interp_rate);
-
     if (bandwidth > max_bandwidth) {
         printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
         return 0;
@@ -139,7 +130,7 @@ int main (int argc, char **argv)
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_tx_freq(USRP_CHANNEL, frequency);
-    uio->set_tx_interp(interp_rate);
+    uio->set_tx_samplerate(2.0f*bandwidth);
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port

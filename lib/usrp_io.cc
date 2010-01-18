@@ -202,17 +202,14 @@ float usrp_io::get_rx_samplerate()
 
 void usrp_io::set_tx_samplerate(float _tx_samplerate)
 {
-    float min_bandwidth = 32e6f / 512.0f;
-    float max_bandwidth = 32e6f /   4.0f;
-
     // compute interpolation rate
-    unsigned int interp_rate = (unsigned int)(32e6 / _tx_samplerate);
+    unsigned int interp_rate = (unsigned int)(64e6 / _tx_samplerate);
 
     // ensure multiple of 4
     interp_rate = (interp_rate >> 2) << 2;
 
     // compute usrp sampling rate
-    float usrp_tx_samplerate = 32e6f / (float)interp_rate;
+    float usrp_tx_samplerate = 64e6f / (float)interp_rate;
 
     // compute arbitrary resampling rate
     tx_resamp_rate = usrp_tx_samplerate / _tx_samplerate;
@@ -228,17 +225,14 @@ void usrp_io::set_tx_samplerate(float _tx_samplerate)
 
 void usrp_io::set_rx_samplerate(float _rx_samplerate)
 {
-    float min_bandwidth = 32e6f / 512.0f;
-    float max_bandwidth = 32e6f /   4.0f;
-
     // compute decimation rate
-    unsigned int decim_rate = (unsigned int)(16e6 / _rx_samplerate);
+    unsigned int decim_rate = (unsigned int)(32e6 / _rx_samplerate);
 
     // ensure multiple of 2
     decim_rate = (decim_rate >> 1) << 1;
 
     // compute usrp sampling rate
-    float usrp_rx_samplerate = 16e6f / (float)decim_rate;
+    float usrp_rx_samplerate = 32e6f / (float)decim_rate;
 
     // compute arbitrary resampling rate
     rx_resamp_rate = usrp_rx_samplerate / _rx_samplerate;

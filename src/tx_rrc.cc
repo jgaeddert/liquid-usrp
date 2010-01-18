@@ -74,12 +74,6 @@ int main (int argc, char **argv)
         }
     }
 
-    // compute interpolation rate
-    unsigned int interp_rate = (unsigned int)(32e6 / symbol_rate);
-    
-    // ensure multiple of 4
-    interp_rate = (interp_rate >> 2) << 2;
-
     if (symbol_rate > max_symbol_rate) {
         printf("error: maximum symbol_rate exceeded (%8.4f MHz)\n", max_symbol_rate*1e-6);
         return 0;
@@ -104,7 +98,7 @@ int main (int argc, char **argv)
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_tx_freq(0, frequency);
-    uio->set_tx_samplerate(symbol_rate);
+    uio->set_tx_samplerate(2.0f*symbol_rate);
     uio->enable_auto_tx(0);
 
     // retrieve tx port from usrp_io object

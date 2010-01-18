@@ -145,15 +145,6 @@ int main (int argc, char **argv)
         }
     }
 
-    // compute interpolation rate
-    unsigned int decim_rate = (unsigned int)(16e6 / bandwidth);
-    
-    // ensure multiple of 2
-    decim_rate = (decim_rate >> 1) << 1;
-
-    // update actual bandwidth
-    bandwidth = 16e6f / (float)(decim_rate);
-
     if (bandwidth > max_bandwidth) {
         printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
         return 0;
@@ -171,7 +162,7 @@ int main (int argc, char **argv)
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_rx_freq(USRP_CHANNEL, frequency);
-    uio->set_rx_decim(decim_rate);
+    uio->set_rx_samplerate(2.0f*bandwidth);
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve rx port
