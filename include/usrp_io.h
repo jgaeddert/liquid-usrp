@@ -36,12 +36,16 @@ class usrp_standard_tx; // usrp_standard.h
 // threading functions
 void* usrp_io_tx_process(void * _u);
 void* usrp_io_rx_process(void * _u);
+void* usrp_io_tx_resamp_process(void * _u);
+void* usrp_io_rx_resamp_process(void * _u);
 
 class usrp_io
 {
     // friend functions allow private access
     friend void* usrp_io_tx_process(void * _u);
     friend void* usrp_io_rx_process(void * _u);
+    friend void* usrp_io_tx_resamp_process(void * _u);
+    friend void* usrp_io_rx_resamp_process(void * _u);
 
 public:
     // default constructor
@@ -77,8 +81,8 @@ public:
     void disable_auto_tx(int _channel);
 
     // port handling
-    gport2 get_tx_port(int _channel) { return port_tx; }
-    gport2 get_rx_port(int _channel) { return port_rx; }
+    gport2 get_tx_port(int _channel) { return port_resamp_tx; }
+    gport2 get_rx_port(int _channel) { return port_resamp_rx; }
 
 protected:
     // initialization methods
@@ -102,6 +106,8 @@ protected:
     // tx/rx processing threads
     pthread_t tx_thread;
     pthread_t rx_thread;
+    pthread_t tx_resamp_thread;
+    pthread_t rx_resamp_thread;
 
     // internal buffering
     unsigned int tx_buffer_length;
@@ -114,6 +120,8 @@ protected:
     // intput/output data ports
     gport2 port_tx;
     gport2 port_rx;
+    gport2 port_resamp_tx;
+    gport2 port_resamp_rx;
 
     // gain
     float tx_gain;              // nominal tx gain
@@ -132,5 +140,12 @@ protected:
     // interp/decim rates
     unsigned int tx_interp0, tx_interp1;
     unsigned int rx_decim0, rx_decim1;
+
+    // arbitrary resampling properties/objects
+    float rx_resamp_rate;
+    float tx_resamp_rate;
+
+    resamp_crcf rx_resamp;
+    resamp_crcf tx_resamp;
 };
 

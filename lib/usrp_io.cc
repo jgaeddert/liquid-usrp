@@ -56,8 +56,18 @@ usrp_io::usrp_io()
     tx_buffer = new short[2*tx_buffer_length*sizeof(short)];
     rx_buffer = new short[2*rx_buffer_length*sizeof(short)];
 
+    // ports
     port_tx = gport2_create(4*tx_buffer_length, sizeof(std::complex<float>));
     port_rx = gport2_create(4*tx_buffer_length, sizeof(std::complex<float>));
+
+    port_resamp_tx = gport2_create(4*tx_buffer_length, sizeof(std::complex<float>));
+    port_resamp_rx = gport2_create(4*tx_buffer_length, sizeof(std::complex<float>));
+
+    // resampling
+    tx_resamp_rate = 1.0f;
+    rx_resamp_rate = 1.0f;
+    tx_resamp = resamp_crcf_create(tx_resamp_rate,13,0.8f,60.0f,32);
+    rx_resamp = resamp_crcf_create(rx_resamp_rate,13,0.8f,60.0f,32);
 
 #if USRPIO_USE_DC_BLOCKER
     m_hat = 0.0f;
@@ -71,7 +81,14 @@ usrp_io::~usrp_io()
     // destroy ports
     gport2_destroy(port_tx);
     gport2_destroy(port_rx);
+    gport2_destroy(port_resamp_tx);
+    gport2_destroy(port_resamp_rx);
 
+    // destroy resampling objects
+    resamp_crcf_destroy(tx_resamp);
+    resamp_crcf_destroy(rx_resamp);
+
+    // destroy buffers
     delete [] tx_port_buffer;
     delete [] rx_port_buffer;
 
@@ -90,7 +107,9 @@ void usrp_io::start_tx(int _channel)
         throw 0;
     }
     tx_active = true;
+
     pthread_create(&tx_thread, NULL, usrp_io_tx_process, this);
+    pthread_create(&tx_resamp_thread, NULL, usrp_io_tx_resamp_process, this);
 }
 
 void usrp_io::start_rx(int _channel)
@@ -104,6 +123,7 @@ void usrp_io::start_rx(int _channel)
     }
     rx_active = true;
     pthread_create(&rx_thread, NULL, usrp_io_rx_process, this);
+    pthread_create(&rx_resamp_thread, NULL, usrp_io_rx_resamp_process, this);
 }
 
 // gain
@@ -347,4 +367,77 @@ void* usrp_io_rx_process(void * _u)
     pthread_exit(NULL);
 }
 
+
+void* usrp_io_tx_resamp_process(void * _u)
+{
+    std::cout << "usrp_io_tx_resamp_process() invoked" << std::endl;
+    usrp_io * usrp = (usrp_io*) _u;
+
+    // local buffers
+    std::complex<float> data_in[64];
+    std::complex<float> data_out[128];
+    unsigned int num_written;
+    unsigned int num_written_total;
+    unsigned int i;
+
+    while (usrp->tx_active) {
+        // get data from port_resamp_tx
+        gport2_consume(usrp->port_resamp_tx,
+                       (void*)data_in,
+                       64);
+
+        // run resampler
+        num_written_total=0;
+        for (i=0; i<64; i++) {
+            resamp_crcf_execute(usrp->tx_resamp,data_in[i],&data_out[num_written_total],&num_written);
+            num_written_total += num_written;
+        }
+
+        // push data to usrp thread
+        gport2_produce(usrp->port_tx,
+                       (void*)data_out,
+                       num_written_total);
+    }
+
+    std::cout << "usrp_io_tx_resamp_process() terminating" << std::endl;
+    pthread_exit(NULL);
+}
+
+void* usrp_io_rx_resamp_process(void * _u)
+{
+    std::cout << "usrp_io_rx_resamp_process() invoked" << std::endl;
+    usrp_io * usrp = (usrp_io*) _u;
+
+    // local buffers
+    std::complex<float> data_in[64];
+    std::complex<float> data_out[128];
+    unsigned int num_written;
+    unsigned int num_written_total;
+    unsigned int i;
+
+    while (usrp->rx_active) {
+        // get data from port_rx
+        gport2_consume(usrp->port_rx,
+                       (void*)data_in,
+                       64);
+
+        // run resampler
+        num_written_total=0;
+        for (i=0; i<64; i++) {
+            resamp_crcf_execute(usrp->rx_resamp,
+                                data_in[i],
+                                &data_out[num_written_total],
+                                &num_written);
+            num_written_total += num_written;
+        }
+
+        // push data to output
+        gport2_produce(usrp->port_resamp_rx,
+                       (void*)data_out,
+                       num_written_total);
+    }
+
+    std::cout << "usrp_io_rx_resamp_process() terminating" << std::endl;
+    pthread_exit(NULL);
+}
 
