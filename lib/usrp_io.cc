@@ -66,8 +66,8 @@ usrp_io::usrp_io()
     // resampling
     tx_resamp_rate = 1.0f;
     rx_resamp_rate = 1.0f;
-    tx_resamp = resamp_crcf_create(tx_resamp_rate,13,0.8f,60.0f,32);
-    rx_resamp = resamp_crcf_create(rx_resamp_rate,13,0.8f,60.0f,32);
+    tx_resamp = resamp_crcf_create(tx_resamp_rate,7,0.8f,60.0f,32);
+    rx_resamp = resamp_crcf_create(rx_resamp_rate,7,0.8f,60.0f,32);
 
 #if USRPIO_USE_DC_BLOCKER
     m_hat = 0.0f;
@@ -432,8 +432,9 @@ void* usrp_io_tx_resamp_process(void * _u)
     usrp_io * usrp = (usrp_io*) _u;
 
     // local buffers
-    std::complex<float> data_in[64];
-    std::complex<float> data_out[128];
+    unsigned int n = usrp->tx_buffer_length;
+    std::complex<float> data_in[n];
+    std::complex<float> data_out[2*n];
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
@@ -442,11 +443,11 @@ void* usrp_io_tx_resamp_process(void * _u)
         // get data from port_resamp_tx
         gport2_consume(usrp->port_resamp_tx,
                        (void*)data_in,
-                       64);
+                       n);
 
         // run resampler
         num_written_total=0;
-        for (i=0; i<64; i++) {
+        for (i=0; i<n; i++) {
             resamp_crcf_execute(usrp->tx_resamp,data_in[i],&data_out[num_written_total],&num_written);
             num_written_total += num_written;
         }
@@ -467,8 +468,9 @@ void* usrp_io_rx_resamp_process(void * _u)
     usrp_io * usrp = (usrp_io*) _u;
 
     // local buffers
-    std::complex<float> data_in[64];
-    std::complex<float> data_out[128];
+    unsigned int n = usrp->rx_buffer_length;
+    std::complex<float> data_in[n];
+    std::complex<float> data_out[2*n];
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
@@ -477,11 +479,11 @@ void* usrp_io_rx_resamp_process(void * _u)
         // get data from port_rx
         gport2_consume(usrp->port_rx,
                        (void*)data_in,
-                       64);
+                       n);
 
         // run resampler
         num_written_total=0;
-        for (i=0; i<64; i++) {
+        for (i=0; i<n; i++) {
             resamp_crcf_execute(usrp->rx_resamp,
                                 data_in[i],
                                 &data_out[num_written_total],
