@@ -61,7 +61,7 @@ int main (int argc, char **argv)
     float num_seconds = 5.0f;
     unsigned int m = 3;
     float beta = 0.3f;
-
+    float r = 1.0f; // resampling rate
 
     //
     int d;
@@ -88,9 +88,6 @@ int main (int argc, char **argv)
     // ensure multiple of 4
     interp_rate = (interp_rate >> 2) << 2;
 
-    // update actual symbol_rate
-    symbol_rate = 32e6f / (float)(interp_rate);
-
     if (symbol_rate > max_symbol_rate) {
         printf("error: maximum symbol_rate exceeded (%8.4f MHz)\n", max_symbol_rate*1e-6);
         return 0;
@@ -105,9 +102,16 @@ int main (int argc, char **argv)
         return 0;
     }
 
+    // compute usrp symbol rate
+    float usrp_symbol_rate = 32e6f / (float)(interp_rate);
+
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("symbol_rate :   %12.8f [kHz]\n", symbol_rate*1e-3f);
+    printf("symbol_rate :   %12.8f [kHz] (usrp : %12.8f [kHz])\n", symbol_rate*1e-3f, usrp_symbol_rate*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
+
+    //
+    r = usrp_symbol_rate / symbol_rate;
+    printf("resampling rate : %12.8f\n", r);
 
     // 
     unsigned int num_blocks = (unsigned int)((4.0f*symbol_rate*num_seconds)/(512));
@@ -137,6 +141,12 @@ int main (int argc, char **argv)
 
     resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
     std::complex<float> data_tx[512];
+
+    // arbitrary resampler
+    resamp_crcf arbitrary_resampler = resamp_crcf_create(r,13,0.5f,60.0f,32);
+    unsigned int num_written;
+    unsigned int num_written_total;
+    std::complex<float> data_resamp[1024];
 
     // 
     std::complex<float> symbols[num_symbols];
@@ -170,7 +180,16 @@ int main (int argc, char **argv)
         for (n=0; n<2*num_symbols; n++)
             resamp2_crcf_interp_execute(interpolator,interp_out[n],&data_tx[2*n]);
 
-        gport2_produce(port_tx,(void*)data_tx,512);
+        // run arbitrary resampler
+        num_written_total = 0;
+        for (n=0; n<4*num_symbols; n++) {
+            resamp_crcf_execute(arbitrary_resampler,data_tx[n],&data_resamp[num_written_total],&num_written);
+            num_written_total += num_written;
+        }
+        //printf(" %6u > %6u\n", 4*num_symbols, num_written_total);
+
+        //gport2_produce(port_tx,(void*)data_tx,512);
+        gport2_produce(port_tx,(void*)data_resamp,num_written_total);
     }
  
     uio->stop_tx(0);  // Stop data transfer
@@ -178,6 +197,7 @@ int main (int argc, char **argv)
 
     // clean it up
     resamp2_crcf_destroy(interpolator);
+    resamp_crcf_destroy(arbitrary_resampler);
     interp_crcf_destroy(nyquist_filter);
     modem_destroy(mod);
     delete uio;
