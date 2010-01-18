@@ -235,7 +235,7 @@ void usrp_io::set_rx_samplerate(float _rx_samplerate)
     float usrp_rx_samplerate = 32e6f / (float)decim_rate;
 
     // compute arbitrary resampling rate
-    rx_resamp_rate = usrp_rx_samplerate / _rx_samplerate;
+    rx_resamp_rate = _rx_samplerate / usrp_rx_samplerate;
     resamp_crcf_setrate(rx_resamp, rx_resamp_rate);
     usrp_rx->set_decim_rate(decim_rate);
 
