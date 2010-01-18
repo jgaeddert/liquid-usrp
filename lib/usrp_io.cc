@@ -208,6 +208,9 @@ void usrp_io::set_tx_samplerate(float _tx_samplerate)
     // ensure multiple of 4
     interp_rate = (interp_rate >> 2) << 2;
 
+    // check special condition : interp_rate = 44
+    if (interp_rate == 44) interp_rate = 48;
+
     // compute usrp sampling rate
     float usrp_tx_samplerate = 64e6f / (float)interp_rate;
 
