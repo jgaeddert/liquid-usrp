@@ -70,11 +70,17 @@ public:
     void set_tx_freq(int _channel, float _freq);
     void set_rx_freq(int _channel, float _freq);
 
-    // decimation/interpolation
+    // decimation/interpolation [deprecated]
     unsigned int get_tx_interp();
     unsigned int get_rx_decim();
     void set_tx_interp(int _interp);
     void set_rx_decim(int _decim);
+
+    // sample rate
+    float get_tx_samplerate();
+    float get_rx_samplerate();
+    void set_tx_samplerate(float _tx_rate);
+    void set_rx_samplerate(float _rx_rate);
 
     // other properties
     void enable_auto_tx(int _channel);

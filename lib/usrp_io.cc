@@ -188,6 +188,70 @@ void usrp_io::set_rx_decim(int _decim)
     rx_gain = USRP_IO_RX_GAIN * usrp_rx_gain_correction(_decim);
 }
 
+float usrp_io::get_tx_samplerate()
+{
+    float interp_rate = (float) (usrp_tx->interp_rate());
+    return 32e6f / interp_rate * tx_resamp_rate;
+}
+
+float usrp_io::get_rx_samplerate()
+{
+    float decim_rate = (float) (usrp_rx->decim_rate());
+    return 16e6f / decim_rate * rx_resamp_rate;
+}
+
+void usrp_io::set_tx_samplerate(float _tx_samplerate)
+{
+    float min_bandwidth = 32e6f / 512.0f;
+    float max_bandwidth = 32e6f /   4.0f;
+
+    // compute interpolation rate
+    unsigned int interp_rate = (unsigned int)(32e6 / _tx_samplerate);
+
+    // ensure multiple of 4
+    interp_rate = (interp_rate >> 2) << 2;
+
+    // compute usrp sampling rate
+    float usrp_tx_samplerate = 32e6f / (float)interp_rate;
+
+    // compute arbitrary resampling rate
+    tx_resamp_rate = usrp_tx_samplerate / _tx_samplerate;
+    resamp_crcf_setrate(tx_resamp, tx_resamp_rate);
+    usrp_tx->set_interp_rate(interp_rate);
+
+    printf("usrp_io::set_tx_samplerate() %8.4f kHz = %8.4f kHz * %8.6f (interp %u)\n",
+            _tx_samplerate * 1e-3f,
+            usrp_tx_samplerate * 1e-3f,
+            1.0f / tx_resamp_rate,
+            interp_rate);
+}
+
+void usrp_io::set_rx_samplerate(float _rx_samplerate)
+{
+    float min_bandwidth = 32e6f / 512.0f;
+    float max_bandwidth = 32e6f /   4.0f;
+
+    // compute decimation rate
+    unsigned int decim_rate = (unsigned int)(16e6 / _rx_samplerate);
+
+    // ensure multiple of 2
+    decim_rate = (decim_rate >> 1) << 1;
+
+    // compute usrp sampling rate
+    float usrp_rx_samplerate = 16e6f / (float)decim_rate;
+
+    // compute arbitrary resampling rate
+    rx_resamp_rate = usrp_rx_samplerate / _rx_samplerate;
+    resamp_crcf_setrate(rx_resamp, rx_resamp_rate);
+    usrp_rx->set_decim_rate(decim_rate);
+
+    printf("usrp_io::set_rx_samplerate() %8.4f kHz = %8.4f kHz * %8.6f (decim %u)\n",
+            _rx_samplerate * 1e-3f,
+            usrp_rx_samplerate * 1e-3f,
+            rx_resamp_rate,
+            decim_rate);
+}
+
 // other properties
 void usrp_io::enable_auto_tx(int _channel)
 {
