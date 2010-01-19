@@ -24,6 +24,7 @@
 #include <usrp_standard.h>
 #include <usrp_prims.h>
 #include <usrp_dbid.h>
+#include <usrp_bytesex.h>
 
 #include "usrp_io.h"
 #include "flex.h"
@@ -217,6 +218,8 @@ void usrp_io::set_tx_samplerate(float _tx_samplerate)
     // compute arbitrary resampling rate
     tx_resamp_rate = usrp_tx_samplerate / _tx_samplerate;
     resamp_crcf_setrate(tx_resamp, tx_resamp_rate);
+    usleep(200000); // NOTE: this sleep is necessary before re-setting the interp
+                    //       rate so that bad things don't happen on the RF output
     usrp_tx->set_interp_rate(interp_rate);
 
     printf("usrp_io::set_tx_samplerate() %8.4f kHz = %8.4f kHz * %8.6f (interp %u)\n",
@@ -451,7 +454,10 @@ void* usrp_io_tx_resamp_process(void * _u)
         // run resampler
         num_written_total=0;
         for (i=0; i<n; i++) {
-            resamp_crcf_execute(usrp->tx_resamp,data_in[i],&data_out[num_written_total],&num_written);
+            resamp_crcf_execute(usrp->tx_resamp,
+                                data_in[i],
+                                &data_out[num_written_total],
+                                &num_written);
             num_written_total += num_written;
         }
 
