@@ -27,16 +27,16 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <math.h>
 #include <unistd.h>
 
-#include "db_base.h"
+#include "ossie_db_base.h"
 #include "lf.h"
 
 
-db_lf::db_lf(usrp_standard_rx *u, unsigned int _which) : db_base(u, _which)
+db_lf::db_lf(usrp_standard_rx *u, unsigned int _which) : ossie_db_base(u, _which)
 {
 
 }
 
-db_lf::db_lf(usrp_standard_tx *u, unsigned int _which) : db_base(u, _which)
+db_lf::db_lf(usrp_standard_tx *u, unsigned int _which) : ossie_db_base(u, _which)
 {
 
 }

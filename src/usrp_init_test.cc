@@ -28,13 +28,13 @@ int main() {
         exit(0);
     }
 
-    //db_base * rx_db0_control
+    //ossie_db_base * rx_db0_control
     int rx_db0 = usrp_rx->daughterboard_id(0);
     int rx_db1 = usrp_rx->daughterboard_id(1);
 
     // from ossie
-    db_base * rx_db0_control;
-    //db_base * rx_db1_control;
+    ossie_db_base * rx_db0_control;
+    //ossie_db_base * rx_db1_control;
 
     std::cout << "rx db slot 0 : " << usrp_dbid_to_string(rx_db0) << std::endl;
     std::cout << "rx db slot 1 : " << usrp_dbid_to_string(rx_db1) << std::endl;

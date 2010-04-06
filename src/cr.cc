@@ -75,10 +75,10 @@ typedef struct crdata {
     // front end objects
     usrp_standard_tx * utx;
     int tx_db_id;
-    db_base * txdb;
+    ossie_db_base * txdb;
     usrp_standard_rx * urx;
     int rx_db_id;
-    db_base * rxdb;
+    ossie_db_base * rxdb;
 
     //
     unsigned int tx_interp;

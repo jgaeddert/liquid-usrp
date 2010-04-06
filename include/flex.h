@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "usrp_spi_defs.h"
 
-#include "db_base.h"
+#include "ossie_db_base.h"
 
 class flex_vco_control {
 
@@ -136,7 +136,7 @@ public:
 
 };
 
-class db_flex : public db_base {
+class db_flex : public ossie_db_base {
 
 public:
   db_flex(usrp_standard_rx *u, unsigned int which, flex_vco_control *vco);

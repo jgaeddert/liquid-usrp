@@ -20,19 +20,19 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
 ****************************************************************************/
-#ifndef DB_BASE_H
-#define DB_BASE_H
+#ifndef OSSIE_DB_BASE_H
+#define OSSIE_DB_BASE_H
 
 #include <string>
 
 #include <usrp_standard.h>
 
-class db_base {
+class ossie_db_base {
 
 public:
-  db_base(usrp_standard_rx *u, unsigned int which);
-  db_base(usrp_standard_tx *u, unsigned int which);
-  virtual ~db_base();
+  ossie_db_base(usrp_standard_rx *u, unsigned int which);
+  ossie_db_base(usrp_standard_tx *u, unsigned int which);
+  virtual ~ossie_db_base();
 
   int dbid();
   std::string db_name();

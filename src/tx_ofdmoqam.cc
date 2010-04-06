@@ -76,7 +76,7 @@ int main (int argc, char **argv)
 
     // daughterboard
     int tx_db0 = utx->daughterboard_id(0);
-    db_base * tx_db0_control;   // from ossie
+    ossie_db_base * tx_db0_control;   // from ossie
     std::cout << "tx db slot 0 : " << usrp_dbid_to_string(tx_db0) << std::endl;
  
     // Set DDC center frequency

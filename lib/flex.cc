@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //#include "ossie/debug.h"
 #define DEBUG(V,N,S) std::cout << S << std::endl;
 
-#include "db_base.h"
+#include "ossie_db_base.h"
 #include "flex.h"
 
 flex_vco_control::flex_vco_control(int _R_DIV, int _P, int _CP2, int _CP1, int _DIVSEL, int _DIV2, int _CPGAIN, int _freq_mult) : R_DIV(_R_DIV), P(_P), CP2(_CP2), CP1(_CP1), DIVSEL(_DIVSEL), DIV2(_DIV2), CPGAIN(_CPGAIN), freq_mult(_freq_mult), REFCLK_DIVISOR(1)
@@ -120,7 +120,7 @@ void flex_vco_control::setR_DIV(unsigned int REF_D)
     R_DIV = REF_D;
 }
 
-db_flex::db_flex(usrp_standard_rx *_urx, unsigned int _w, flex_vco_control *_vco) : db_base(_urx, _w), vco(_vco), first(true), spi_format(SPI_FMT_MSB | SPI_FMT_HDR_0)
+db_flex::db_flex(usrp_standard_rx *_urx, unsigned int _w, flex_vco_control *_vco) : ossie_db_base(_urx, _w), vco(_vco), first(true), spi_format(SPI_FMT_MSB | SPI_FMT_HDR_0)
 {
 
     if (which == 0)
@@ -140,7 +140,7 @@ db_flex::db_flex(usrp_standard_rx *_urx, unsigned int _w, flex_vco_control *_vco
 
 }
 
-db_flex::db_flex(usrp_standard_tx *_utx, unsigned int _w, flex_vco_control *_vco) : db_base(_utx, _w), vco(_vco), first(true), spi_format(SPI_FMT_MSB | SPI_FMT_HDR_0)
+db_flex::db_flex(usrp_standard_tx *_utx, unsigned int _w, flex_vco_control *_vco) : ossie_db_base(_utx, _w), vco(_vco), first(true), spi_format(SPI_FMT_MSB | SPI_FMT_HDR_0)
 {
 
     if (which == 0)

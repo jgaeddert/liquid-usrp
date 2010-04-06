@@ -25,9 +25,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #define LF_H
 
 #include "usrp_spi_defs.h"
-#include "db_base.h"
+#include "ossie_db_base.h"
 
-class db_lf : public db_base {
+class db_lf : public ossie_db_base {
 
 public:
   db_lf(usrp_standard_rx *u, unsigned int which);

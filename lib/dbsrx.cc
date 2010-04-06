@@ -31,11 +31,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //#include "ossie/debug.h"
 #define DEBUG(V,N,S) std::cout << S << std::endl;
 
-#include "db_base.h"
+#include "ossie_db_base.h"
 #include "dbsrx.h"
 
 //NEED TO FIGURE THIS ONE OUT####################################################
-dbsrx::dbsrx(usrp_standard_rx *_urx, unsigned int _w):db_base(_urx, _w)
+dbsrx::dbsrx(usrp_standard_rx *_urx, unsigned int _w):ossie_db_base(_urx, _w)
 {
     u = _urx;
     lo_offset = -8E6;
@@ -96,7 +96,7 @@ dbsrx::dbsrx(usrp_standard_rx *_urx, unsigned int _w):db_base(_urx, _w)
     set_bw(init_bw);
     std::cout <<"set bw" <<std::endl;
     
-    //enable_refclk(true); //not implemented in db_base class
+    //enable_refclk(true); //not implemented in ossie_db_base class
     //u->_write_fpga_reg(40 + slot, 1); //Enable refclk?
     urx->_write_fpga_reg(ref_clkreg, (refclk_divisor() & REFCLK_DIVISOR_MASK) | REFCLK_ENABLE);//0x90
     
@@ -106,7 +106,7 @@ dbsrx::dbsrx(usrp_standard_rx *_urx, unsigned int _w):db_base(_urx, _w)
 //NEED TO FIGURE THIS ONE OUT####################################################
 dbsrx::~dbsrx()
 {
-    //enable_refclk(false); //not implemented in db_base class    
+    //enable_refclk(false); //not implemented in ossie_db_base class    
     //u->_write_fpga_reg(40 + slot, 0); //Disable refclk?
     urx->_write_fpga_reg(ref_clkreg, 0);
 }

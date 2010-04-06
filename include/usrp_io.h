@@ -29,7 +29,7 @@
 #define USRPIO_USE_DC_BLOCKER 0
 
 // forward declaration of classes
-class db_base;          // db_base.h
+class ossie_db_base;    // ossie_db_base.h
 class usrp_standard_rx; // usrp_standard.h
 class usrp_standard_tx; // usrp_standard.h
 
@@ -99,10 +99,10 @@ protected:
     usrp_standard_tx * usrp_tx;
 
     // daughterboards
-    db_base * rx_db0;
-    db_base * rx_db1;
-    db_base * tx_db0;
-    db_base * tx_db1;
+    ossie_db_base * rx_db0;
+    ossie_db_base * rx_db1;
+    ossie_db_base * tx_db0;
+    ossie_db_base * tx_db1;
 
     // flags
     bool use_complex;

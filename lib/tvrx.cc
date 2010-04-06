@@ -27,10 +27,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <math.h>
 #include <unistd.h>
 
-#include "db_base.h"
+#include "ossie_db_base.h"
 #include "tvrx.h"
 
-tvrx::tvrx(usrp_standard_rx *_urx, unsigned int _w):db_base(_urx, _w)
+tvrx::tvrx(usrp_standard_rx *_urx, unsigned int _w):ossie_db_base(_urx, _w)
 {
     if(!which)
         i2c_addr = 0x60;

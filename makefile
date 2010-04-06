@@ -7,7 +7,7 @@ CPPFLAGS	:= -I . -I ./include -Wall -g -O2
 
 local_headers	:=		\
 	basic.h			\
-	db_base.h		\
+	ossie_db_base.h		\
 	dbsrx.h			\
 	flex.h			\
 	lf.h			\
@@ -17,7 +17,7 @@ local_headers	:=		\
 
 local_src	:=		\
 	basic.cc		\
-	db_base.cc		\
+	ossie_db_base.cc	\
 	dbsrx.cc		\
 	flex.cc			\
 	lf.cc			\

@@ -151,8 +151,8 @@ int main (int argc, char **argv)
     usrp_standard_rx * urx;
     int tx_db_id;
     int rx_db_id;
-    db_base * txdb;
-    db_base * rxdb;
+    ossie_db_base * txdb;
+    ossie_db_base * rxdb;
 
     int    num_underruns = 0;
     bool   underrun;

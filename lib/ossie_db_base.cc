@@ -27,24 +27,24 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "usrp_standard.h"
 #include "usrp_prims.h"
 
-#include "db_base.h"
+#include "ossie_db_base.h"
 
-db_base::db_base(usrp_standard_rx *_u, unsigned int _which) : u(_u), urx(_u), utx(NULL), which(_which), tx(false)
+ossie_db_base::ossie_db_base(usrp_standard_rx *_u, unsigned int _which) : u(_u), urx(_u), utx(NULL), which(_which), tx(false)
 {
     slot = which * 2 + 1;
 }
 
-db_base::db_base(usrp_standard_tx *_u, unsigned int _which) : u(_u), urx(NULL), utx(_u), which(_which), tx(true)
+ossie_db_base::ossie_db_base(usrp_standard_tx *_u, unsigned int _which) : u(_u), urx(NULL), utx(_u), which(_which), tx(true)
 {
     slot = which * 2;
 }
 
 // destructor
-db_base::~db_base()
+ossie_db_base::~ossie_db_base()
 {
 }
 
-int db_base::dbid()
+int ossie_db_base::dbid()
 {
     if (tx)
         return(utx->daughterboard_id(which));
@@ -52,7 +52,7 @@ int db_base::dbid()
         return(urx->daughterboard_id(which));
 }
 
-std::string db_base::db_name()
+std::string ossie_db_base::db_name()
 {
     if (tx)
         return(usrp_dbid_to_string(utx->daughterboard_id(which)));
@@ -60,7 +60,7 @@ std::string db_base::db_name()
         return(usrp_dbid_to_string(urx->daughterboard_id(which)));
 }
 
-void db_base::bypass_adc_buffers(bool bypass)
+void ossie_db_base::bypass_adc_buffers(bool bypass)
 {
     if (tx)
         std::cerr << "Can't bypass adc buffers on TX daughter boards." << std::endl;
@@ -74,22 +74,22 @@ void db_base::bypass_adc_buffers(bool bypass)
         }
 }
 
-void db_base::set_atr_mask(int mask)
+void ossie_db_base::set_atr_mask(int mask)
 {
     u->_write_fpga_reg(FR_ATR_MASK_0 + 3 * slot, mask);
 }
 
-void db_base::set_atr_txval(int txval)
+void ossie_db_base::set_atr_txval(int txval)
 {
     u->_write_fpga_reg(FR_ATR_TXVAL_0 + 3 * slot, txval);
 }
 
-void db_base::set_atr_rxval(int rxval)
+void ossie_db_base::set_atr_rxval(int rxval)
 {
     u->_write_fpga_reg(FR_ATR_RXVAL_0 + 3 * slot, rxval);
 }
 
-void db_base::get_pga_gain_range(float &gmin, float &gmax, float &gstep)
+void ossie_db_base::get_pga_gain_range(float &gmin, float &gmax, float &gstep)
 {
     if (urx) {
         gmin = urx->pga_min();
@@ -103,7 +103,7 @@ void db_base::get_pga_gain_range(float &gmin, float &gmax, float &gstep)
         ;  // This should never happen
 }
 
-void db_base::set_pga_gain(int which, float gain)
+void ossie_db_base::set_pga_gain(int which, float gain)
 {
     if (urx)
         urx->set_pga(which, gain);

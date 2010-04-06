@@ -241,7 +241,7 @@ main (int argc, char **argv)
 
     // daughterboard
     int rx_db0 = urx->daughterboard_id(0);
-    db_base * rx_db0_control;   // from ossie
+    ossie_db_base * rx_db0_control;   // from ossie
     //std::cout << "rx db slot 0 : " << usrp_dbid_to_string(rx_db0) << std::endl;
     //printf("rx db slot 0: %s\n", usrp_dbid_to_string(rx_db0));
  
