@@ -121,7 +121,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(0);
 
     // retrieve rx port
-    gport2 port_rx = uio->get_rx_port(0);
+    gport port_rx = uio->get_rx_port(0);
 
     // framing
     ofdmoqamframe64sync framesync = ofdmoqamframe64sync_create(m,beta,callback,NULL);
@@ -142,7 +142,7 @@ int main (int argc, char **argv)
     unsigned int i, n;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
-        gport2_consume(port_rx,(void*)data_rx,rx_buffer_length);
+        gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
 
         // run decimator
         for (n=0; n<rx_buffer_length/2; n++) {

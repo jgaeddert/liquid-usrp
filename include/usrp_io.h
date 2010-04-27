@@ -87,8 +87,8 @@ public:
     void disable_auto_tx(int _channel);
 
     // port handling
-    gport2 get_tx_port(int _channel) { return port_resamp_tx; }
-    gport2 get_rx_port(int _channel) { return port_resamp_rx; }
+    gport get_tx_port(int _channel) { return port_resamp_tx; }
+    gport get_rx_port(int _channel) { return port_resamp_rx; }
 
 protected:
     // initialization methods
@@ -124,10 +124,10 @@ protected:
     std::complex<float> * rx_port_buffer;
 
     // intput/output data ports
-    gport2 port_tx;
-    gport2 port_rx;
-    gport2 port_resamp_tx;
-    gport2 port_resamp_rx;
+    gport port_tx;
+    gport port_rx;
+    gport port_resamp_tx;
+    gport port_resamp_rx;
 
     // gain
     float tx_gain;              // nominal tx gain

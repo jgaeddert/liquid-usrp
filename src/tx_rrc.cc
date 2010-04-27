@@ -102,7 +102,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(0);
 
     // retrieve tx port from usrp_io object
-    gport2 port_tx = uio->get_tx_port(0);
+    gport port_tx = uio->get_tx_port(0);
 
     unsigned int num_symbols = 128;
 
@@ -153,7 +153,7 @@ int main (int argc, char **argv)
         for (n=0; n<2*num_symbols; n++)
             resamp2_crcf_interp_execute(interpolator,interp_out[n],&data_tx[2*n]);
 
-        gport2_produce(port_tx,(void*)data_tx,512);
+        gport_produce(port_tx,(void*)data_tx,512);
     }
  
     uio->stop_tx(0);  // Stop data transfer

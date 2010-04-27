@@ -134,7 +134,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port
-    gport2 port_tx = uio->get_tx_port(USRP_CHANNEL);
+    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
 
     // packetizer
     packetizer p = packetizer_create(payload_len,fec0,fec1);
@@ -246,7 +246,7 @@ int main (int argc, char **argv)
             n+=p;
             num_samples_remaining -= p;
 
-            gport2_produce(port_tx,(void*)data_tx,2*p);
+            gport_produce(port_tx,(void*)data_tx,2*p);
         }
  
     }

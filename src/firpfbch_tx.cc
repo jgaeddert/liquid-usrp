@@ -117,7 +117,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port from usrp_io object
-    gport2 port_tx = uio->get_tx_port(USRP_CHANNEL);
+    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
 
     // parameters
     //unsigned int k=2;   // samples/symbol
@@ -172,7 +172,7 @@ int main (int argc, char **argv)
         for (n=0; n<num_channels; n++)
             resamp2_crcf_interp_execute(interpolator,synthesizer_out[n],&data_tx[2*n]);
 
-        gport2_produce(port_tx,(void*)data_tx,2*num_channels);
+        gport_produce(port_tx,(void*)data_tx,2*num_channels);
 
     }
  

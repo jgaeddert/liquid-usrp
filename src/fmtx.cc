@@ -124,7 +124,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(0);
 
     // retrieve tx port from usrp_io object
-    gport2 port_tx = uio->get_tx_port(0);
+    gport port_tx = uio->get_tx_port(0);
     std::complex<float> data_tx[512];
 
     // frequency modulator
@@ -150,7 +150,7 @@ int main (int argc, char **argv)
             nco_step(nco_audio);
         }
 
-        gport2_produce(port_tx,(void*)data_tx,512);
+        gport_produce(port_tx,(void*)data_tx,512);
 
     }
  

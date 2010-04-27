@@ -166,7 +166,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve rx port
-    gport2 port_rx = uio->get_rx_port(USRP_CHANNEL);
+    gport port_rx = uio->get_rx_port(USRP_CHANNEL);
 
     num_packets_received = 0;
     num_valid_packets_received = 0;
@@ -208,7 +208,7 @@ int main (int argc, char **argv)
     // read samples from buffer, run through frame synchronizer
     for (i=0; i<num_blocks; i++) {
         // grab data from port
-        gport2_consume(port_rx, (void*)data_rx, 512);
+        gport_consume(port_rx, (void*)data_rx, 512);
 
         // run decimator
         for (n=0; n<256; n++) {

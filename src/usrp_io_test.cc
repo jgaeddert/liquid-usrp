@@ -52,8 +52,8 @@ int main() {
     usrp->enable_auto_tx(USRP_CHANNEL);
 
     // ports
-    gport2 port_tx = usrp->get_tx_port(USRP_CHANNEL);
-    gport2 port_rx = usrp->get_rx_port(USRP_CHANNEL);
+    gport port_tx = usrp->get_tx_port(USRP_CHANNEL);
+    gport port_rx = usrp->get_rx_port(USRP_CHANNEL);
 
     // threads
     pthread_t tx_thread;
@@ -97,7 +97,7 @@ int main() {
 
 void * tx_handler ( void *_port )
 {
-    gport2 port = (gport2) _port;
+    gport port = (gport) _port;
  
     // interpolator options
     unsigned int m=4;
@@ -120,7 +120,7 @@ void * tx_handler ( void *_port )
             s[i].imag() = rand()%2 ? 1.0f : -1.0f;
             interp_crcf_execute(interp, s[i], &x[2*i]);
         }
-        gport2_produce(port,(void*)x,2*num_symbols);
+        gport_produce(port,(void*)x,2*num_symbols);
     }
     std::cout << "done." << std::endl;
     interp_crcf_destroy(interp);
@@ -132,7 +132,7 @@ void * tx_handler ( void *_port )
 
 void * rx_handler ( void *_port )
 {
-    gport2 p = (gport2) _port;
+    gport p = (gport) _port;
 
     std::complex<float> data_rx[512];
     std::complex<float> spectrogram_buffer[64];
@@ -142,7 +142,7 @@ void * rx_handler ( void *_port )
     asgram_set_offset(sg,80.0f);
 
     for (unsigned int n=0; n<4000; n++) {
-        gport2_consume(p,(void*)data_rx,512);
+        gport_consume(p,(void*)data_rx,512);
         
         // run ascii spectrogram
         if (n%30 == 0) {

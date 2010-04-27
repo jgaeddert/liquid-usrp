@@ -93,7 +93,7 @@ int main (int argc, char **argv)
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve tx port
-    gport2 port_tx = uio->get_tx_port(USRP_CHANNEL);
+    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
 
     // framegen parameters
     //unsigned int k=2; // samples per symbol
@@ -142,7 +142,7 @@ int main (int argc, char **argv)
                     frame[n+j], &data_tx[2*j]);
             }
 
-            gport2_produce(port_tx,(void*)data_tx,512);
+            gport_produce(port_tx,(void*)data_tx,512);
         }
 
     }
