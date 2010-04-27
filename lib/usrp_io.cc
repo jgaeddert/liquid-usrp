@@ -42,8 +42,11 @@ usrp_io::usrp_io()
 {
     // flags
     use_complex = true;
-    rx_active = false;
-    tx_active = false;
+    rx_active = false;  // rx thread controller flag
+    tx_active = false;  // tx thread controller flag
+
+    rx_running = false; // rx thread status flag
+    tx_running = false; // tx thread status flag
 
     initialize();
 
@@ -79,6 +82,20 @@ usrp_io::usrp_io()
 
 usrp_io::~usrp_io()
 {
+    // force stop tx/rx
+    stop_tx(0);
+    stop_rx(0);
+    
+    // wait for tx/rx inactive
+    printf("waiting for tx/rx to stop running...\n");
+    unsigned int n=5000; // timeout
+    while ( (tx_running || rx_running) && n > 0) {
+        usleep(1000);
+        n--;
+    }
+    if (n==0)
+        std::cerr << "warning: usrp_io::~usrp_io(), tx/rx still running during destructor invocation!" << std::endl;
+
     // destroy ports
     gport_destroy(port_tx);
     gport_destroy(port_rx);
@@ -339,6 +356,9 @@ void* usrp_io_tx_process(void * _u)
     int rc;
     bool underrun;
 
+    // set internal tx running flag
+    usrp->tx_running = true;
+
     // start data transfer
     usrp->usrp_tx->start();
 
@@ -374,6 +394,10 @@ void* usrp_io_tx_process(void * _u)
     usrp->usrp_tx->stop();
 
     std::cout << "usrp_io_tx_process() terminating" << std::endl;
+
+    // clear internal tx running flag
+    usrp->tx_running = false;
+
     pthread_exit(NULL);
 }
 
@@ -385,6 +409,9 @@ void* usrp_io_rx_process(void * _u)
     // local variables
     int rc;
     bool overrun;
+
+    // set internal rx running flag
+    usrp->rx_running = true;
 
     // start data transfer
     usrp->usrp_rx->start();
@@ -428,6 +455,10 @@ void* usrp_io_rx_process(void * _u)
     usrp->usrp_rx->stop();
 
     std::cout << "usrp_io_rx_process() terminating" << std::endl;
+
+    // clear internal rx running flag
+    usrp->rx_running = false;
+
     pthread_exit(NULL);
 }
 

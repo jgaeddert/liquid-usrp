@@ -106,8 +106,10 @@ protected:
 
     // flags
     bool use_complex;
-    bool rx_active;
-    bool tx_active;
+    bool rx_active;     // rx thread controller flag
+    bool tx_active;     // tx thread controller flag
+    bool rx_running;    // rx thread status flag
+    bool tx_running;    // tx thread status flag
 
     // tx/rx processing threads
     pthread_t tx_thread;
