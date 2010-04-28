@@ -31,10 +31,11 @@
 
 void usage() {
     printf("packet_tx:\n");
-    printf("  f     :   center frequency [Hz]\n");
-    printf("  b     :   bandwidth [Hz]\n");
-    printf("  p     :   packet spacing\n");
-    printf("  t     :   run time [seconds]\n");
+    printf("  f     :   center frequency [Hz] (default: 462 MHz)\n");
+    printf("  b     :   bandwidth [Hz], [62.5kHz, 8MHz] (default: 62.5kHz)\n");
+    printf("  p     :   packet spacing (default: 1)\n");
+    printf("  g     :   transmit power gain [dB] (default: -3dB)\n");
+    printf("  t     :   run time [seconds] (default: 5.0)\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -51,16 +52,18 @@ int main (int argc, char **argv)
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
+    float txgain_dB = -3.0f;
 
     unsigned int packet_spacing=1;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:p:t:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:p:g:t:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 'p':   packet_spacing = atoi(optarg);  break;
+        case 'g':   txgain_dB = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
@@ -82,6 +85,7 @@ int main (int argc, char **argv)
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("tx gain     :   %12.8f [dB]\n", txgain_dB);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(4096));
@@ -103,6 +107,9 @@ int main (int argc, char **argv)
     resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
     std::complex<float> data_tx[512];
 
+    // transmitter gain (linear)
+    float g = powf(10.0f, txgain_dB/10.0f);
+ 
     // framing
     std::complex<float> frame[2048];
     framegen64 framegen = framegen64_create(m,beta);
@@ -138,6 +145,7 @@ int main (int argc, char **argv)
             // run interpolator
             unsigned int j;
             for (j=0; j<256; j++) {
+                frame[n+j] *= g;
                 resamp2_crcf_interp_execute(interpolator,
                     frame[n+j], &data_tx[2*j]);
             }
