@@ -130,10 +130,11 @@ int main (int argc, char **argv)
             // generate random data
             for (j=0; j<24; j++)    header[j]  = rand() % 256;
             for (j=0; j<64; j++)    payload[j] = rand() % 256;
-            header[0] = pid;
+            header[0] = (pid >> 8) & 0x00ff;
+            header[1] = (pid     ) & 0x00ff;
             if (verbose)
                 printf("packet id: %u\n", pid);
-            pid = (pid+1)%256;
+            pid = (pid+1) & 0xffff;
 
             framegen64_execute(framegen, header, payload, frame);
         } else {

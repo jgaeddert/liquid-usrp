@@ -46,7 +46,10 @@ static int callback(unsigned char * _header,  int _header_valid,
     } else if ( !_payload_valid ) {
         if (verbose) printf("payload crc : FAIL\n");
     } else {
-        if (verbose) printf("packet id: %u\n", (unsigned int ) _header[0]);
+        if (verbose) {
+            unsigned int pid = (_header[0] << 8) | _header[1];
+            printf("packet id: %u\n", pid);
+        }
         num_valid_packets_received++;
     }
     return 0;
