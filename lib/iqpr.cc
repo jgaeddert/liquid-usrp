@@ -5,10 +5,13 @@
 #include <iostream>
 #include <complex>
 #include <math.h>
+#include <pthread.h>
 #include <liquid/liquid.h>
 
 #include "iqpr.h"
 #include "usrp_io.h"
+
+#define USRP_CHANNEL        (0)
 
 // packet header structure
 //
@@ -52,8 +55,8 @@ struct iqpr_s {
     unsigned int payload_len;       // decoded message length (bytes)
     unsigned int packet_len;        // encoded message length (bytes)
     unsigned int frame_len;         // frame length (complex samples)
-    std::complex<float> * mf_buffer;
-    std::complex<float> * frame;
+    std::complex<float> * frame;    // size: 1 x frame_len
+    std::complex<float> * mf_buffer[256];
     std::complex<float> data_tx[512];
 
     // status variables
@@ -63,11 +66,28 @@ struct iqpr_s {
     unsigned int num_valid_packets_received;
     unsigned int num_bytes_received;
 
+    // threads
+    pthread_t tx_thread;
+    pthread_t rx_thread;
 };
 
 iqpr iqpr_create()
 {
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
+
+    // create usrp_io
+    q->uio = new usrp_io();
+    q->uio->set_rx_freq(USRP_CHANNEL, 462e6f);
+    q->uio->set_tx_freq(USRP_CHANNEL, 462e6f);
+    q->uio->set_rx_samplerate(2.0f*62.5e3f);
+    q->uio->set_tx_samplerate(2.0f*62.5e3f);
+    q->uio->enable_auto_tx(USRP_CHANNEL);
+
+    // buffers, etc.
+    q->payload_len = 64;
+    q->packet_len = packetizer_get_packet_length(q->payload_len,
+                                                 FEC_NONE,
+                                                 FEC_NONE);
 
     // create frame generator
     q->fgprops.rampup_len = 16;
@@ -91,12 +111,28 @@ iqpr iqpr_create()
     q->p_enc = packetizer_create(0,FEC_NONE,FEC_NONE);
     q->p_dec = packetizer_create(0,FEC_NONE,FEC_NONE);
 
+    // allocate memory for arrays
+    q->frame_len = flexframegen_getframelen(q->fg);
+    q->frame = (std::complex<float>*) malloc( q->frame_len * sizeof(std::complex<float>) );
+
+    // clear status
+    q->verbose = 1;
+
+    // start tx/rx threads
+    iqpr_start_threads(q);
+
     // return object
     return q;
 }
 
 void iqpr_destroy(iqpr _q)
 {
+    // stop tx/rx threads
+    iqpr_stop_threads(_q);
+
+    // destroy usrp_io object
+    delete _q->uio;
+
     // destroy framing objects
     flexframegen_destroy(_q->fg);
     flexframesync_destroy(_q->fs);
@@ -110,6 +146,9 @@ void iqpr_destroy(iqpr _q)
     packetizer_destroy(_q->p_enc);
     packetizer_destroy(_q->p_dec);
 
+    // free allocated memory
+    free(_q->frame);
+
     // free main object
     free(_q);
 }
@@ -119,12 +158,16 @@ void iqpr_print(iqpr _q)
     printf("iqpr:\n");
 }
 
+// 
+// internal methods
+//
+
 // callback
-static int iqpr_callback(unsigned char * _rx_header,
-                         int _rx_header_valid,
-                         unsigned char * _rx_payload,
-                         unsigned int _rx_payload_len,
-                         void * _userdata)
+int iqpr_callback(unsigned char * _rx_header,
+                  int _rx_header_valid,
+                  unsigned char * _rx_payload,
+                  unsigned int _rx_payload_len,
+                  void * _userdata)
 {
     iqpr q = (iqpr) _userdata;
 
@@ -175,6 +218,43 @@ static int iqpr_callback(unsigned char * _rx_header,
     */
 
     return 0;
+}
+
+// start threads
+void iqpr_start_threads(iqpr _q)
+{
+    // set thread attributes
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    // create tx/rx threads
+    pthread_create(&_q->tx_thread, &attr, iqpr_tx_process, (void*)_q);
+    pthread_create(&_q->rx_thread, &attr, iqpr_rx_process, (void*)_q);
+}
+
+// stop threads
+void iqpr_stop_threads(iqpr _q)
+{
+    void * status;
+    pthread_join(_q->tx_thread, &status);
+    pthread_join(_q->rx_thread, &status);
+}
+
+void * iqpr_tx_process(void * _q)
+{
+    // wait for data
+
+    printf("iqpr tx process complete.\n");
+    pthread_exit(NULL);
+}
+
+void * iqpr_rx_process(void * _q)
+{
+    // continuously read data, blocking on tx_mutex
+
+    printf("iqpr rx process complete.\n");
+    pthread_exit(NULL);
 }
 
 

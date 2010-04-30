@@ -40,6 +40,7 @@ local_progs	:=			\
 	src/flexframe_rx.cc		\
 	src/packet_tx.cc 		\
 	src/packet_rx.cc		\
+	src/ping.cc			\
 	src/cr.cc			\
 	src/tx_ofdmoqam.cc		\
 	src/dsa_ofdmoqam.cc		\
