@@ -10,6 +10,7 @@ local_headers	:=		\
 	ossie_db_base.h		\
 	dbsrx.h			\
 	flex.h			\
+	iqpr.h			\
 	lf.h			\
 	tvrx.h			\
 	usrp_io.h		\
@@ -20,6 +21,7 @@ local_src	:=		\
 	ossie_db_base.cc	\
 	dbsrx.cc		\
 	flex.cc			\
+	iqpr.cc			\
 	lf.cc			\
 	tvrx.cc			\
 	usrp_io.cc		\

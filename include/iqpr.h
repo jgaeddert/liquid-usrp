@@ -66,6 +66,18 @@ void iqpr_select(iqpr _q);
 void iqpr_tx_encode_header(iqpr _q);
 void iqpr_rx_decode_header(iqpr _q);
 
+// threads
+void * tx_process(void * _q);
+void * rx_process(void * _q);
+
+// callback
+static int iqpr_callback(unsigned char * _rx_header,
+                         int _rx_header_valid,
+                         unsigned char * _rx_payload,
+                         unsigned int _rx_payload_len,
+                         void * _userdata);
+
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */

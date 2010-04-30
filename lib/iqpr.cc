@@ -10,8 +10,14 @@
 #include "iqpr.h"
 #include "usrp_io.h"
 
-// callback
-void callback(void);
+// packet header structure
+//
+//  id      num bytes   description
+//  -----------------------------
+//  plen    2           packet length
+//  fec0    1           fec scheme (inner)
+//  fec1    1           fec scheme (outer)
+//
 
 struct iqpr_s {
     unsigned int node_id;           // node identification
@@ -39,7 +45,6 @@ struct iqpr_s {
 
     // MAC layer
     int tx_mutex;                   // transmit mutex lock for...
-    int ack_timeout;                //
     unsigned char header_tx[8];     // transmit header
     unsigned char header_rx[8];     // receive header
 
@@ -51,7 +56,125 @@ struct iqpr_s {
     std::complex<float> * frame;
     std::complex<float> data_tx[512];
 
-    // extended
-    void * nodes;   // list of nodes in network
+    // status variables
+    int verbose;
+    unsigned int num_packets_received;
+    unsigned int num_valid_headers_received;
+    unsigned int num_valid_packets_received;
+    unsigned int num_bytes_received;
+
 };
+
+iqpr iqpr_create()
+{
+    iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
+
+    // create frame generator
+    q->fgprops.rampup_len = 16;
+    q->fgprops.phasing_len = 64;
+    q->fgprops.payload_len = 0;
+    q->fgprops.mod_scheme = MOD_QPSK;
+    q->fgprops.mod_bps = 2;
+    q->fgprops.rampdn_len = 16;
+    q->fg = flexframegen_create(&q->fgprops);
+
+    // create frame synchronizer
+    flexframesyncprops_init_default(&q->fsprops);
+    q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
+
+    // filtering objects
+    q->mf_interp = interp_crcf_create_rrc(2,3,0.7f,0.0f);
+    q->interp = resamp2_crcf_create(37,0.0f,60.0f);
+    q->decim  = resamp2_crcf_create(37,0.0f,60.0f);
+
+    // packetizer objects
+    q->p_enc = packetizer_create(0,FEC_NONE,FEC_NONE);
+    q->p_dec = packetizer_create(0,FEC_NONE,FEC_NONE);
+
+    // return object
+    return q;
+}
+
+void iqpr_destroy(iqpr _q)
+{
+    // destroy framing objects
+    flexframegen_destroy(_q->fg);
+    flexframesync_destroy(_q->fs);
+
+    // destroy filter objects
+    interp_crcf_destroy(_q->mf_interp);
+    resamp2_crcf_destroy(_q->interp);
+    resamp2_crcf_destroy(_q->decim);
+
+    // destroy packetizer objects
+    packetizer_destroy(_q->p_enc);
+    packetizer_destroy(_q->p_dec);
+
+    // free main object
+    free(_q);
+}
+
+void iqpr_print(iqpr _q)
+{
+    printf("iqpr:\n");
+}
+
+// callback
+static int iqpr_callback(unsigned char * _rx_header,
+                         int _rx_header_valid,
+                         unsigned char * _rx_payload,
+                         unsigned int _rx_payload_len,
+                         void * _userdata)
+{
+    iqpr q = (iqpr) _userdata;
+
+    q->num_packets_received++;
+    if (q->verbose) printf("********* iqpr callback invoked, ");
+
+    if ( !_rx_header_valid ) {
+        if (q->verbose) printf("header crc : FAIL\n");
+        return 0;
+    }
+    q->num_valid_headers_received++;
+    unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
+    if (q->verbose) printf("packet id: %6u\n", packet_id);
+    unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
+    fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
+    fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
+
+    /*
+    // TODO: validate fec0,fec1 before indexing fec_scheme_str
+    printf("    payload len : %u\n", payload_len);
+    printf("    fec0        : %s\n", fec_scheme_str[fec0]);
+    printf("    fec1        : %s\n", fec_scheme_str[fec1]);
+    */
+
+    q->p_dec = packetizer_recreate(q->p_dec, payload_len, fec0, fec1);
+
+    // decode packet
+    unsigned char msg_dec[payload_len];
+    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, msg_dec);
+    if (crc_pass) {
+        q->num_valid_packets_received++;
+        q->num_bytes_received += payload_len;
+    } else {
+        if (q->verbose) printf("  <<< payload crc fail >>>\n");
+    }
+
+    /*
+    packetizer_print(q->p_dec);
+    printf("payload len: %u\n", _rx_payload_len);
+    unsigned int i;
+    for (i=0; i<_rx_payload_len; i++)
+        printf("%.2x ", _rx_payload[i]);
+    printf("\n");
+
+    for (i=0; i<payload_len; i++)
+        printf("%.2x ", msg_dec[i]);
+    printf("\n");
+    */
+
+    return 0;
+}
+
 
