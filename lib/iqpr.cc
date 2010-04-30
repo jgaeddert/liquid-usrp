@@ -223,6 +223,10 @@ int iqpr_callback(unsigned char * _rx_header,
 // start threads
 void iqpr_start_threads(iqpr _q)
 {
+    // start usrp_io
+    _q->uio->start_rx(USRP_CHANNEL);
+    _q->uio->start_tx(USRP_CHANNEL);
+
     // set thread attributes
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -243,7 +247,9 @@ void iqpr_stop_threads(iqpr _q)
 
 void * iqpr_tx_process(void * _q)
 {
-    // wait for data
+    iqpr q = (iqpr) _q;
+
+    // TODO : wait for data to become avilable
 
     printf("iqpr tx process complete.\n");
     pthread_exit(NULL);
@@ -251,7 +257,28 @@ void * iqpr_tx_process(void * _q)
 
 void * iqpr_rx_process(void * _q)
 {
+    iqpr q = (iqpr) _q;
+
+    // ports, buffers, etc.
+    gport port_rx = q->uio->get_rx_port(USRP_CHANNEL);
+    std::complex<float> data_rx[512];
+    std::complex<float> decim_out[256];
+
     // continuously read data, blocking on tx_mutex
+    unsigned int i,n;
+    unsigned int num_blocks = 1000;
+    for (i=0; i<num_blocks; i++) {
+        // grab data from port
+        gport_consume(port_rx, (void*)data_rx, 512);
+
+        // run decimator
+        for (n=0; n<256; n++) {
+            resamp2_crcf_decim_execute(q->decim, &data_rx[2*n], &decim_out[n]);
+        }
+
+        // run through frame synchronizer
+        flexframesync_execute(q->fs, decim_out, 256);
+    }
 
     printf("iqpr rx process complete.\n");
     pthread_exit(NULL);
