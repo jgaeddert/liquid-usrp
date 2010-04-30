@@ -51,9 +51,6 @@ void usage() {
     printf("  u,h   :   usage/help\n");
 }
 
-// return scheme from string
-fec_scheme str2fec(const char * _str);
-
 int main (int argc, char **argv)
 {
     bool verbose = true;
@@ -215,7 +212,7 @@ int main (int argc, char **argv)
                 printf("%.2x ",packet[j]);
             printf("\n");
             */
-            pid = (pid+1)%(1<<16);
+            pid = (pid+1) & 0xffff;
 
             flexframegen_execute(fg, header, packet, frame);
 

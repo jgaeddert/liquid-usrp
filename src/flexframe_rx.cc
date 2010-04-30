@@ -182,7 +182,7 @@ int main (int argc, char **argv)
     // set properties to default
     flexframesyncprops_s props;
     flexframesyncprops_init_default(&props);
-    props.squelch_threshold = -32.0f;
+    props.squelch_threshold = -30.0f;
     props.agc_bw0 = 1e-3f;
     props.agc_bw1 = 1e-5f;
     props.agc_gmin = 1e-3f;
