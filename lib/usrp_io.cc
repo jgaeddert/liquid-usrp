@@ -85,6 +85,14 @@ usrp_io::~usrp_io()
     // force stop tx/rx
     stop_tx(0);
     stop_rx(0);
+
+    // signal eom on all ports
+    gport_signal_eom(port_tx);
+    gport_signal_eom(port_rx);
+
+    gport_signal_eom(port_resamp_tx);
+    gport_signal_eom(port_resamp_rx);
+
     
     // wait for tx/rx inactive
     printf("waiting for tx/rx to stop running...\n");
@@ -355,6 +363,7 @@ void* usrp_io_tx_process(void * _u)
     // local variables
     int rc;
     bool underrun;
+    int gport_eom=0;
 
     // set internal tx running flag
     usrp->tx_running = true;
@@ -362,11 +371,14 @@ void* usrp_io_tx_process(void * _u)
     // start data transfer
     usrp->usrp_tx->start();
 
-    while (usrp->tx_active) {
+    while (usrp->tx_active && !gport_eom) {
         // wait for data
+        gport_eom =
         gport_consume(usrp->port_tx,
                       (void*)(usrp->tx_port_buffer),
                       usrp->tx_buffer_length);
+
+        if (gport_eom) break;
 
         // convert to short
         for (unsigned int i=0; i<usrp->tx_buffer_length; i++) {
@@ -409,6 +421,7 @@ void* usrp_io_rx_process(void * _u)
     // local variables
     int rc;
     bool overrun;
+    int gport_eom=0;
 
     // set internal rx running flag
     usrp->rx_running = true;
@@ -416,7 +429,7 @@ void* usrp_io_rx_process(void * _u)
     // start data transfer
     usrp->usrp_rx->start();
 
-    while (usrp->rx_active) {
+    while (usrp->rx_active && !gport_eom) {
         // read data
         rc = usrp->usrp_rx->read(usrp->rx_buffer, 2*usrp->rx_buffer_length*sizeof(short), &overrun);
 
@@ -446,6 +459,7 @@ void* usrp_io_rx_process(void * _u)
             usrp->rx_port_buffer[i] -= usrp->m_hat;
         }
 #endif
+        gport_eom =
         gport_produce(usrp->port_rx,
                       (void*)(usrp->rx_port_buffer),
                       usrp->rx_buffer_length);
@@ -475,12 +489,16 @@ void* usrp_io_tx_resamp_process(void * _u)
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
+    int gport_eom=0;
 
-    while (usrp->tx_active) {
+    while (usrp->tx_active && !gport_eom) {
         // get data from port_resamp_tx
+        gport_eom =
         gport_consume(usrp->port_resamp_tx,
                       (void*)data_in,
                       n);
+
+        if (gport_eom) break;
 
         // run resampler
         num_written_total=0;
@@ -493,6 +511,7 @@ void* usrp_io_tx_resamp_process(void * _u)
         }
 
         // push data to usrp thread
+        gport_eom =
         gport_produce(usrp->port_tx,
                       (void*)data_out,
                       num_written_total);
@@ -514,12 +533,16 @@ void* usrp_io_rx_resamp_process(void * _u)
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
+    int gport_eom=0;
 
-    while (usrp->rx_active) {
+    while (usrp->rx_active && !gport_eom) {
         // get data from port_rx
+        gport_eom =
         gport_consume(usrp->port_rx,
                       (void*)data_in,
                       n);
+
+        if (gport_eom) break;
 
         // run resampler
         num_written_total=0;
@@ -532,6 +555,7 @@ void* usrp_io_rx_resamp_process(void * _u)
         }
 
         // push data to output
+        gport_eom =
         gport_produce(usrp->port_resamp_rx,
                       (void*)data_out,
                       num_written_total);
