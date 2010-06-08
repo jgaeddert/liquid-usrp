@@ -5,6 +5,8 @@
 #include <iostream>
 #include <complex>
 #include <math.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <pthread.h>
 #include <liquid/liquid.h>
 
@@ -163,11 +165,21 @@ void iqpr_print(iqpr _q)
 //
 
 // callback
+#if LIQUID_FLEXFRAMESYNC_FRAMESYMS == 1
+int iqpr_callback(unsigned char * _rx_header,
+                  int _rx_header_valid,
+                  unsigned char * _rx_payload,
+                  unsigned int _rx_payload_len,
+                  void * _userdata,
+                  std::complex<float> * _frame_samples,
+                  unsigned int _frame_samples_len)
+#else
 int iqpr_callback(unsigned char * _rx_header,
                   int _rx_header_valid,
                   unsigned char * _rx_payload,
                   unsigned int _rx_payload_len,
                   void * _userdata)
+#endif
 {
     iqpr q = (iqpr) _userdata;
 

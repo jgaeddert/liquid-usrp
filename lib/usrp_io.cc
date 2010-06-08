@@ -20,6 +20,7 @@
  */
 
 #include <iostream>
+#include <stdio.h>
 #include <complex>
 #include <usrp_standard.h>
 #include <usrp_prims.h>
