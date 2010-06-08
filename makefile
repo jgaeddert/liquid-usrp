@@ -2,28 +2,16 @@
 # USRP tests makefile
 #
 
-LDFLAGS		= -lusrp -pthread -lliquid -lfftw3f -lfec
+LDFLAGS		= -lusrp -pthread -lliquid -lfftw3f -lfec -lm -lc
 CPPFLAGS	:= -I . -I ./include -Wall -g -O2
 
 local_headers	:=		\
-	basic.h			\
-	ossie_db_base.h		\
-	dbsrx.h			\
-	flex.h			\
 	iqpr.h			\
-	lf.h			\
-	tvrx.h			\
 	usrp_io.h		\
 	usrp_rx_gain_correction.h
 
 local_src	:=		\
-	basic.cc		\
-	ossie_db_base.cc	\
-	dbsrx.cc		\
-	flex.cc			\
 	iqpr.cc			\
-	lf.cc			\
-	tvrx.cc			\
 	usrp_io.cc		\
 	usrp_rx_gain_correction.cc
 

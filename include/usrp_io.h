@@ -28,6 +28,8 @@
 
 #define USRPIO_USE_DC_BLOCKER 0
 
+#define USRP_VERSION 3
+
 // forward declaration of classes
 class ossie_db_base;    // ossie_db_base.h
 class usrp_standard_rx; // usrp_standard.h
@@ -38,6 +40,14 @@ void* usrp_io_tx_process(void * _u);
 void* usrp_io_rx_process(void * _u);
 void* usrp_io_tx_resamp_process(void * _u);
 void* usrp_io_rx_resamp_process(void * _u);
+
+#if USRP_VERSION < 3
+#else
+#  include <usrp_standard.h>
+#  include <usrp_dbid.h>
+#  include <usrp_prims.h>
+//#  include <usrp_bytesex.h>
+#endif
 
 class usrp_io
 {
@@ -94,6 +104,7 @@ protected:
     // initialization methods
     void initialize();
 
+#if USRP_VERSION < 3
     // gr/usrp objects
     usrp_standard_rx * usrp_rx;
     usrp_standard_tx * usrp_tx;
@@ -103,6 +114,17 @@ protected:
     ossie_db_base * rx_db1;
     ossie_db_base * tx_db0;
     ossie_db_base * tx_db1;
+#else
+    // gr/usrp objects
+    usrp_standard_rx_sptr usrp_rx;
+    usrp_standard_tx_sptr usrp_tx;
+
+    // daughterboards
+    db_base_sptr rx_db0;
+    db_base_sptr rx_db1;
+    db_base_sptr tx_db0;
+    db_base_sptr tx_db1;
+#endif
 
     // flags
     bool use_complex;

@@ -28,15 +28,15 @@
 #include <usrp_bytesex.h>
 
 #include "usrp_io.h"
-#include "flex.h"
-#include "basic.h"
-#include "lf.h"
-#include "dbsrx.h"
-#include "tvrx.h"
 #include "usrp_rx_gain_correction.h"
 
 #define USRP_IO_RX_GAIN     (1.0f / 64.0f)
 #define USRP_IO_TX_GAIN     (8000.0f)
+
+#if USRP_VERSION < 3
+#else
+#  include <byteswap.h>
+#endif
 
 // default constructor
 usrp_io::usrp_io()
@@ -166,6 +166,7 @@ void usrp_io::set_tx_freq(int _channel, float _freq)
 {
     // TODO: check daughterboard capabilities
 
+#if USRP_VERSION < 3
     // set the daughterboard frequency
     float db_lo_offset  = -8e6;
     float db_lo_freq    = 0.0f;
@@ -173,11 +174,36 @@ void usrp_io::set_tx_freq(int _channel, float _freq)
     tx_db0->set_db_freq(db_lo_freq_set, db_lo_freq);
     float ddc_freq = _freq - db_lo_freq;
     usrp_tx->set_tx_freq(_channel, ddc_freq);
+#else
+    db_base_sptr db;
+    if (_channel == 0) {
+        db = tx_db0;
+    } else if (_channel == 1) {
+        db = tx_db1;
+    } else {
+        fprintf(stderr,"error: usrp_io::set_tx_Freq(), invalid channel: %d\n", _channel);
+        exit(1);
+    }
+
+    usrp_tune_result result;
+    if (!usrp_tx->tune(_channel, db, _freq, &result)) {
+        fprintf(stderr,"error: usrp_io::set_tx_freq(), tune failed\n");
+        exit(1);
+    }
+
+    // print debug info
+    printf("usrp tx tune result:\n");
+    printf("    baseband freq   :   %12.4e\n", result.baseband_freq);
+    printf("    dxc_freq        :   %12.4e\n", result.dxc_freq);
+    printf("    residual_freq   :   %12.4e\n", result.residual_freq);
+    printf("    inverted        :   %u\n", result.inverted);
+#endif
 
     // TODO: store local oscillator and ddc frequencies internally
 }
 void usrp_io::set_rx_freq(int _channel, float _freq)
 {
+#if USRP_VERSION < 3
     // TODO: check daughterboard capabilities
 
     // set the daughterboard frequency
@@ -189,6 +215,32 @@ void usrp_io::set_rx_freq(int _channel, float _freq)
     usrp_rx->set_rx_freq(_channel, ddc_freq);
 
     // TODO: store local oscillator and ddc frequencies internally
+
+#else
+    db_base_sptr db;
+    if (_channel == 0) {
+        db = rx_db0;
+    } else if (_channel == 1) {
+        db = rx_db1;
+    } else {
+        fprintf(stderr,"error: usrp_io::set_rx_Freq(), invalid channel: %d\n", _channel);
+        exit(1);
+    }
+
+    usrp_tune_result result;
+    if (!usrp_rx->tune(_channel, db, _freq, &result)) {
+        fprintf(stderr,"error: usrp_io::set_rx_freq(), tune failed\n");
+        exit(1);
+    }
+
+    // print debug info
+    printf("usrp rx tune result:\n");
+    printf("    baseband freq   :   %12.4e\n", result.baseband_freq);
+    printf("    dxc_freq        :   %12.4e\n", result.dxc_freq);
+    printf("    residual_freq   :   %12.4e\n", result.residual_freq);
+    printf("    inverted        :   %u\n", result.inverted);
+#endif
+
 }
 
 // decimation/interpolation
@@ -312,10 +364,11 @@ void usrp_io::initialize()
         throw 0;
     }
 
-    // check for rx daughterboards
+    // check for rx daughterboards and assign first subdevice
     int rx_db0_id = usrp_rx->daughterboard_id(0);
     int rx_db1_id = usrp_rx->daughterboard_id(1);
 
+#if USRP_VERSION < 3
     if (rx_db0_id == USRP_DBID_FLEX_400_RX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_RX_MIMO_B\n");
         rx_db0 = new db_flex400_rx_mimo_b(usrp_rx,0);
@@ -323,6 +376,10 @@ void usrp_io::initialize()
         std::cerr << "error: usrp_io::initialize(), use usrp db flex 400 rx MIMO B" << std::endl;
         throw 0;
     }
+#else
+    rx_db0 = usrp_rx->db(0)[0];
+    rx_db1 = usrp_rx->db(1)[0];
+#endif
 
     std::cout << "usrp daughterboard rx slot 0 : " << usrp_dbid_to_string(rx_db0_id) << std::endl;
     std::cout << "usrp daughterboard rx slot 1 : " << usrp_dbid_to_string(rx_db1_id) << std::endl;
@@ -332,6 +389,7 @@ void usrp_io::initialize()
     int tx_db0_id = usrp_tx->daughterboard_id(0);
     int tx_db1_id = usrp_tx->daughterboard_id(1);
 
+#if USRP_VERSION < 3
     if (tx_db0_id == USRP_DBID_FLEX_400_TX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_TX_MIMO_B\n");
         tx_db0 = new db_flex400_tx_mimo_b(usrp_tx,0);
@@ -339,6 +397,10 @@ void usrp_io::initialize()
         std::cerr << "error: usrp_io::initialize(), use usrp db flex 400 tx MIMO B" << std::endl;
         throw 0;
     }
+#else
+    rx_db0 = usrp_rx->db(0)[0];
+    rx_db1 = usrp_rx->db(1)[0];
+#endif
 
     std::cout << "usrp daughterboard tx slot 0 : " << usrp_dbid_to_string(tx_db0_id) << std::endl;
     std::cout << "usrp daughterboard tx slot 1 : " << usrp_dbid_to_string(tx_db1_id) << std::endl;
