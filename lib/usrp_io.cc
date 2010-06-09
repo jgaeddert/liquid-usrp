@@ -187,8 +187,8 @@ void usrp_io::set_tx_freq(int _channel, float _freq)
 
     usrp_tune_result result;
     if (!usrp_tx->tune(_channel, db, _freq, &result)) {
-        fprintf(stderr,"error: usrp_io::set_tx_freq(), tune failed\n");
-        exit(1);
+        fprintf(stderr,"warning: usrp_io::set_tx_freq(), tune failed\n");
+        //exit(1);
     }
 
     // print debug info
@@ -229,8 +229,8 @@ void usrp_io::set_rx_freq(int _channel, float _freq)
 
     usrp_tune_result result;
     if (!usrp_rx->tune(_channel, db, _freq, &result)) {
-        fprintf(stderr,"error: usrp_io::set_rx_freq(), tune failed\n");
-        exit(1);
+        fprintf(stderr,"warning: usrp_io::set_rx_freq(), tune failed\n");
+        //exit(1);
     }
 
     // print debug info
@@ -398,23 +398,28 @@ void usrp_io::initialize()
         throw 0;
     }
 #else
-    rx_db0 = usrp_rx->db(0)[0];
-    rx_db1 = usrp_rx->db(1)[0];
+    tx_db0 = usrp_tx->db(0)[0];
+    tx_db1 = usrp_tx->db(1)[0];
 #endif
 
     std::cout << "usrp daughterboard tx slot 0 : " << usrp_dbid_to_string(tx_db0_id) << std::endl;
     std::cout << "usrp daughterboard tx slot 1 : " << usrp_dbid_to_string(tx_db1_id) << std::endl;
 
     // default: set tx_enable
+    printf("setting enable...\n");
     tx_db0->set_enable(true);
 
     // defaults
+    printf("setting num_channels...\n");
     usrp_rx->set_nchannels(1);
     usrp_tx->set_nchannels(1);
 
     // gains
+    printf("setting gains...\n");
     rx_gain = USRP_IO_RX_GAIN * usrp_rx_gain_correction(256);
     tx_gain = USRP_IO_TX_GAIN;
+
+    printf("done with usrp_io::initialize\n");
 }
 
 // threading functions

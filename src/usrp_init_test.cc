@@ -40,7 +40,7 @@ int main() {
     unsigned int buffer_len = 1024;
     short int rx_buffer[buffer_len];
     bool overrun=false;
-    float frequency = 485e6;
+    float frequency = 462e6;
 
     // from ossie
 #if USRP_VERSION < 3
@@ -78,10 +78,13 @@ int main() {
     // tune
 
     usrp_tune_result result;
+    usrp_rx->tune(USRP_CHANNEL, rx_db0_control, frequency, &result);
+#if 0
     if (!usrp_rx->tune(USRP_CHANNEL, rx_db0_control, frequency, &result)) {
         fprintf(stderr,"error: tune failed\n");
         exit(1);
     }
+#endif
 
     // print debug info
     printf("usrp rx tune result:\n");
