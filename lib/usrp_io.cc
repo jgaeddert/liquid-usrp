@@ -22,10 +22,11 @@
 #include <iostream>
 #include <stdio.h>
 #include <complex>
+#include <byteswap.h>
 #include <usrp_standard.h>
 #include <usrp_prims.h>
 #include <usrp_dbid.h>
-#include <usrp_bytesex.h>
+//#include <usrp_bytesex.h>
 
 #include "usrp_io.h"
 #include "usrp_rx_gain_correction.h"
@@ -33,10 +34,6 @@
 #define USRP_IO_RX_GAIN     (1.0f / 64.0f)
 #define USRP_IO_TX_GAIN     (8000.0f)
 
-#if USRP_VERSION < 3
-#else
-#  include <byteswap.h>
-#endif
 
 // default constructor
 usrp_io::usrp_io()
@@ -355,6 +352,9 @@ void usrp_io::initialize()
             << std::endl;
         throw 0;
     }
+    printf("pga gain : %12.8f (min: %12.8f, max: %12.8f)\n", usrp_rx->pga(0),
+                                                             usrp_rx->pga_min(),
+                                                             usrp_rx->pga_max());
 
     // create tx object
     usrp_tx = usrp_standard_tx::make(0, 512);

@@ -8,6 +8,10 @@ config.status
 configure
 makefile
 
+# ignore all octave files
+*.m
+octave-core
+
 # ignore all programs
 src/firpfbch_tx
 src/flexframe_rx
