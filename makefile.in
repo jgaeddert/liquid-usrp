@@ -2,8 +2,29 @@
 # USRP tests makefile
 #
 
-LDFLAGS		= -lusrp -pthread -lliquid -lfftw3f -lfec -lm -lc
-CPPFLAGS	:= -I . -I ./include -Wall -g -O2
+# paths
+srcdir = @srcdir@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+VPATH = @srcdir@
+include_dirs	:= . include
+vpath %.h $(include_dirs)
+
+# programs
+CC	:= @CC@
+CXX	:= @CXX@
+MV	:= mv -f
+RM	:= rm -f
+SED	:= sed
+AR	:= ar
+RANLIB	:= ranlib
+
+# flags
+INCLUDE_CFLAGS	= $(addprefix -I ,$(include_dirs))
+CFLAGS		+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
+CPPFLAGS	+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
+LDFLAGS		+= @LIBS@
+ARFLAGS		= r
 
 local_headers	:=		\
 	iqpr.h			\
@@ -47,10 +68,10 @@ headers		= $(addprefix include/,$(local_headers))
 all: $(programs)
 
 $(objects): %.cc.o : %.cc $(headers)
-	g++ $(CPPFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 $(programs): % : %.cc $(objects)
-	g++ $(CPPFLAGS) $(objects) $(LDFLAGS) $< -o $@
+	$(CXX) $(CPPFLAGS) $(objects) $(LDFLAGS) $< -o $@
 
 clean:
 	$(RM) $(objects)
