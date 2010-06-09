@@ -136,20 +136,30 @@ void * rx_handler ( void *_port )
 {
     gport p = (gport) _port;
 
+    unsigned int nfft=64;
     std::complex<float> data_rx[512];
-    std::complex<float> spectrogram_buffer[64];
+    std::complex<float> spectrogram_buffer[nfft];
 
-    asgram sg = asgram_create(spectrogram_buffer,64);
-    asgram_set_scale(sg,20.0f);
-    asgram_set_offset(sg,80.0f);
+    asgram sg = asgram_create(spectrogram_buffer,nfft);
+    asgram_set_scale(sg,10.0f);
+    asgram_set_offset(sg,-20.0f);
+
+    float peakval;
+    float peakfreq;
+    char ascii[nfft+1];
+    ascii[nfft] = '\0'; // append null character to end of string
 
     for (unsigned int n=0; n<4000; n++) {
         gport_consume(p,(void*)data_rx,512);
         
         // run ascii spectrogram
         if (n%30 == 0) {
-            memmove(spectrogram_buffer, data_rx, 64*sizeof(std::complex<float>));
-            asgram_execute(sg);
+            memmove(spectrogram_buffer, data_rx, nfft*sizeof(std::complex<float>));
+            asgram_execute(sg, ascii, &peakval, &peakfreq);
+
+            // print the spectrogram
+            printf(" > %s < pk%5.1fdB [%5.2f]\n", ascii, peakval, peakfreq);
+
         }
     }
 
