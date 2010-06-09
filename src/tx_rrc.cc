@@ -21,6 +21,7 @@
  
 #include <math.h>
 #include <iostream>
+#include <stdio.h>
 #include <complex>
 #include <getopt.h>
 #include <liquid/liquid.h>

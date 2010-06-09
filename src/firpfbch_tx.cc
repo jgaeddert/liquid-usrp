@@ -24,9 +24,10 @@
 //                channelizer (transmitter)
 //
 
-#include <math.h>
 #include <iostream>
 #include <complex>
+#include <math.h>
+#include <stdio.h>
 #include <getopt.h>
 #include <liquid/liquid.h>
 

@@ -21,6 +21,7 @@
  
 #include <math.h>
 #include <iostream>
+#include <stdio.h>
 #include <complex>
 #include <getopt.h>
 #include <liquid/liquid.h>
@@ -130,7 +131,7 @@ int main (int argc, char **argv)
     // frequency modulator
     float m = 0.03f;
     float f = 0.0f;
-    freqmodem fm = freqmodem_create(m,f);
+    freqmodem fm = freqmodem_create(m,f,LIQUID_MODEM_FM_PLL);
 
     // audio NCO
     float f_audio = 0.01f;

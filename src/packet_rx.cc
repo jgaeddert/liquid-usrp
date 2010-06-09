@@ -19,9 +19,11 @@
  * along with liquid.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <math.h>
 #include <iostream>
 #include <complex>
+#include <math.h>
+#include <stdio.h>
+#include <getopt.h>
 #include <liquid/liquid.h>
 
 #include "usrp_io.h"

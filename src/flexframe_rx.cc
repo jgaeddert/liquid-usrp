@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <complex>
+#include <stdio.h>
 #include <sys/resource.h>
 #include <liquid/liquid.h>
 
@@ -40,11 +41,21 @@ typedef struct {
     packetizer p;
 } framedata;
 
+#if 0
 static int callback(unsigned char * _rx_header,
                     int _rx_header_valid,
                     unsigned char * _rx_payload,
                     unsigned int _rx_payload_len,
                     void * _userdata)
+#else
+static int callback(unsigned char * _rx_header,
+                    int _rx_header_valid,
+                    unsigned char * _rx_payload,
+                    unsigned int _rx_payload_len,
+                    void * _userdata,
+                    liquid_float_complex * _frame_samples,
+                    unsigned int _frame_samples_len)
+#endif
 {
     num_packets_received++;
     if (verbose) printf("********* callback invoked, ");

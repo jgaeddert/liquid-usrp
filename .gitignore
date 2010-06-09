@@ -1,2 +1,18 @@
 # ignore all programs
+src/firpfbch_tx
+src/flexframe_rx
+src/flexframe_tx
+src/fmtx
+src/jammer
+src/ofdmframe64_rx
+src/ofdmframe64_tx
+src/ofdmoqamframe64_rx
+src/ofdmoqamframe64_tx
+src/packet_rx
+src/packet_tx
+src/ping
+src/tx_rrc
 src/usrp_init_test
+src/usrp_io_test
+src/usrp_rx_gain_correction_test
+
