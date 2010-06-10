@@ -23,10 +23,6 @@
 #include <stdio.h>
 #include <complex>
 #include <byteswap.h>
-#include <usrp_standard.h>
-#include <usrp_prims.h>
-#include <usrp_dbid.h>
-//#include <usrp_bytesex.h>
 
 #include "usrp_io.h"
 #include "usrp_rx_gain_correction.h"

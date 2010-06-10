@@ -5,17 +5,24 @@
 #include <iostream>
 #include <stdio.h>
 
-#include "usrp_standard.h"
-#include "usrp_prims.h"
-#include "usrp_dbid.h"
+#if 0
+#  include <usrp/usrp_standard.h>
+#  include <usrp/usrp_prims.h>
+#  include <usrp/usrp_dbid.h>
+#else
+#  include <usrp_standard.h>
+#  include <usrp_prims.h>
+#  include <usrp_dbid.h>
+#endif
 
-
+/*
 //#include "USRP.h"
 #include "flex.h"
 #include "basic.h"
 #include "lf.h"
 #include "dbsrx.h"
 #include "tvrx.h"
+*/
 
 #define USRP_CHANNEL    0
 #define USRP_VERSION    3

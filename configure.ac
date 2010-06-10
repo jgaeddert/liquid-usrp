@@ -60,11 +60,29 @@ AC_CHECK_LIB([usrp], [main], [],
              [])
 
 # Check for necessary header files
-AC_CHECK_HEADERS([usrp_standard.h usrp_dbid.h usrp_prims.h stdio.h stdlib.h stdbool.h complex.h string.h getopt.h float.h inttypes.h limits.h stdlib.h string.h unistd.h])
+AC_LANG_PUSH([C++])
+AC_CHECK_HEADERS([usrp_standard.h \
+                  usrp_dbid.h \
+                  usrp_prims.h \
+                  stdio.h \
+                  stdlib.h \
+                  stdbool.h \
+                  complex.h \
+                  string.h \
+                  getopt.h \
+                  float.h \
+                  inttypes.h \
+                  limits.h \
+                  stdlib.h \
+                  string.h \
+                  unistd.h],
+                  [],
+                  [AC_MSG_ERROR(missing headers)])
 if test -z "$HAVE_stdio.h"
 then
     AC_MSG_ERROR([Need stdio.h!])
 fi
+AC_LANG_POP
 
 # Check for optional header files, libraries
 AC_CHECK_HEADERS(pthread.h fec.h fftw3.h)

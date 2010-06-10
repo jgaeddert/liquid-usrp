@@ -43,10 +43,12 @@ void* usrp_io_rx_resamp_process(void * _u);
 
 #if USRP_VERSION < 3
 #else
+//#  include <usrp/usrp_standard.h>
+//#  include <usrp/usrp_dbid.h>
+//#  include <usrp/usrp_prims.h>
 #  include <usrp_standard.h>
 #  include <usrp_dbid.h>
 #  include <usrp_prims.h>
-//#  include <usrp_bytesex.h>
 #endif
 
 class usrp_io
