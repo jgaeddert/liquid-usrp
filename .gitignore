@@ -1,3 +1,7 @@
+# ignore all object files
+src/*.o
+lib/*.o
+
 # ignore all configure files
 autom4te.cache/
 config.h
@@ -30,3 +34,5 @@ src/usrp_init_test
 src/usrp_io_test
 src/usrp_rx_gain_correction_test
 
+# miscellany
+*.swp
