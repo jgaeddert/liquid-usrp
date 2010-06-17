@@ -1,6 +1,9 @@
 Install basic USRP libraries:
     # apt-get install usrp usrp-firmware
 
+Install from gnuradio's git repo (still testing).
+    $ git checkout 9a9582715d # known good revision
+
 Configure USB and change USRP permissions
 
 To be able to run a waveform that uses the USRP you will either need to have root permissions or give access to your user to use the USRP. The process for each distribution is different but for Fedora 5 or 6: Define a group named usrp (as root):
@@ -19,8 +22,7 @@ Create a file named /etc/udev/rules.d/10-usrp.rules with the following contents,
 
     # rule to grant read/write access on USRP to group named usrp.
     # to use, install this file in /etc/udev/rules.d as 10-usrp.rules
-    ACTION=="add", BUS=="usb", SYSFS{idVendor}=="fffe", SYSFS{idProduct}=="0002",
-    GROUP:="usrp", MODE:="0660"
+    ACTION=="add", BUS=="usb", SYSFS{idVendor}=="fffe", SYSFS{idProduct}=="0002", GROUP:="usrp", MODE:="0660"
 
 Restart the udev daemon to enable he changes.
 
@@ -80,4 +82,14 @@ Problem: While running nodeBooter I get the following or similar error:
     Aborted
 
 Solution: Disconnect USRP's USB cable, reconnect, and re-start nodeBooter.
+
+Problem: installing old(er) version of gnuradio gives error during configure:
+    checking Python.h usability... no
+    checking Python.h presence... no
+    checking for Python.h... no
+    configure: error: cannot find usable Python headers
+
+Solution: for some reason configure fails if you don't have the fort77
+compiler.
+    # apt-get install fort77
 
