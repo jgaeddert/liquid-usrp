@@ -3,33 +3,28 @@
 //
 
 #include <iostream>
+#include <stdlib.h>
 #include <stdio.h>
 
-#if 0
-#  include <usrp/usrp_standard.h>
-#  include <usrp/usrp_prims.h>
-#  include <usrp/usrp_dbid.h>
-#else
-#  include <usrp_standard.h>
-#  include <usrp_prims.h>
-#  include <usrp_dbid.h>
-#endif
+#include "config.h"
 
-/*
-//#include "USRP.h"
-#include "flex.h"
-#include "basic.h"
-#include "lf.h"
-#include "dbsrx.h"
-#include "tvrx.h"
-*/
+#if USRP_LEGACY
+#  include <usrp_standard.h>
+#  include <usrp_dbid.h>
+#  include <usrp_prims.h>
+#  include "flex.h"
+#  include "basic.h"
+#  include "lf.h"
+#  include "dbsrx.h"
+#  include "tvrx.h"
+#endif
 
 #define USRP_CHANNEL    0
 #define USRP_VERSION    3
 
 int main() {
     // initialize rx
-#if USRP_VERSION < 3
+#if USRP_LEGACY
     usrp_standard_rx * usrp_rx = usrp_standard_rx::make(USRP_CHANNEL,256);
 #else
     usrp_standard_rx_sptr usrp_rx = usrp_standard_rx::make(USRP_CHANNEL,256);
@@ -50,7 +45,7 @@ int main() {
     float frequency = 462e6;
 
     // from ossie
-#if USRP_VERSION < 3
+#if USRP_LEGACY
     ossie_db_base * rx_db0_control;
     //ossie_db_base * rx_db1_control;
 

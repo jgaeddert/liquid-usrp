@@ -30,6 +30,13 @@
 #define USRP_IO_RX_GAIN     (1.0f / 64.0f)
 #define USRP_IO_TX_GAIN     (8000.0f)
 
+#if USRP_LEGACY
+#  include "flex.h"
+#  include "basic.h"
+#  include "lf.h"
+#  include "dbsrx.h"
+#  include "tvrx.h"
+#endif
 
 // default constructor
 usrp_io::usrp_io()
@@ -159,7 +166,7 @@ void usrp_io::set_tx_freq(int _channel, float _freq)
 {
     // TODO: check daughterboard capabilities
 
-#if USRP_VERSION < 3
+#if USRP_LEGACY
     // set the daughterboard frequency
     float db_lo_offset  = -8e6;
     float db_lo_freq    = 0.0f;
@@ -196,7 +203,7 @@ void usrp_io::set_tx_freq(int _channel, float _freq)
 }
 void usrp_io::set_rx_freq(int _channel, float _freq)
 {
-#if USRP_VERSION < 3
+#if USRP_LEGACY
     // TODO: check daughterboard capabilities
 
     // set the daughterboard frequency
@@ -364,9 +371,9 @@ void usrp_io::initialize()
     int rx_db0_id = usrp_rx->daughterboard_id(0);
     int rx_db1_id = usrp_rx->daughterboard_id(1);
 
-#if USRP_VERSION < 3
-    if (rx_db0_id == USRP_DBID_FLEX_400_RX_MIMO_B) {
-        printf("usrp daughterboard: USRP_DBID_FLEX_400_RX_MIMO_B\n");
+#if USRP_LEGACY
+    if (rx_db0_id == USRP_DBID_FLEX_400_RX) {
+        printf("usrp daughterboard: USRP_DBID_FLEX_400_RX\n");
         rx_db0 = new db_flex400_rx_mimo_b(usrp_rx,0);
     } else {
         std::cerr << "error: usrp_io::initialize(), use usrp db flex 400 rx MIMO B" << std::endl;
@@ -385,9 +392,9 @@ void usrp_io::initialize()
     int tx_db0_id = usrp_tx->daughterboard_id(0);
     int tx_db1_id = usrp_tx->daughterboard_id(1);
 
-#if USRP_VERSION < 3
-    if (tx_db0_id == USRP_DBID_FLEX_400_TX_MIMO_B) {
-        printf("usrp daughterboard: USRP_DBID_FLEX_400_TX_MIMO_B\n");
+#if USRP_LEGACY
+    if (tx_db0_id == USRP_DBID_FLEX_400_TX) {
+        printf("usrp daughterboard: USRP_DBID_FLEX_400_TX\n");
         tx_db0 = new db_flex400_tx_mimo_b(usrp_tx,0);
     } else {
         std::cerr << "error: usrp_io::initialize(), use usrp db flex 400 tx MIMO B" << std::endl;

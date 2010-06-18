@@ -23,6 +23,7 @@
 #include <math.h>
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
 #include <complex>
 #include <getopt.h>
 #include <liquid/liquid.h>
@@ -116,9 +117,9 @@ int main (int argc, char **argv)
     } mode = JAMMER_MODE_SWEEP;
 
     // create and initialize the NCO
-    //nco nco_tone = nco_create(); // libliquid-0.1.0
-    nco nco_tone = nco_create(LIQUID_NCO);
-    nco_set_frequency(nco_tone,f_tone);
+    //nco_crcf nco_tone = nco_crcf_create(); // libliquid-0.1.0
+    nco_crcf nco_tone = nco_crcf_create(LIQUID_NCO);
+    nco_crcf_set_frequency(nco_tone,f_tone);
 
     unsigned int n; // sample counter
     unsigned int i;
@@ -129,8 +130,8 @@ int main (int argc, char **argv)
 
         // generate tone data (complex sinusoid samples)
         for (n=0; n<512; n++) {
-            nco_cexpf(nco_tone, &data_tx[n]);
-            nco_step(nco_tone);
+            nco_crcf_cexpf(nco_tone, &data_tx[n]);
+            nco_crcf_step(nco_tone);
         }
 
         // write data to output buffer
@@ -162,14 +163,14 @@ int main (int argc, char **argv)
         }
 
         // update the NCO frequency
-        nco_set_frequency(nco_tone,f_tone);
+        nco_crcf_set_frequency(nco_tone,f_tone);
     }
  
     uio->stop_tx(0);  // Stop data transfer
     printf("usrp data transfer complete\n");
 
     // clean up allocated memory objects
-    nco_destroy(nco_tone);
+    nco_crcf_destroy(nco_tone);
     delete uio;
     return 0;
 }

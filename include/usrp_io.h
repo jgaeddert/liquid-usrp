@@ -26,14 +26,9 @@
 #include <pthread.h>
 #include <liquid/liquid.h>
 
+#include "config.h"
+
 #define USRPIO_USE_DC_BLOCKER 0
-
-#define USRP_VERSION 3
-
-// forward declaration of classes
-class ossie_db_base;    // ossie_db_base.h
-class usrp_standard_rx; // usrp_standard.h
-class usrp_standard_tx; // usrp_standard.h
 
 // threading functions
 void* usrp_io_tx_process(void * _u);
@@ -41,7 +36,12 @@ void* usrp_io_rx_process(void * _u);
 void* usrp_io_tx_resamp_process(void * _u);
 void* usrp_io_rx_resamp_process(void * _u);
 
-#if USRP_VERSION < 3
+#if 0
+#if USRP_LEGACY
+// forward declaration of classes
+class ossie_db_base;    // ossie_db_base.h
+class usrp_standard_rx; // usrp_standard.h
+class usrp_standard_tx; // usrp_standard.h
 #else
 //#  include <usrp/usrp_standard.h>
 //#  include <usrp/usrp_dbid.h>
@@ -50,6 +50,18 @@ void* usrp_io_rx_resamp_process(void * _u);
 #  include <usrp_dbid.h>
 #  include <usrp_prims.h>
 #endif
+#endif
+
+#include <usrp_standard.h>
+#include <usrp_dbid.h>
+#include <usrp_prims.h>
+#include "ossie_db_base.h"
+
+//#define USRP_DBID_TX USRP_DBID_FLEX_400_TX_MIMO_B
+//#define USRP_DBID_RX USRP_DBID_FLEX_400_RX_MIMO_B
+
+//#define USRP_DBID_TX USRP_DBID_FLEX_400_RX
+//#define USRP_DBID_RX USRP_DBID_FLEX_400_TX
 
 class usrp_io
 {
@@ -106,7 +118,7 @@ protected:
     // initialization methods
     void initialize();
 
-#if USRP_VERSION < 3
+#if USRP_LEGACY
     // gr/usrp objects
     usrp_standard_rx * usrp_rx;
     usrp_standard_tx * usrp_tx;

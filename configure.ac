@@ -35,6 +35,16 @@ AH_BOTTOM([
 #endif // __LIQUID_CONFIG_H__
 ])
 
+# Configure options
+
+# enable/disable building legacy usrp code (usrp-0.12)
+AC_ARG_ENABLE(legacy,
+    AS_HELP_STRING([--enable-legacy],[enable building of legacy usrp code]),
+    [ AC_DEFINE(USRP_LEGACY,[1],[enable/disable legacy code])
+      LEGACY_LIBS="basic.cc dbsrx.cc flex.cc lf.cc ossie_db_base.cc tvrx.cc"],
+    [ AC_DEFINE(USRP_LEGACY,[0],[enable/disable legacy code]) LEGACY_LIBS=""],
+)
+
 # Check for necessary programs
 AC_PROG_CC
 AC_PROG_CXX
@@ -114,6 +124,7 @@ AC_CHECK_SIZEOF(unsigned int)
 # autoconf variable substitutions
 #
 AC_SUBST(LIBS)              # shared libraries (-lc, -lm, etc.)
+AC_SUBST(LEGACY_LIBS)       # usrp legacy library source files
 
 #AC_SUBST(SH_LIB)            # output shared library target
 #AC_SUBST(REBIND)            # rebinding tool (e.g. ldconfig)

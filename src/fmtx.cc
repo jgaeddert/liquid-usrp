@@ -22,6 +22,7 @@
 #include <math.h>
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
 #include <complex>
 #include <getopt.h>
 #include <liquid/liquid.h>
@@ -135,8 +136,8 @@ int main (int argc, char **argv)
 
     // audio NCO
     float f_audio = 0.01f;
-    nco nco_audio = nco_create(LIQUID_NCO);
-    nco_set_frequency(nco_audio,f_audio);
+    nco_crcf nco_audio = nco_crcf_create(LIQUID_NCO);
+    nco_crcf_set_frequency(nco_audio,f_audio);
 
     unsigned int n; // sample counter
     unsigned int i;
@@ -147,8 +148,8 @@ int main (int argc, char **argv)
 
         // generate FM data
         for (n=0; n<512; n++) {
-            freqmodem_modulate(fm, nco_cos(nco_audio), &data_tx[n]);
-            nco_step(nco_audio);
+            freqmodem_modulate(fm, nco_crcf_cos(nco_audio), &data_tx[n]);
+            nco_crcf_step(nco_audio);
         }
 
         gport_produce(port_tx,(void*)data_tx,512);
@@ -160,7 +161,7 @@ int main (int argc, char **argv)
 
     // clean it up
     freqmodem_destroy(fm);
-    nco_destroy(nco_audio);
+    nco_crcf_destroy(nco_audio);
     delete uio;
     return 0;
 }

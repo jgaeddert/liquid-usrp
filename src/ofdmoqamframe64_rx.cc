@@ -23,6 +23,7 @@
 #include <complex>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <liquid/liquid.h>
 
 #include "usrp_io.h"

@@ -22,6 +22,7 @@
 #include <iostream>
 #include <complex>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/resource.h>
 #include <liquid/liquid.h>
 

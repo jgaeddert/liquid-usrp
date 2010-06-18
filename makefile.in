@@ -32,6 +32,7 @@ local_headers	:=		\
 	usrp_rx_gain_correction.h
 
 local_src	:=		\
+	@LEGACY_LIBS@		\
 	iqpr.cc			\
 	usrp_io.cc		\
 	usrp_rx_gain_correction.cc
