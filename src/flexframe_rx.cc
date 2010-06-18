@@ -195,12 +195,14 @@ int main (int argc, char **argv)
     flexframesyncprops_s props;
     flexframesyncprops_init_default(&props);
     props.squelch_threshold = -30.0f;
+#if 0
     props.agc_bw0 = 1e-3f;
     props.agc_bw1 = 1e-5f;
     props.agc_gmin = 1e-3f;
     props.agc_gmax = 1e4f;
     props.pll_bw0 = 1e-3f;
     props.pll_bw1 = 3e-5f;
+#endif
     flexframesync fs = flexframesync_create(&props,callback,(void*)&fd);
 
     // create decimator
