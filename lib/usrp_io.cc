@@ -372,7 +372,7 @@ void usrp_io::initialize()
     int rx_db1_id = usrp_rx->daughterboard_id(1);
 
 #if USRP_LEGACY
-    if (rx_db0_id == USRP_DBID_FLEX_400_RX) {
+    if (rx_db0_id == USRP_DBID_FLEX_400_RX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_RX\n");
         rx_db0 = new db_flex400_rx_mimo_b(usrp_rx,0);
     } else {
@@ -393,7 +393,7 @@ void usrp_io::initialize()
     int tx_db1_id = usrp_tx->daughterboard_id(1);
 
 #if USRP_LEGACY
-    if (tx_db0_id == USRP_DBID_FLEX_400_TX) {
+    if (tx_db0_id == USRP_DBID_FLEX_400_TX_MIMO_B) {
         printf("usrp daughterboard: USRP_DBID_FLEX_400_TX\n");
         tx_db0 = new db_flex400_tx_mimo_b(usrp_tx,0);
     } else {
