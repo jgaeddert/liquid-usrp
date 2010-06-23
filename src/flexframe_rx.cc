@@ -192,8 +192,8 @@ int main (int argc, char **argv)
     fd.payload = NULL;
     fd.p = p;
     // set properties to default
-    flexframesyncprops_s props;
-    flexframesyncprops_init_default(&props);
+    framesyncprops_s props;
+    framesyncprops_init_default(&props);
     props.squelch_threshold = -30.0f;
 #if 0
     props.agc_bw0 = 1e-3f;

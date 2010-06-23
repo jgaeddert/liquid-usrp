@@ -121,12 +121,10 @@ int main (int argc, char **argv)
     gport port_rx = uio->get_rx_port(USRP_CHANNEL);
 
     // framing
-    unsigned int m=3;
-    float beta=0.7f;
-    framesync64 framesync = framesync64_create(m,beta,callback,NULL);
-
-    // set properties
-    framesync64_set_squelch_threshold(framesync, -28.0f);   // RSSI threshold
+    framesyncprops_s props;
+    framesyncprops_init_default(&props);
+    props.squelch_threshold = -30.0f;
+    framesync64 framesync = framesync64_create(NULL,callback,NULL);
 
     // create decimator
     resamp2_crcf decimator = resamp2_crcf_create(37,0.0f,60.0f);

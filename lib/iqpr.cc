@@ -34,7 +34,7 @@ struct iqpr_s {
     flexframegen fg;                // frame generator
     flexframegenprops_s fgprops;    // frame generator properties
     flexframesync fs;               // frame synchronizer
-    flexframesyncprops_s fsprops;   // frame synchronizer properties
+    framesyncprops_s fsprops;   // frame synchronizer properties
 
     // filtering objects
     interp_crcf  mf_interp;         // matched filter interpolator
@@ -101,7 +101,7 @@ iqpr iqpr_create()
     q->fg = flexframegen_create(&q->fgprops);
 
     // create frame synchronizer
-    flexframesyncprops_init_default(&q->fsprops);
+    framesyncprops_init_default(&q->fsprops);
     q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
 
     // filtering objects
