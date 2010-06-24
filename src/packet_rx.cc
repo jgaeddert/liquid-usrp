@@ -42,8 +42,12 @@ static int callback(unsigned char * _header,  int _header_valid,
                     void * _userdata)
 {
 
-    if (verbose) printf("********* callback invoked, ");
     num_packets_received++;
+    if (verbose) {
+        printf("********* callback invoked, ");
+        printf("SNR=%5.1fdB, ", _stats.SNR);
+        printf("rssi=%5.1fdB, ", _stats.rssi);
+    }
 
     if ( !_header_valid ) {
         if (verbose) printf("header crc : FAIL\n");
