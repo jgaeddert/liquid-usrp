@@ -78,21 +78,12 @@ void * iqpr_tx_process(void * _q);
 void * iqpr_rx_process(void * _q);
 
 // callback
-#if LIQUID_FLEXFRAMESYNC_FRAMESYMS == 1
 int iqpr_callback(unsigned char * _rx_header,
                   int _rx_header_valid,
                   unsigned char * _rx_payload,
                   unsigned int _rx_payload_len,
-                  void * _userdata,
-                  std::complex<float> * _frame_samples,
-                  unsigned int _frame_samples_len);
-#else
-int iqpr_callback(unsigned char * _rx_header,
-                  int _rx_header_valid,
-                  unsigned char * _rx_payload,
-                  unsigned int _rx_payload_len,
+                  framesyncstats_s _stats,
                   void * _userdata);
-#endif
 
 
 #ifdef __cplusplus

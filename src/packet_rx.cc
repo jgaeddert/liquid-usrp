@@ -38,6 +38,7 @@ static unsigned int num_valid_packets_received;
 
 static int callback(unsigned char * _header,  int _header_valid,
                     unsigned char * _payload, int _payload_valid,
+                    framesyncstats_s _stats,
                     void * _userdata)
 {
 
