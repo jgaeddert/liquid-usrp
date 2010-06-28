@@ -95,7 +95,7 @@ fi
 AC_LANG_POP
 
 # Check for optional header files, libraries
-AC_CHECK_HEADERS(pthread.h fec.h fftw3.h)
+AC_CHECK_HEADERS(pthread.h fec.h fftw3.h byteswap.h)
 AC_CHECK_LIB([pthread], [pthread_mutex_init], [],
              [AC_MSG_WARN(Need POSIX thread library!)],
              [])
