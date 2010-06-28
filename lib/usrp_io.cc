@@ -19,10 +19,15 @@
  * along with liquid.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "config.h"
+
 #include <iostream>
 #include <stdio.h>
 #include <complex>
-#include <byteswap.h>
+
+#if HAVE_BYTESWAP_H
+#  include <byteswap.h>
+#endif
 
 #include "usrp_io.h"
 #include "usrp_rx_gain_correction.h"
