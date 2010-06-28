@@ -250,7 +250,7 @@ void iqpr_stop_threads(iqpr _q)
 
 void * iqpr_tx_process(void * _q)
 {
-    iqpr q = (iqpr) _q;
+    //iqpr q = (iqpr) _q;
 
     // TODO : wait for data to become avilable
 

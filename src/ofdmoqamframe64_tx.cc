@@ -125,12 +125,14 @@ int main (int argc, char **argv)
 
     // framing
     std::complex<float> frame[2048];
+    /*
     unsigned int num_symbols = num_symbols_S0 +
                                num_symbols_S1 +
                                num_symbols_S2 +
                                num_symbols_data;
     unsigned int num_frames  = num_symbols + 2*m + 1;
     unsigned int num_samples = 64*num_frames;
+    */
 
     modem mod = modem_create(MOD_QPSK,2);
 

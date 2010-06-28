@@ -12,9 +12,6 @@ extern "C" {
 #   define LIQUID_USE_COMPLEX_H 1
 #endif /* __cplusplus */
 
-// flexframesync, callback pushes framesyms?
-#define LIQUID_FLEXFRAMESYNC_FRAMESYMS  (1)
-
 typedef struct iqpr_s * iqpr;
 
 iqpr iqpr_create();
