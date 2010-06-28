@@ -19,9 +19,26 @@ void iqpr_destroy(iqpr _q);
 void iqpr_print(iqpr _q);
 
 // open connection to remote node
-int iqpr_open_connection(iqpr _q, unsigned int _node_id);
+//  _q          :   iqpr packetizer object
+//  _node_id    :   identification of destination node
+//  _link_type  :   tcp/udp/...
+//
+// returns:
+//  -1          :   link cannot be established (timeout)
+//   0          :   link cannot be established (connection refused)
+//   1          :   link established
+int iqpr_open_connection(iqpr _q,
+                         unsigned int _node_id
+                         unsigned int _link_type);
 
 // close connection to remote node
+//  _q          :   iqpr packetizer object
+//  _node_id    :   identification of destination node
+//
+// returns:
+//  -1          :   link to destination node does not exist
+//   0          :   link cannot be established (refused)
+//   1          :   link established
 int iqpr_close_connection(iqpr _q, unsigned int _node_id);
 
 // print connections
@@ -53,12 +70,13 @@ void iqpr_configure(iqpr _q, void * _props);
 //  c   :   cpu usage
 void iqpr_get_internals(iqpr _q, void * _props);
 
-#define IQPR_UDP        0   // UDP-like packet (don't wait for 'ACK')
-#define IQPR_TCP        1   // TCP-like packet (wait for 'ACK')
+#define IQPR_UDP        0       // UDP-like packet (don't wait for 'ACK')
+#define IQPR_TCP        1       // TCP-like packet (wait for 'ACK')
+#define IQPR_BROADCAST  2       // broadcast packet
 
 // internal definitions
-#define IQPR_CONNECT    2   // request connection
-#define IQPR_DISCONNECT 3   // request disconnection
+#define IQPR_CONNECT    20      // request link connection
+#define IQPR_DISCONNECT 21      // request link disconnection
 
 // send data packet to _node_id
 int iqpr_send(iqpr _q,
@@ -120,6 +138,28 @@ void iqpr_header_encode(struct iqpr_header_s _header,
 void iqpr_header_decode(unsigned char * _header_data,
                         struct iqpr_header_s * _header);
 
+#if 0
+// 
+// iqpr connection
+//
+struct iqpr_connection_s {
+    unsigned int node_id_dst;   // destination node id
+    unsigned char * buffer;
+    flexframegenprops_s fgprops;
+
+    // status variables
+    int ack_waiting;            // waiting for ack?
+    unsigned int ack_packet_id; // packet id for ack
+
+    unsigned int num_packets_received;
+    unsigned int num_valid_headers_received;
+    unsigned int num_valid_packets_received;
+    unsigned int num_bytes_received;
+};
+
+// initialize structure
+void iqpr_connection_init(struct iqpr_connection_s * _c);
+#endif
 
 #ifdef __cplusplus
 } /* extern "C" */

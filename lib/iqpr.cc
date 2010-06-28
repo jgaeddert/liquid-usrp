@@ -70,6 +70,7 @@ struct iqpr_s {
     unsigned int num_valid_headers_received;
     unsigned int num_valid_packets_received;
     unsigned int num_bytes_received;
+    unsigned int num_collisions;
 
     // threads
     pthread_t tx_thread;
@@ -218,6 +219,8 @@ int iqpr_callback(unsigned char * _rx_header,
     if (crc_pass) {
         q->num_valid_packets_received++;
         q->num_bytes_received += header.payload_len;
+
+        // TODO : check packet type, send request for immediate ACK if necessary
     } else {
         if (q->verbose) printf("  <<< payload crc fail >>>\n");
     }
