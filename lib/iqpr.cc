@@ -57,8 +57,8 @@ struct iqpr_s {
     unsigned int payload_len;       // decoded message length (bytes)
     unsigned int packet_len;        // encoded message length (bytes)
     unsigned int frame_len;         // frame length (complex samples)
-    std::complex<float> * frame;    // size: 1 x frame_len
-    std::complex<float> * mf_buffer[256];
+    std::complex<float> * frame;    // transmitter frame [size: 1 x frame_len]
+    std::complex<float> mf_buffer[256];
     std::complex<float> data_tx[512];
 
     // status variables
@@ -185,43 +185,27 @@ int iqpr_callback(unsigned char * _rx_header,
         return 0;
     }
     q->num_valid_headers_received++;
-    unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
-    if (q->verbose) printf("packet id: %6u\n", packet_id);
-    unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
-    fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
-    fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
 
-    /*
-    // TODO: validate fec0,fec1 before indexing fec_scheme_str
-    printf("    payload len : %u\n", payload_len);
-    printf("    fec0        : %s\n", fec_scheme_str[fec0]);
-    printf("    fec1        : %s\n", fec_scheme_str[fec1]);
-    */
+    // decode header
+    struct iqpr_header_s header;
+    iqpr_decode_header(_rx_header, &header);
 
-    q->p_dec = packetizer_recreate(q->p_dec, payload_len, fec0, fec1);
+    if (q->verbose) printf("packet id: %6u\n", header.packet_id);
+
+    q->p_dec = packetizer_recreate(q->p_dec,
+                                   header.payload_len,
+                                   header.fec0,
+                                   header.fec1);
 
     // decode packet
-    unsigned char msg_dec[payload_len];
+    unsigned char msg_dec[header.payload_len];
     bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, msg_dec);
     if (crc_pass) {
         q->num_valid_packets_received++;
-        q->num_bytes_received += payload_len;
+        q->num_bytes_received += header.payload_len;
     } else {
         if (q->verbose) printf("  <<< payload crc fail >>>\n");
     }
-
-    /*
-    packetizer_print(q->p_dec);
-    printf("payload len: %u\n", _rx_payload_len);
-    unsigned int i;
-    for (i=0; i<_rx_payload_len; i++)
-        printf("%.2x ", _rx_payload[i]);
-    printf("\n");
-
-    for (i=0; i<payload_len; i++)
-        printf("%.2x ", msg_dec[i]);
-    printf("\n");
-    */
 
     return 0;
 }
@@ -290,52 +274,42 @@ void * iqpr_rx_process(void * _q)
     pthread_exit(NULL);
 }
 
-void iqpr_encode_header(unsigned int _packet_id,
-                        unsigned int _payload_len,
-                        fec_scheme _fec0,
-                        fec_scheme _fec1,
-                        unsigned int _node_id_src,
-                        unsigned int _node_id_dst,
-                        unsigned char * _header)
+void iqpr_encode_header(struct iqpr_header_s _header,
+                        unsigned char * _header_data)
 {
     // encode packet id
-    _header[0] = (_packet_id >> 8) & 0x00ff;
-    _header[1] = (_packet_id     ) & 0x00ff;
+    _header_data[0] = (_header.packet_id >> 8) & 0x00ff;
+    _header_data[1] = (_header.packet_id     ) & 0x00ff;
 
     // encode payload length
-    _header[2] = (_payload_len >> 8) & 0x00ff;
-    _header[3] = (_payload_len     ) & 0x00ff;
+    _header_data[2] = (_header.payload_len >> 8) & 0x00ff;
+    _header_data[3] = (_header.payload_len     ) & 0x00ff;
 
     // encode fec schemes
-    _header[4] = (unsigned char) _fec0;
-    _header[5] = (unsigned char) _fec1;
+    _header_data[4] = (unsigned char) _header.fec0;
+    _header_data[5] = (unsigned char) _header.fec1;
 
     // encode source/destination node IDs
-    _header[6] = (unsigned char) _node_id_src;
-    _header[7] = (unsigned char) _node_id_dst;
+    _header_data[6] = (unsigned char) _header.node_id_src;
+    _header_data[7] = (unsigned char) _header.node_id_dst;
 }
 
-void iqpr_decode_header(unsigned char * _header,
-                        unsigned int * _packet_id,
-                        unsigned int * _payload_len,
-                        fec_scheme * _fec0,
-                        fec_scheme * _fec1,
-                        unsigned int * _node_id_src,
-                        unsigned int * _node_id_dst)
+void iqpr_decode_header(unsigned char * _header_data,
+                        struct iqpr_header_s * _header)
 {
     // decode packet id
-    *_packet_id = (_header[0] << 8) | _header[1];
+    _header->packet_id = (_header_data[0] << 8) | _header_data[1];
 
     // decode packet length
-    *_payload_len = (_header[2] << 8) | _header[3];
+    _header->payload_len = (_header_data[2] << 8) | _header_data[3];
 
     // decode fec schemes
-    *_fec0 = (fec_scheme)(_header[4]);
-    *_fec1 = (fec_scheme)(_header[5]);
+    _header->fec0 = (fec_scheme)(_header_data[4]);
+    _header->fec1 = (fec_scheme)(_header_data[5]);
 
     // decode source/destination node IDs
-    *_node_id_src = _header[6];
-    *_node_id_dst = _header[7];
+    _header->node_id_src = _header_data[6];
+    _header->node_id_dst = _header_data[7];
 }
 
 

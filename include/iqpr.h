@@ -53,8 +53,8 @@ void iqpr_configure(iqpr _q, void * _props);
 //  c   :   cpu usage
 void iqpr_get_internals(iqpr _q, void * _props);
 
-#define IQPR_UDP    0   // UDP-like packet (don't wait for 'ACK')
-#define IQPR_TCP    1   // TCP-like packet (wait for 'ACK')
+#define IQPR_UDP        0   // UDP-like packet (don't wait for 'ACK')
+#define IQPR_TCP        1   // TCP-like packet (wait for 'ACK')
 
 // send data packet to _node_id
 int iqpr_send(iqpr _q,
@@ -80,20 +80,20 @@ int iqpr_select(iqpr _q);
 void iqpr_start_threads(iqpr _q);
 void iqpr_stop_threads(iqpr _q);
 
-void iqpr_encode_header(unsigned int _packet_id,
-                        unsigned int _payload_len,
-                        fec_scheme _fec0,
-                        fec_scheme _fec1,
-                        unsigned int _node_id_src,
-                        unsigned int _node_id_dst,
-                        unsigned char * _header);
+struct iqpr_header_s {
+    unsigned int packet_id;
+    unsigned int payload_len;
+    fec_scheme fec0;
+    fec_scheme fec1;
+    unsigned int node_id_src;
+    unsigned int node_id_dst;
+};
 
-void iqpr_decode_header(unsigned char * _header,
-                        unsigned int * _packet_id,
-                        unsigned int * _payload_len,
-                        fec_scheme * _fec0,
-                        fec_scheme * _fec1,
-                        unsigned int * _node_id);
+void iqpr_encode_header(struct iqpr_header_s _header,
+                        unsigned char * _header_data);
+
+void iqpr_decode_header(unsigned char * _header_data,
+                        struct iqpr_header_s * _header);
 
 // threads
 void * iqpr_tx_process(void * _q);
