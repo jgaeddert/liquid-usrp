@@ -50,8 +50,8 @@ struct iqpr_s {
 
     // MAC layer
     int tx_mutex;                   // transmit mutex lock for...
-    unsigned char header_tx[8];     // transmit header
-    unsigned char header_rx[8];     // receive header
+    unsigned char header_tx[9];     // transmit header
+    unsigned char header_rx[9];     // receive header
 
     // buffers
     unsigned int payload_len;       // decoded message length (bytes)
@@ -73,9 +73,12 @@ struct iqpr_s {
     pthread_t rx_thread;
 };
 
-iqpr iqpr_create()
+iqpr iqpr_create(unsigned int _node_id)
 {
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
+
+    // set properties
+    q->node_id = _node_id;
 
     // create usrp_io
     q->uio = new usrp_io();
@@ -285,6 +288,54 @@ void * iqpr_rx_process(void * _q)
 
     printf("iqpr rx process complete.\n");
     pthread_exit(NULL);
+}
+
+void iqpr_encode_header(unsigned int _packet_id,
+                        unsigned int _payload_len,
+                        fec_scheme _fec0,
+                        fec_scheme _fec1,
+                        unsigned int _node_id_src,
+                        unsigned int _node_id_dst,
+                        unsigned char * _header)
+{
+    // encode packet id
+    _header[0] = (_packet_id >> 8) & 0x00ff;
+    _header[1] = (_packet_id     ) & 0x00ff;
+
+    // encode payload length
+    _header[2] = (_payload_len >> 8) & 0x00ff;
+    _header[3] = (_payload_len     ) & 0x00ff;
+
+    // encode fec schemes
+    _header[4] = (unsigned char) _fec0;
+    _header[5] = (unsigned char) _fec1;
+
+    // encode source/destination node IDs
+    _header[6] = (unsigned char) _node_id_src;
+    _header[7] = (unsigned char) _node_id_dst;
+}
+
+void iqpr_decode_header(unsigned char * _header,
+                        unsigned int * _packet_id,
+                        unsigned int * _payload_len,
+                        fec_scheme * _fec0,
+                        fec_scheme * _fec1,
+                        unsigned int * _node_id_src,
+                        unsigned int * _node_id_dst)
+{
+    // decode packet id
+    *_packet_id = (_header[0] << 8) | _header[1];
+
+    // decode packet length
+    *_payload_len = (_header[2] << 8) | _header[3];
+
+    // decode fec schemes
+    *_fec0 = (fec_scheme)(_header[4]);
+    *_fec1 = (fec_scheme)(_header[5]);
+
+    // decode source/destination node IDs
+    *_node_id_src = _header[6];
+    *_node_id_dst = _header[7];
 }
 
 

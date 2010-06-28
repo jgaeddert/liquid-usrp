@@ -173,7 +173,7 @@ int main (int argc, char **argv)
     resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
 
     // data buffers
-    unsigned char header[8];
+    unsigned char header[9];
     unsigned char payload[payload_len];
     unsigned char packet[packet_len];
 

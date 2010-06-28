@@ -23,7 +23,9 @@
 #include <complex>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <getopt.h>
+#include <time.h>
 #include <liquid/liquid.h>
 
 #include "usrp_io.h"
@@ -32,23 +34,30 @@
 void usage() {
     printf("ping:\n");
     printf("  u,h   :   usage/help\n");
+    printf("  i<id> :   node id, 0:255, default: random\n");
 }
 
 int main (int argc, char **argv)
 {
+    srand(time(NULL));
+
+    // options
+    unsigned int node_id = rand() % 256;
+
     //
     int d;
-    while ((d = getopt(argc,argv,"uh")) != EOF) {
+    while ((d = getopt(argc,argv,"uhi:")) != EOF) {
         switch (d) {
         case 'u':
-        case 'h':
+        case 'h':   usage();                return 0;
+        case 'i':   node_id = atoi(optarg); break;
         default:
-            usage();
-            return 0;
+            fprintf(stderr,"error: %s, unsupported option\n", argv[0]);
+            exit(1);
         }
     }
 
-    iqpr q = iqpr_create();
+    iqpr q = iqpr_create(node_id);
 
     iqpr_destroy(q);
 
