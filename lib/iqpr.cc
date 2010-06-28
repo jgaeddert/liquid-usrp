@@ -60,6 +60,9 @@ struct iqpr_s {
     std::complex<float> * frame;    // transmitter frame [size: 1 x frame_len]
     std::complex<float> mf_buffer[256];
     std::complex<float> data_tx[512];
+    unsigned int data_rx_numalloc;  // number of bytes allocated to data_rx
+    unsigned int data_rx_len;       // received data buffer length
+    unsigned char * data_rx;        // received data buffer
 
     // status variables
     int verbose;
@@ -119,6 +122,9 @@ iqpr iqpr_create(unsigned int _node_id)
     // allocate memory for arrays
     q->frame_len = flexframegen_getframelen(q->fg);
     q->frame = (std::complex<float>*) malloc( q->frame_len * sizeof(std::complex<float>) );
+    q->data_rx_numalloc = 64;
+    q->data_rx_len = 0;
+    q->data_rx = (unsigned char*) malloc( q->data_rx_numalloc * sizeof(unsigned char) );
 
     // clear status
     q->verbose = 1;
@@ -188,7 +194,7 @@ int iqpr_callback(unsigned char * _rx_header,
 
     // decode header
     struct iqpr_header_s header;
-    iqpr_decode_header(_rx_header, &header);
+    iqpr_header_decode(_rx_header, &header);
 
     if (q->verbose) printf("packet id: %6u\n", header.packet_id);
 
@@ -197,9 +203,18 @@ int iqpr_callback(unsigned char * _rx_header,
                                    header.fec0,
                                    header.fec1);
 
-    // decode packet
-    unsigned char msg_dec[header.payload_len];
-    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, msg_dec);
+    // decode packet, reallocating buffer if necessary
+    if (header.payload_len > q->data_rx_numalloc) {
+        printf("iqpr, reallocating rx data length to %u bytes\n", header.payload_len);
+        q->data_rx_numalloc = header.payload_len;
+        q->data_rx = (unsigned char*) realloc(q->data_rx, q->data_rx_numalloc*sizeof(unsigned char));
+        if (q->data_rx == NULL) {
+            fprintf(stderr,"error, could not allocate memory for received data array\n");
+            exit(1);
+        }
+    }
+    q->data_rx_len = header.payload_len;
+    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, q->data_rx);
     if (crc_pass) {
         q->num_valid_packets_received++;
         q->num_bytes_received += header.payload_len;
@@ -274,7 +289,19 @@ void * iqpr_rx_process(void * _q)
     pthread_exit(NULL);
 }
 
-void iqpr_encode_header(struct iqpr_header_s _header,
+void iqpr_header_print(struct iqpr_header_s _header)
+{
+    printf("iqpr header:\n");
+    printf("    packet id       :   %u\n", _header.packet_id);
+    printf("    payload length  :   %u\n", _header.payload_len);
+    printf("    fec (inner)     :   %s\n", fec_scheme_str[_header.fec0]);
+    printf("    fec (outer)     :   %s\n", fec_scheme_str[_header.fec1]);
+    printf("    source node id  :   %u\n", _header.node_id_src);
+    printf("    dest. node id   :   %u\n", _header.node_id_dst);
+    printf("    packet type     :   %u\n", _header.packet_type);
+}
+
+void iqpr_header_encode(struct iqpr_header_s _header,
                         unsigned char * _header_data)
 {
     // encode packet id
@@ -292,9 +319,12 @@ void iqpr_encode_header(struct iqpr_header_s _header,
     // encode source/destination node IDs
     _header_data[6] = (unsigned char) _header.node_id_src;
     _header_data[7] = (unsigned char) _header.node_id_dst;
+
+    // encode packet type
+    _header_data[8] = _header.packet_type & 0x00ff;
 }
 
-void iqpr_decode_header(unsigned char * _header_data,
+void iqpr_header_decode(unsigned char * _header_data,
                         struct iqpr_header_s * _header)
 {
     // decode packet id
@@ -310,6 +340,9 @@ void iqpr_decode_header(unsigned char * _header_data,
     // decode source/destination node IDs
     _header->node_id_src = _header_data[6];
     _header->node_id_dst = _header_data[7];
+
+    // decode packet type
+    _header->packet_type = _header_data[8];
 }
 
 
