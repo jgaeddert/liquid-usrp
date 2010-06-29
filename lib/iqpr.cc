@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/time.h>
 #include <pthread.h>
 #include <liquid/liquid.h>
 
@@ -425,4 +426,25 @@ void iqpr_header_decode(unsigned char * _header_data,
     _header->packet_type = _header_data[8];
 }
 
+
+// initialize timespec given microseconds
+void iqpr_init_timespec(struct timespec * _ts,
+                        unsigned int _usec)
+{
+    struct timeval tp;
+    int rc = gettimeofday(&tp,NULL);
+
+    if (rc == -1) {
+        fprintf(stderr,"error: iqpr_init_timespec(), failed to get time of day\n");
+        exit(1);
+    }
+
+    _ts->tv_sec = tp.tv_sec;
+    _ts->tv_nsec = (tp.tv_usec + 1000*_usec) * 1000;
+
+    while (_ts->tv_nsec > 1000000000) {
+        _ts->tv_nsec -= 1000000000;
+        _ts->tv_sec += 1;
+    }
+}
 

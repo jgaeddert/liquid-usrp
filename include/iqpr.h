@@ -141,6 +141,10 @@ void iqpr_header_encode(struct iqpr_header_s _header,
 void iqpr_header_decode(unsigned char * _header_data,
                         struct iqpr_header_s * _header);
 
+// initialize timespec given microseconds
+void iqpr_init_timespec(struct timespec * _ts,
+                        unsigned int _usec);
+
 #if 0
 // 
 // iqpr connection
