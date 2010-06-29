@@ -63,26 +63,6 @@ Solution: As root, run
 
     # /sbin/ldconfig
 
-Problem: When running nodeBooter:
-
-usrp: failed to find usrp[0]
-
-Solution:
-
-Restart the machine
-
-Problem: While running nodeBooter I get the following or similar error:
-
-    usrp_open_interface:usb_claim_interface: failed interface 2
-    could not claim interface 2: Device or resource busy
-    usrp_basic_rx: can't open rx interface
-    Failed to create usrp rx
-    terminate called after throwing an instance of
-    'CF::LifeCycle::InitializeError'
-    Aborted
-
-Solution: Disconnect USRP's USB cable, reconnect, and re-start nodeBooter.
-
 Problem: installing old(er) version of gnuradio gives error during configure:
     checking Python.h usability... no
     checking Python.h presence... no
