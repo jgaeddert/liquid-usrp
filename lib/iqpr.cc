@@ -39,8 +39,6 @@ struct iqpr_s {
 
     // filtering objects
     interp_crcf  mf_interp;         // matched filter interpolator
-    resamp2_crcf interp;            // half-band interpolator
-    resamp2_crcf decim;             // half-band decimator
 
     // packetizer objects
     packetizer p_enc;               // packet encoder
@@ -121,8 +119,6 @@ iqpr iqpr_create(unsigned int _node_id)
 
     // filtering objects
     q->mf_interp = interp_crcf_create_rrc(2,3,0.7f,0.0f);
-    q->interp = resamp2_crcf_create(37,0.0f,60.0f);
-    q->decim  = resamp2_crcf_create(37,0.0f,60.0f);
 
     // packetizer objects
     q->p_enc = packetizer_create(0,FEC_NONE,FEC_NONE);
@@ -171,8 +167,6 @@ void iqpr_destroy(iqpr _q)
 
     // destroy filter objects
     interp_crcf_destroy(_q->mf_interp);
-    resamp2_crcf_destroy(_q->interp);
-    resamp2_crcf_destroy(_q->decim);
 
     // destroy packetizer objects
     packetizer_destroy(_q->p_enc);
@@ -348,7 +342,6 @@ void * iqpr_rx_process(void * _q)
     // ports, buffers, etc.
     gport port_rx = q->uio->get_rx_port(USRP_CHANNEL);
     std::complex<float> data_rx[512];
-    std::complex<float> decim_out[256];
 
     // continuously read data, blocking on tx_mutex
     unsigned int i,n;
@@ -357,13 +350,8 @@ void * iqpr_rx_process(void * _q)
         // grab data from port
         gport_consume(port_rx, (void*)data_rx, 512);
 
-        // run decimator
-        for (n=0; n<256; n++) {
-            resamp2_crcf_decim_execute(q->decim, &data_rx[2*n], &decim_out[n]);
-        }
-
         // run through frame synchronizer
-        flexframesync_execute(q->fs, decim_out, 256);
+        flexframesync_execute(q->fs, data_rx, 512);
     }
 
     printf("iqpr rx process complete.\n");
