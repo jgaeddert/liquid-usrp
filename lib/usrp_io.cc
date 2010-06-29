@@ -23,6 +23,7 @@
 
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
 #include <complex>
 
 #if HAVE_BYTESWAP_H
@@ -73,7 +74,11 @@ usrp_io::usrp_io()
     port_resamp_tx = gport_create(4*tx_buffer_length, sizeof(std::complex<float>));
     port_resamp_rx = gport_create(4*tx_buffer_length, sizeof(std::complex<float>));
 
-    // resampling
+    // halfband resampling
+    tx_halfband_resamp = resamp2_crcf_create(37, 0, 60.0f);
+    rx_halfband_resamp = resamp2_crcf_create(37, 0, 60.0f);
+
+    // arbitrary resampling
     tx_resamp_rate = 1.0f;
     rx_resamp_rate = 1.0f;
     tx_resamp = resamp_crcf_create(tx_resamp_rate,7,0.8f,60.0f,32);
@@ -117,6 +122,8 @@ usrp_io::~usrp_io()
     gport_destroy(port_resamp_rx);
 
     // destroy resampling objects
+    resamp2_crcf_destroy(tx_halfband_resamp);
+    resamp2_crcf_destroy(rx_halfband_resamp);
     resamp_crcf_destroy(tx_resamp);
     resamp_crcf_destroy(rx_resamp);
 
@@ -561,7 +568,8 @@ void* usrp_io_tx_resamp_process(void * _u)
     // local buffers
     unsigned int n = usrp->tx_buffer_length;
     std::complex<float> data_in[n];
-    std::complex<float> data_out[2*n];
+    std::complex<float> data_resamp[2*n];
+    std::complex<float> data_out[4*n];
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
@@ -576,21 +584,28 @@ void* usrp_io_tx_resamp_process(void * _u)
 
         if (gport_eom) break;
 
-        // run resampler
+        // run arbitrary resampler
         num_written_total=0;
         for (i=0; i<n; i++) {
             resamp_crcf_execute(usrp->tx_resamp,
                                 data_in[i],
-                                &data_out[num_written_total],
+                                &data_resamp[num_written_total],
                                 &num_written);
             num_written_total += num_written;
+        }
+ 
+        // run halfband interpolator
+        for (i=0; i<num_written_total; i++) {
+            resamp2_crcf_interp_execute(usrp->tx_halfband_resamp,
+                                        data_resamp[i],
+                                        &data_out[2*i]);
         }
 
         // push data to usrp thread
         gport_eom =
         gport_produce(usrp->port_tx,
                       (void*)data_out,
-                      num_written_total);
+                      2*num_written_total);
     }
 
     std::cout << "usrp_io_tx_resamp_process() terminating" << std::endl;
@@ -605,11 +620,18 @@ void* usrp_io_rx_resamp_process(void * _u)
     // local buffers
     unsigned int n = usrp->rx_buffer_length;
     std::complex<float> data_in[n];
-    std::complex<float> data_out[2*n];
+    std::complex<float> data_resamp[n/2];
+    std::complex<float> data_out[n];
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
     int gport_eom=0;
+
+    // ensure n is even
+    if ( (n % 2) != 0 ) {
+        fprintf(stderr,"error: usrp_io_rx_resamp_process(), buffer length needs to be even\n");
+        exit(1);
+    }
 
     while (usrp->rx_active && !gport_eom) {
         // get data from port_rx
@@ -620,11 +642,18 @@ void* usrp_io_rx_resamp_process(void * _u)
 
         if (gport_eom) break;
 
-        // run resampler
+        // run halfband decimator
+        for (i=0; i<n/2; i++) {
+            resamp2_crcf_decim_execute(usrp->rx_halfband_resamp,
+                                       &data_in[2*i],
+                                       &data_resamp[i]);
+        }
+
+        // run arbitrary resampler
         num_written_total=0;
-        for (i=0; i<n; i++) {
+        for (i=0; i<n/2; i++) {
             resamp_crcf_execute(usrp->rx_resamp,
-                                data_in[i],
+                                data_resamp[i],
                                 &data_out[num_written_total],
                                 &num_written);
             num_written_total += num_written;

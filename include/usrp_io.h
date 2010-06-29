@@ -185,6 +185,10 @@ protected:
     unsigned int tx_interp0, tx_interp1;
     unsigned int rx_decim0, rx_decim1;
 
+    // halfband interpolator/decimator
+    resamp2_crcf rx_halfband_resamp;
+    resamp2_crcf tx_halfband_resamp;
+
     // arbitrary resampling properties/objects
     float rx_resamp_rate;
     float tx_resamp_rate;
