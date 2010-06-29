@@ -48,6 +48,7 @@ local_progs	:=			\
 	src/iqpr_test.cc		\
 	src/packet_tx.cc 		\
 	src/packet_rx.cc		\
+	src/ping.cc			\
 	src/ofdmframe64_tx.cc		\
 	src/ofdmframe64_rx.cc		\
 	src/ofdmoqamframe64_tx.cc	\
