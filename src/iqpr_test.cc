@@ -32,7 +32,7 @@
 #include "iqpr.h"
  
 void usage() {
-    printf("ping:\n");
+    printf("iqpr_test:\n");
     printf("  u,h   :   usage/help\n");
     printf("  i<id> :   node id, 0:255, default: random\n");
 }

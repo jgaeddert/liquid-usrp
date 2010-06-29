@@ -21,6 +21,7 @@ src/firpfbch_tx
 src/flexframe_rx
 src/flexframe_tx
 src/fmtx
+src/iqpr_test
 src/jammer
 src/ofdmframe64_rx
 src/ofdmframe64_tx
