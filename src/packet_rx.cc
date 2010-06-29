@@ -131,17 +131,12 @@ int main (int argc, char **argv)
     props.squelch_threshold = -30.0f;
     framesync64 framesync = framesync64_create(NULL,callback,NULL);
 
-    // create decimator
-    resamp2_crcf decimator = resamp2_crcf_create(37,0.0f,60.0f);
-    
     unsigned int rx_buffer_length = 512;
-    std::complex<float> decim_out[rx_buffer_length];
  
     // start data transfer
     uio->start_rx(USRP_CHANNEL);
     printf("usrp data transfer started\n");
  
-    unsigned int n;
     std::complex<float> data_rx[rx_buffer_length];
 
     // reset counter
@@ -153,13 +148,8 @@ int main (int argc, char **argv)
         // grab data from port
         gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
 
-        // run decimator
-        for (n=0; n<rx_buffer_length/2; n++) {
-            resamp2_crcf_decim_execute(decimator, &data_rx[2*n], &decim_out[n]);
-        }
-
         // run through frame synchronizer
-        framesync64_execute(framesync, decim_out, rx_buffer_length/2);
+        framesync64_execute(framesync, data_rx, rx_buffer_length);
     }
  
  
@@ -177,7 +167,6 @@ int main (int argc, char **argv)
 
     // clean it up
     framesync64_destroy(framesync);
-    resamp2_crcf_destroy(decimator);
 
     delete uio;
     return 0;

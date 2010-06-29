@@ -164,13 +164,7 @@ int main (int argc, char **argv)
     // create pulse-shaping interpolator
     unsigned int m=3;
     float beta=0.7f;
-    unsigned int h_len = 2*2*m + 1;
-    float h[h_len];
-    design_rrc_filter(2,m,beta,0,h);
-    interp_crcf mfinterp = interp_crcf_create(2,h,h_len);
-
-    // create half-band interpolator
-    resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
+    interp_crcf mfinterp = interp_crcf_create_rrc(2,m,beta,0);
 
     // data buffers
     unsigned char header[9];
@@ -180,12 +174,10 @@ int main (int argc, char **argv)
     // start usrp data transfer
     uio->start_tx(USRP_CHANNEL);
 
-    std::complex<float> data_tx[512];
-
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/10.0f);
  
-    unsigned int i, j, n, pid=0;
+    unsigned int i, j, pid=0;
     // start transmitter
     for (i=0; i<num_blocks; i++) {
         // generate the frame / transmit silence
@@ -231,22 +223,8 @@ int main (int argc, char **argv)
                 interp_crcf_execute(mfinterp, 0.0f, &mfbuffer[2*j]);
         }
 
-        // send data to usrp_io in blocks
-        unsigned int num_samples_remaining = 2*frame_len;
-        n = 0;
-        unsigned int p;
-
-        while (num_samples_remaining > 0) {
-            p = num_samples_remaining > 256 ? 256 : num_samples_remaining;
-
-            // interpolate using half-band interpolator
-            for (j=0; j<p; j++)
-                resamp2_crcf_interp_execute(interpolator, mfbuffer[n+j], &data_tx[2*j]);
-            n+=p;
-            num_samples_remaining -= p;
-
-            gport_produce(port_tx,(void*)data_tx,2*p);
-        }
+        // send data to usrp via port
+        gport_produce(port_tx,(void*)mfbuffer,2*frame_len);
  
     }
  
@@ -256,7 +234,6 @@ int main (int argc, char **argv)
     // clean it up
     packetizer_destroy(p);
     flexframegen_destroy(fg);
-    resamp2_crcf_destroy(interpolator);
     interp_crcf_destroy(mfinterp);
     delete uio;
     return 0;

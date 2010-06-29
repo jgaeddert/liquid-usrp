@@ -106,9 +106,6 @@ int main (int argc, char **argv)
     unsigned int m=3; // delay
     float beta=0.7f;  // excess bandwidth factor
 
-    resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
-    std::complex<float> data_tx[512];
-
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/10.0f);
  
@@ -120,7 +117,7 @@ int main (int argc, char **argv)
     unsigned char header[24];
     unsigned char payload[64];
 
-    unsigned int j, n, pid=0;
+    unsigned int j, pid=0;
 
     // start usrp data transfer
     uio->start_tx(USRP_CHANNEL);
@@ -143,18 +140,11 @@ int main (int argc, char **argv)
             framegen64_flush(framegen, 2048, frame);
         }
 
-        // send data to usrp_io in blocks
-        for (n=0; n<2048; n+=256) {
-            // run interpolator
-            unsigned int j;
-            for (j=0; j<256; j++) {
-                frame[n+j] *= g;
-                resamp2_crcf_interp_execute(interpolator,
-                    frame[n+j], &data_tx[2*j]);
-            }
+        // apply gain
+        for (j=0; j<2048; j++)
+            frame[i] *= g;
 
-            gport_produce(port_tx,(void*)data_tx,512);
-        }
+        gport_produce(port_tx,(void*)frame,2048);
 
     }
  
@@ -162,7 +152,6 @@ int main (int argc, char **argv)
     printf("usrp data transfer complete\n");
 
     // clean it up
-    resamp2_crcf_destroy(interpolator);
     delete uio;
     return 0;
 }
