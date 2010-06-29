@@ -114,11 +114,8 @@ int main (int argc, char **argv)
     float dt=0.0f;      // fractional sample delay
     //float beta=0.3f;    // excess bandwidth factor
 
-    // create filter
-    unsigned int h_len = 2*k*m+1;
-    float h[h_len];
-    design_rrc_filter(k,m,beta,dt,h);
-    interp_crcf nyquist_filter = interp_crcf_create(k,h,h_len);
+    // create matched-filter interpolator
+    interp_crcf nyquist_filter = interp_crcf_create_rrc(k,m,beta,dt);
 
     resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
     std::complex<float> data_tx[512];
