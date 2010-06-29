@@ -75,6 +75,13 @@ struct iqpr_s {
     // threads
     pthread_t tx_thread;
     pthread_t rx_thread;
+
+    // mutexes, conditional variables
+    pthread_mutex_t usrp_mutex;     // usrp mutex
+    int tx_hold;                    // hold transmitter flag (csma)
+    int tx_waiting;                 // transmitter waiting flag
+    pthread_cond_t tx_data_ready;   // transmitter data condition
+    pthread_cond_t tx_hold_ready;   // transmitter hold condition
 };
 
 iqpr iqpr_create(unsigned int _node_id)
@@ -130,6 +137,13 @@ iqpr iqpr_create(unsigned int _node_id)
     // clear status
     q->verbose = 1;
 
+    // initialize mutexes, conditional variables
+    pthread_mutex_init(&q->usrp_mutex, NULL);
+    pthread_cond_init(&q->tx_data_ready, NULL);
+    pthread_cond_init(&q->tx_hold_ready, NULL);
+    q->tx_hold = 0;
+    q->tx_waiting = 0;
+
     // start tx/rx threads
     iqpr_start_threads(q);
 
@@ -141,6 +155,11 @@ void iqpr_destroy(iqpr _q)
 {
     // stop tx/rx threads
     iqpr_stop_threads(_q);
+
+    // destroy mutexes, conditional variables
+    pthread_mutex_destroy(&_q->usrp_mutex);
+    pthread_cond_destroy(&_q->tx_data_ready);
+    pthread_cond_destroy(&_q->tx_hold_ready);
 
     // destroy usrp_io object
     delete _q->uio;
@@ -228,6 +247,32 @@ int iqpr_callback(unsigned char * _rx_header,
     return 0;
 }
 
+void iqpr_callback_csma_lock(void * _userdata)
+{
+    iqpr q = (iqpr) _userdata;
+
+    // set tx hold flag
+    q->tx_hold = 1;
+}
+
+void iqpr_callback_csma_unlock(void * _userdata)
+{
+    iqpr q = (iqpr) _userdata;
+
+    // release tx hold flag
+    q->tx_hold = 0;
+
+    // if transmitter is waiting for data, signal condition
+    if (q->tx_waiting) {
+        pthread_mutex_lock(&q->usrp_mutex);
+
+        pthread_cond_signal(&q->tx_hold_ready);
+
+        pthread_mutex_unlock(&q->usrp_mutex);
+    }
+}
+
+
 // start threads
 void iqpr_start_threads(iqpr _q)
 {
@@ -255,9 +300,41 @@ void iqpr_stop_threads(iqpr _q)
 
 void * iqpr_tx_process(void * _q)
 {
-    //iqpr q = (iqpr) _q;
+    iqpr q = (iqpr) _q;
 
     // TODO : wait for data to become avilable
+    unsigned int i;
+    for (i=0; i<100; i++) {
+        usleep(10000);
+        // wait for data
+        // pthread_mutex_lock(&q->usrp_mutex);
+        //
+        // // this automatically unlocks usrp_mutex
+        // pthread_cond_wait(&q->tx_data_ready,
+        //                   &q->usrp_mutex);
+
+        // received data transmit request!
+
+        // assemble frame...
+
+        // check if tx hold is on
+        if (q->tx_hold) {
+            // set flag to tell csma that transmitter is waiting
+            q->tx_waiting = 1;
+
+            // this atomically unlocks usrp_mutex and waits for
+            // pthread_cond_signal(&q->tx_hold_ready)
+            pthread_cond_wait(&q->tx_hold_ready,
+                              &q->usrp_mutex);
+
+            // clear waiting flag
+            q->tx_waiting = 0;
+        }
+
+        // transmit frame
+
+        // pthread_mutex_unlock(&q->usrp_mutex);
+    }
 
     printf("iqpr tx process complete.\n");
     pthread_exit(NULL);

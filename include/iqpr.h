@@ -115,6 +115,9 @@ int iqpr_callback(unsigned char * _rx_header,
                   framesyncstats_s _stats,
                   void * _userdata);
 
+void iqpr_callback_csma_lock(void * _userdata);
+void iqpr_callback_csma_unlock(void * _userdata);
+
 
 // iqpr header 
 struct iqpr_header_s {
