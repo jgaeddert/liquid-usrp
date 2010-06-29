@@ -114,7 +114,7 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(512));
+    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(512));
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
