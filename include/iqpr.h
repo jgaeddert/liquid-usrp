@@ -28,7 +28,7 @@ void iqpr_print(iqpr _q);
 //   0          :   link cannot be established (connection refused)
 //   1          :   link established
 int iqpr_open_connection(iqpr _q,
-                         unsigned int _node_id
+                         unsigned int _node_id,
                          unsigned int _link_type);
 
 // close connection to remote node
