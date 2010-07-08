@@ -32,6 +32,7 @@
 #include <math.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <sys/time.h>
 #include <complex>
 #include <liquid/liquid.h>
 #include "usrp_io.h"
@@ -65,6 +66,7 @@ typedef struct {
     unsigned int pid;               // packet id
 
     // receiver
+    pthread_mutex_t rx_data_mutex;
     unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
 
     // transmitter
@@ -78,6 +80,11 @@ typedef struct {
 } pingdata;
 
 void pingdata_init(pingdata * _q);
+void pingdata_destroy(pingdata * _q);
+
+// initialize timespec given microseconds
+void ping_init_timespec(struct timespec * _ts,
+                        unsigned int _usec);
 
 int main (int argc, char **argv) {
     // options
@@ -159,6 +166,11 @@ int main (int argc, char **argv) {
 
     // delete usrp object
     delete usrp;
+
+    // destroy main data object
+    pingdata_destroy(&q);
+
+    return 0;
 }
 
 void * tx_handler ( void * _userdata )
@@ -198,7 +210,16 @@ void * tx_handler ( void * _userdata )
 
     while (q->continue_running)
     {
-        // TODO wait for signal...
+        // wait for signal condition
+        pthread_mutex_lock(&q->tx_data_mutex);
+        pthread_cond_wait(&q->tx_data_ready,
+                          &q->tx_data_mutex);
+
+        // check if we have received kill signal
+        if (!q->continue_running)
+            break;
+
+        printf("[tx] sending packet %u...\n", q->pid);
 
         // prepare header
         header[0] = (q->pid >> 8) & 0xff;
@@ -214,6 +235,9 @@ void * tx_handler ( void * _userdata )
 
         // generate frame
         flexframegen_execute(fg, header, payload, frame);
+
+        // release tx mutex
+        pthread_mutex_unlock(&q->tx_data_mutex);
 
         // run interpolator
         for (i=0; i<frame_len; i++) {
@@ -253,7 +277,20 @@ void * pm_handler ( void * _userdata )
 {
     pingdata * q = (pingdata*) _userdata;
 
-    usleep(10000000);
+    unsigned int i;
+    for (i=0; i<10; i++) {
+        // send data packet
+        pthread_mutex_lock(&q->tx_data_mutex);
+
+        // prepare header...
+
+        printf("[pm] sending packet %u...\n", q->pid);
+
+        pthread_mutex_unlock(&q->tx_data_mutex);
+        pthread_cond_signal(&q->tx_data_ready);
+
+        usleep(1000000);
+    }
 
     // signal other threads to stop
     q->continue_running = 0;
@@ -273,5 +310,43 @@ void pingdata_init(pingdata * _q)
     _q->node_type = NODE_MASTER;
     _q->payload_len = 1024;
     _q->pid = 0;
+
+    // create mutexes, conditions
+    pthread_mutex_init(&_q->tx_data_mutex, NULL);
+    pthread_mutex_init(&_q->rx_data_mutex, NULL);
+    pthread_cond_init(&_q->tx_data_ready, NULL);
+}
+
+void pingdata_destroy(pingdata * _q)
+{
+    // destroy mutexes, conditions
+    pthread_mutex_destroy(&_q->tx_data_mutex);
+    pthread_mutex_destroy(&_q->rx_data_mutex);
+    pthread_cond_destroy(&_q->tx_data_ready);
+}
+
+//
+// other useful methods
+//
+
+// initialize timespec given microseconds
+void ping_init_timespec(struct timespec * _ts,
+                        unsigned int _usec)
+{
+    struct timeval tp;
+    int rc = gettimeofday(&tp,NULL);
+
+    if (rc == -1) {
+        fprintf(stderr,"error: ping_init_timespec(), failed to get time of day\n");
+        exit(1);
+    }
+
+    _ts->tv_sec = tp.tv_sec;
+    _ts->tv_nsec = (tp.tv_usec + 1000*_usec) * 1000;
+
+    while (_ts->tv_nsec > 1000000000) {
+        _ts->tv_nsec -= 1000000000;
+        _ts->tv_sec += 1;
+    }
 }
 
