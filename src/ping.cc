@@ -267,11 +267,11 @@ void * tx_handler ( void * _userdata )
         gport_produce(q->port_tx, (void*)mfbuffer, 2*frame_len);
 
         // flush interpolator with zeros
-        for (i=0; i<32; i++) {
+        for (i=0; i<248; i++) {
             interp_crcf_execute(interp, 0, &mfbuffer[2*i]);
         }
 
-        gport_produce(q->port_tx, (void*)mfbuffer, 64);
+        gport_produce(q->port_tx, (void*)mfbuffer, 496);
 
         usleep(1000000);
     }
