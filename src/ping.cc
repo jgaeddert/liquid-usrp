@@ -216,20 +216,27 @@ void * tx_handler ( void * _userdata )
 
     std::complex<float> mfbuffer[2*frame_len];
 
+    // mutex conditional timed wait
+    struct timespec ts;
+    int rc;
+
     printf("tx thread running...\n");
 
     while (q->continue_running)
     {
-#if 0
         // wait for signal condition
+        ping_init_timespec(&ts, 100);
         pthread_mutex_lock(&q->tx_data_mutex);
-        pthread_cond_wait(&q->tx_data_ready,
-                          &q->tx_data_mutex);
-#endif
+        rc = pthread_cond_timedwait(&q->tx_data_ready,
+                                    &q->tx_data_mutex,
+                                    &ts);
 
-        // check if we have received kill signal
-        if (!q->continue_running)
-            break;
+        // check of condition was flagged or just timed out
+        if (rc != 0) {
+            // release tx mutex and continue
+            pthread_mutex_unlock(&q->tx_data_mutex);
+            continue;
+        }
 
         printf("[tx] sending packet %u...\n", q->pid);
 
@@ -251,12 +258,8 @@ void * tx_handler ( void * _userdata )
         // generate frame
         flexframegen_execute(fg, header, packet, frame);
 
-#if 0
         // release tx mutex
         pthread_mutex_unlock(&q->tx_data_mutex);
-#else
-        q->pid = (q->pid+1) & 0xffff;
-#endif
 
         // run interpolator
         for (i=0; i<frame_len; i++) {
@@ -272,8 +275,6 @@ void * tx_handler ( void * _userdata )
         }
 
         gport_produce(q->port_tx, (void*)mfbuffer, 496);
-
-        usleep(1000000);
     }
 
     // clean up allocated memory objects
@@ -323,7 +324,6 @@ void * pm_handler ( void * _userdata )
 
     unsigned int i;
     for (i=0; i<10; i++) {
-#if 0
         // send data packet
         pthread_mutex_lock(&q->tx_data_mutex);
 
@@ -333,12 +333,11 @@ void * pm_handler ( void * _userdata )
 
         pthread_mutex_unlock(&q->tx_data_mutex);
         pthread_cond_signal(&q->tx_data_ready);
-#endif
 
         usleep(1000000);
     }
 
-    // signal other threads to stop
+    // signal other threads to stop running
     q->continue_running = 0;
 
     printf("pm_handler finished.\n");
