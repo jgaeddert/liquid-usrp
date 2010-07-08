@@ -203,6 +203,10 @@ void * tx_handler ( void * _userdata )
         // prepare header
         header[0] = (q->pid >> 8) & 0xff;
         header[1] = (q->pid     ) & 0xff;
+        header[2] = (q->payload_len >> 8) & 0xff;
+        header[3] = (q->payload_len >> 8) & 0xff;
+        header[4] = (unsigned char)(FEC_NONE);
+        header[5] = (unsigned char)(FEC_NONE);
 
         // generate frame data
         for (i=0; i<q->payload_len; i++)
