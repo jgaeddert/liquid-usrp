@@ -61,6 +61,8 @@ typedef struct {
     // common
     int continue_running;           // continue running transceiver flag
     int node_type;                  // master/slave
+    unsigned int payload_len;       // payload length
+    unsigned int pid;               // packet id
 
     // receiver
     unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
@@ -75,6 +77,8 @@ typedef struct {
     unsigned int num_timeouts;      // running timeout counter
 } pingdata;
 
+void pingdata_init(pingdata * _q);
+
 int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
@@ -82,8 +86,7 @@ int main (int argc, char **argv) {
 
     // initialize pingdata structure
     pingdata q;
-    q.continue_running = 1;
-    q.node_type = NODE_MASTER;  // master node default
+    pingdata_init(&q);
 
     //
     int d;
@@ -162,29 +165,63 @@ void * tx_handler ( void * _userdata )
 {
     pingdata * q = (pingdata*) _userdata;
 
+    // create flexframe generator
+    flexframegenprops_s fgprops;
+    fgprops.rampup_len = 64;
+    fgprops.phasing_len = 64;
+    fgprops.payload_len = q->payload_len;
+    fgprops.mod_scheme = MOD_QPSK;
+    fgprops.mod_bps = 2;
+    fgprops.rampdn_len = 64;
+
+    flexframegen fg = flexframegen_create(&fgprops);
+    flexframegen_print(fg);
+
     // interpolator options
     unsigned int m=4;
     float beta=0.3f;
     interp_crcf interp = interp_crcf_create_rrc(2,m,beta,0);
 
-    unsigned int num_symbols=256;
-    std::complex<float> s;
-    std::complex<float> x[2*num_symbols];
     unsigned int i;
-    unsigned int n;
+    float g = 0.5f; // transmit gain
+
+    // allocate memory for buffers
+    unsigned char header[14];
+    unsigned char payload[q->payload_len];
+
+    unsigned int frame_len = flexframegen_getframelen(fg);
+    std::complex<float> frame[frame_len];
+
+    std::complex<float> mfbuffer[2*frame_len];
+
     printf("tx thread running...\n");
 
-    while (q->continue_running) {
-        // generate data
-        for (i=0; i<num_symbols; i++) {
-            s.real() = rand()%2 ? 1.0f : -1.0f;
-            s.imag() = rand()%2 ? 1.0f : -1.0f;
-            interp_crcf_execute(interp, s, &x[2*i]);
+    while (q->continue_running)
+    {
+        // TODO wait for signal...
+
+        // prepare header
+        header[0] = (q->pid >> 8) & 0xff;
+        header[1] = (q->pid     ) & 0xff;
+
+        // generate frame data
+        for (i=0; i<q->payload_len; i++)
+            frame[i] = rand() & 0xff;
+
+        // generate frame
+        flexframegen_execute(fg, header, payload, frame);
+
+        // run interpolator
+        for (i=0; i<frame_len; i++) {
+            interp_crcf_execute(interp, frame[i]*g, &mfbuffer[2*i]);
         }
 
         // produce data in buffer
-        gport_produce(q->port_tx,(void*)x,2*num_symbols);
+        gport_produce(q->port_tx, (void*)mfbuffer, 2*frame_len);
     }
+
+    // clean up allocated memory objects
+    flexframegen_destroy(fg);
     interp_crcf_destroy(interp);
    
     printf("tx_handler finished.\n");
@@ -212,7 +249,7 @@ void * pm_handler ( void * _userdata )
 {
     pingdata * q = (pingdata*) _userdata;
 
-    usleep(1000000);
+    usleep(10000000);
 
     // signal other threads to stop
     q->continue_running = 0;
@@ -221,4 +258,16 @@ void * pm_handler ( void * _userdata )
     pthread_exit(0); // exit thread
 }
 
+
+// 
+// pingdata internal methods
+//
+
+void pingdata_init(pingdata * _q)
+{
+    _q->continue_running = 1;
+    _q->node_type = NODE_MASTER;
+    _q->payload_len = 1024;
+    _q->pid = 0;
+}
 
