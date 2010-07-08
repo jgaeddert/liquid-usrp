@@ -31,6 +31,7 @@
 #include <string.h>
 #include <math.h>
 #include <getopt.h>
+#include <pthread.h>
 #include <complex>
 #include <liquid/liquid.h>
 #include "usrp_io.h"
@@ -57,9 +58,21 @@ typedef struct {
     gport port_tx;                  // transmit port
     gport port_rx;                  // receive port
 
-    unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
-    int node_type;                  // master/slave
+    // common
     int continue_running;           // continue running transceiver flag
+    int node_type;                  // master/slave
+
+    // receiver
+    unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
+
+    // transmitter
+    pthread_mutex_t tx_data_mutex;
+    pthread_cond_t  tx_data_ready;
+    unsigned char * tx_data;
+    unsigned int packet_id_tx;
+
+    // packet manager
+    unsigned int num_timeouts;      // running timeout counter
 } pingdata;
 
 int main (int argc, char **argv) {
@@ -70,6 +83,7 @@ int main (int argc, char **argv) {
     // initialize pingdata structure
     pingdata q;
     q.continue_running = 1;
+    q.node_type = NODE_MASTER;  // master node default
 
     //
     int d;
