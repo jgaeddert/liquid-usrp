@@ -82,7 +82,7 @@ void pingdata_init(pingdata * _q);
 int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
-    float samplerate = 100e3f;
+    float symbolrate = 100e3f;
 
     // initialize pingdata structure
     pingdata q;
@@ -95,7 +95,7 @@ int main (int argc, char **argv) {
         case 'u':
         case 'h': usage();                      return 0;
         case 'f': frequency = atof(optarg);     break;
-        case 'b': samplerate = atof(optarg);    break;
+        case 'b': symbolrate = atof(optarg);    break;
         case 'm': q.node_type = NODE_MASTER;    break;
         case 's': q.node_type = NODE_SLAVE;     break;
         default:
@@ -109,9 +109,9 @@ int main (int argc, char **argv) {
 
     // set properties
     usrp->set_tx_freq(USRP_CHANNEL, frequency);
-    usrp->set_tx_samplerate(samplerate);
+    usrp->set_tx_samplerate(2*symbolrate);
     usrp->set_rx_freq(USRP_CHANNEL, frequency);
-    usrp->set_rx_samplerate(samplerate);
+    usrp->set_rx_samplerate(2*symbolrate);
     usrp->enable_auto_tx(USRP_CHANNEL);
 
     // initialize ports
