@@ -62,23 +62,32 @@ typedef struct {
     // common
     int continue_running;           // continue running transceiver flag
     int node_type;                  // master/slave
-    unsigned int payload_len;       // payload length
+    unsigned int payload_len;       // payload length (raw data)
+    unsigned int packet_len;        // packet length (encoded data)
     unsigned int pid;               // packet id
 
     // receiver
     pthread_mutex_t rx_data_mutex;
     unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
+    packetizer p_dec;               // packet decoder
 
     // transmitter
     pthread_mutex_t tx_data_mutex;
     pthread_cond_t  tx_data_ready;
     unsigned char * tx_data;
     unsigned int packet_id_tx;
+    packetizer p_enc;               // packet encoder
 
     // packet manager
     unsigned int num_timeouts;      // running timeout counter
 } pingdata;
 
+static int ping_callback(unsigned char * _rx_header,
+                         int _rx_header_valid,
+                         unsigned char * _rx_payload,
+                         unsigned int _rx_payload_len,
+                         framesyncstats_s _stats,
+                         void * _userdata);
 void pingdata_init(pingdata * _q);
 void pingdata_destroy(pingdata * _q);
 
@@ -181,7 +190,7 @@ void * tx_handler ( void * _userdata )
     flexframegenprops_s fgprops;
     fgprops.rampup_len = 64;
     fgprops.phasing_len = 64;
-    fgprops.payload_len = q->payload_len;
+    fgprops.payload_len = q->packet_len;    // NOTE : payload_len for frame is packet_len
     fgprops.mod_scheme = MOD_QPSK;
     fgprops.mod_bps = 2;
     fgprops.rampdn_len = 64;
@@ -190,8 +199,8 @@ void * tx_handler ( void * _userdata )
     flexframegen_print(fg);
 
     // interpolator options
-    unsigned int m=4;
-    float beta=0.3f;
+    unsigned int m=3;
+    float beta=0.7f;
     interp_crcf interp = interp_crcf_create_rrc(2,m,beta,0);
 
     unsigned int i;
@@ -199,7 +208,8 @@ void * tx_handler ( void * _userdata )
 
     // allocate memory for buffers
     unsigned char header[14];
-    unsigned char payload[q->payload_len];
+    unsigned char payload[q->payload_len];  // raw data
+    unsigned char packet[q->packet_len];    // encoded message length
 
     unsigned int frame_len = flexframegen_getframelen(fg);
     std::complex<float> frame[frame_len];
@@ -210,10 +220,12 @@ void * tx_handler ( void * _userdata )
 
     while (q->continue_running)
     {
+#if 0
         // wait for signal condition
         pthread_mutex_lock(&q->tx_data_mutex);
         pthread_cond_wait(&q->tx_data_ready,
                           &q->tx_data_mutex);
+#endif
 
         // check if we have received kill signal
         if (!q->continue_running)
@@ -221,23 +233,30 @@ void * tx_handler ( void * _userdata )
 
         printf("[tx] sending packet %u...\n", q->pid);
 
+        // generate frame data
+        for (i=0; i<q->payload_len; i++)
+            payload[i] = rand() % 256;
+
+        // encode packet
+        packetizer_encode(q->p_enc, payload, packet);
+
         // prepare header
         header[0] = (q->pid >> 8) & 0xff;
         header[1] = (q->pid     ) & 0xff;
         header[2] = (q->payload_len >> 8) & 0xff;
-        header[3] = (q->payload_len >> 8) & 0xff;
+        header[3] = (q->payload_len     ) & 0xff;
         header[4] = (unsigned char)(FEC_NONE);
         header[5] = (unsigned char)(FEC_NONE);
 
-        // generate frame data
-        for (i=0; i<q->payload_len; i++)
-            frame[i] = rand() & 0xff;
-
         // generate frame
-        flexframegen_execute(fg, header, payload, frame);
+        flexframegen_execute(fg, header, packet, frame);
 
+#if 0
         // release tx mutex
         pthread_mutex_unlock(&q->tx_data_mutex);
+#else
+        q->pid = (q->pid+1) & 0xffff;
+#endif
 
         // run interpolator
         for (i=0; i<frame_len; i++) {
@@ -246,6 +265,15 @@ void * tx_handler ( void * _userdata )
 
         // produce data in buffer
         gport_produce(q->port_tx, (void*)mfbuffer, 2*frame_len);
+
+        // flush interpolator with zeros
+        for (i=0; i<32; i++) {
+            interp_crcf_execute(interp, 0, &mfbuffer[2*i]);
+        }
+
+        gport_produce(q->port_tx, (void*)mfbuffer, 64);
+
+        usleep(1000000);
     }
 
     // clean up allocated memory objects
@@ -261,12 +289,28 @@ void * rx_handler ( void * _userdata )
 {
     pingdata * q = (pingdata*) _userdata;
 
+    // create flexframe synchronizer
+    framesyncprops_s fsprops;
+    framesyncprops_init_default(&fsprops);
+    fsprops.squelch_threshold = -30.0f;
+    flexframesync fs = flexframesync_create(&fsprops, ping_callback, (void*)q);
+
+    // allocate memory for buffers
     std::complex<float> data_rx[512];
 
+    // read samples from buffer, run through frame synchronizer
     while (q->continue_running) {
+        // TODO : use mutex lock ?
+
+        // grab data from port
         gport_consume(q->port_rx,(void*)data_rx,512);
-        
+
+        // run through frame synchronizer
+        flexframesync_execute(fs, data_rx, 512);
     }
+
+    // clean up allocated memory
+    flexframesync_destroy(fs);
 
     printf("rx_handler finished.\n");
     pthread_exit(0); // exit thread
@@ -279,6 +323,7 @@ void * pm_handler ( void * _userdata )
 
     unsigned int i;
     for (i=0; i<10; i++) {
+#if 0
         // send data packet
         pthread_mutex_lock(&q->tx_data_mutex);
 
@@ -288,6 +333,7 @@ void * pm_handler ( void * _userdata )
 
         pthread_mutex_unlock(&q->tx_data_mutex);
         pthread_cond_signal(&q->tx_data_ready);
+#endif
 
         usleep(1000000);
     }
@@ -304,12 +350,64 @@ void * pm_handler ( void * _userdata )
 // pingdata internal methods
 //
 
+static int ping_callback(unsigned char * _rx_header,
+                         int _rx_header_valid,
+                         unsigned char * _rx_payload,
+                         unsigned int _rx_payload_len,
+                         framesyncstats_s _stats,
+                         void * _userdata)
+{
+    pingdata * q = (pingdata*) _userdata;
+
+    int verbose = 1;
+    if (verbose) {
+        printf("********* callback invoked, ");
+        printf("SNR=%5.1fdB, ", _stats.SNR);
+        printf("rssi=%5.1fdB, ", _stats.rssi);
+    }
+
+    if ( !_rx_header_valid ) {
+        if (verbose) printf("header crc : FAIL\n");
+        return 0;
+    }
+    unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
+    if (verbose) printf("packet id: %6u\n", packet_id);
+    unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
+    fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
+    fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
+
+    /*
+    // TODO: validate fec0,fec1 before indexing fec_scheme_str
+    printf("    payload len : %u\n", payload_len);
+    printf("    fec0        : %s\n", fec_scheme_str[fec0]);
+    printf("    fec1        : %s\n", fec_scheme_str[fec1]);
+    */
+
+    q->p_dec = packetizer_recreate(q->p_dec, payload_len, fec0, fec1);
+
+    // decode packet
+    unsigned char msg_dec[payload_len];
+    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, msg_dec);
+    if (crc_pass) {
+    } else {
+        if (verbose) printf("  <<< payload crc fail >>>\n");
+    }
+
+    return 0;
+}
+
+
 void pingdata_init(pingdata * _q)
 {
     _q->continue_running = 1;
     _q->node_type = NODE_MASTER;
     _q->payload_len = 1024;
+    _q->packet_len = packetizer_get_packet_length(_q->payload_len, FEC_NONE, FEC_NONE);
     _q->pid = 0;
+
+    // create packetizers
+    _q->p_enc = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
+    _q->p_dec = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
 
     // create mutexes, conditions
     pthread_mutex_init(&_q->tx_data_mutex, NULL);
@@ -319,6 +417,10 @@ void pingdata_init(pingdata * _q)
 
 void pingdata_destroy(pingdata * _q)
 {
+    // destroy packetizers
+    packetizer_destroy(_q->p_enc);
+    packetizer_destroy(_q->p_dec);
+
     // destroy mutexes, conditions
     pthread_mutex_destroy(&_q->tx_data_mutex);
     pthread_mutex_destroy(&_q->rx_data_mutex);
