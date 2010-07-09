@@ -69,22 +69,23 @@ typedef struct {
     // receiver
     unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
     packetizer p_dec;               // packet decoder
-    unsigned char * rx_data;
-    unsigned int rx_data_len;
-    unsigned char rx_header[14];
-    framesyncprops_s fsprops;
-    flexframesync fs;
-    std::complex<float> data_rx[512];   // rx data buffer
+    unsigned char * rx_data;        // received payload data
+    unsigned int rx_data_len;       // received payload data length
+    unsigned char rx_header[14];    // received header
+    unsigned int rx_packet_id;      // received packet identifier
+    framesyncprops_s fsprops;       // frame synchronizer properties
+    flexframesync fs;               // frame synchronizer
+    std::complex<float> rx_buffer[512];   // rx data buffer
 
     // transmitter
     packetizer p_enc;               // packet encoder
-    unsigned char * tx_data;
-    unsigned int tx_data_len;
-    unsigned char tx_header[14];
-    unsigned int packet_id_tx;
-    flexframegenprops_s fgprops;
-    flexframegen fg;
-    interp_crcf interp;
+    unsigned char * tx_data;        // transmitted payload data
+    unsigned int tx_data_len;       // transmitted payload data length
+    unsigned char tx_header[14];    // transmitted header
+    unsigned int tx_packet_id;      // transmitted packet identifier
+    flexframegenprops_s fgprops;    // frame generator properties
+    flexframegen fg;                // frame generator
+    interp_crcf interp;             // matched filter
 
     // packet manager
     unsigned int num_timeouts;      // running timeout counter
@@ -174,7 +175,7 @@ int main (int argc, char **argv) {
 void pingdata_txpacket(pingdata * _q)
 {
     unsigned int i;
-    float g = 0.5f; // transmit gain
+    float g = 0.01f; // transmit gain
 
     // allocate memory for buffers
     unsigned char payload[_q->payload_len];  // raw data
@@ -275,10 +276,10 @@ void pingdata_rxpacket(pingdata * _q)
     unsigned int i;
     for (i=0; i<10; i++) {
         // grab data from port
-        gport_consume(_q->port_rx,(void*)_q->data_rx,512);
+        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
 
         // run through frame synchronizer
-        flexframesync_execute(_q->fs, _q->data_rx, 512);
+        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
     }
 
 }
@@ -324,6 +325,10 @@ static int ping_callback(unsigned char * _rx_header,
             printf("\n");
             fprintf(stderr,"error: ping_callback(), invaid packet type: %u\n", packet_type);
         }
+    }
+
+    if (packet_type != PACKET_TYPE_DATA) {
+        return 0;
     }
 
     /*
