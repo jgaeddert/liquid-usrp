@@ -55,7 +55,7 @@ void usage() {
 }
 
 // ping data structure
-typedef struct {
+struct ping_s {
     gport port_tx;                  // transmit port
     gport port_rx;                  // receive port
 
@@ -89,7 +89,9 @@ typedef struct {
 
     // packet manager
     unsigned int num_timeouts;      // running timeout counter
-} pingdata;
+};
+
+typedef struct ping_s * ping;
 
 static int ping_callback(unsigned char * _rx_header,
                          int _rx_header_valid,
@@ -97,20 +99,19 @@ static int ping_callback(unsigned char * _rx_header,
                          unsigned int _rx_payload_len,
                          framesyncstats_s _stats,
                          void * _userdata);
-void pingdata_init(pingdata * _q);
-void pingdata_destroy(pingdata * _q);
-void pingdata_txpacket(pingdata * _q);
-void pingdata_txack(pingdata * _q, unsigned int _pid);
-void pingdata_rxpacket(pingdata * _q);
+ping ping_create();
+void ping_destroy(ping _q);
+void ping_txpacket(ping _q);
+void ping_txack(ping _q, unsigned int _pid);
+void ping_rxpacket(ping _q);
 
 int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
     float symbolrate = 100e3f;
 
-    // initialize pingdata structure
-    pingdata q;
-    pingdata_init(&q);
+    // initialize ping structure
+    ping q = ping_create();
 
     //
     int d;
@@ -120,8 +121,8 @@ int main (int argc, char **argv) {
         case 'h': usage();                      return 0;
         case 'f': frequency = atof(optarg);     break;
         case 'b': symbolrate = atof(optarg);    break;
-        case 'm': q.node_type = NODE_MASTER;    break;
-        case 's': q.node_type = NODE_SLAVE;     break;
+        case 'm': q->node_type = NODE_MASTER;   break;
+        case 's': q->node_type = NODE_SLAVE;    break;
         default:
             fprintf(stderr,"error: %s, unsupported option\n", argv[0]);
             exit(1);
@@ -139,8 +140,8 @@ int main (int argc, char **argv) {
     usrp->enable_auto_tx(USRP_CHANNEL);
 
     // initialize ports
-    q.port_tx = usrp->get_tx_port(USRP_CHANNEL);
-    q.port_rx = usrp->get_rx_port(USRP_CHANNEL);
+    q->port_tx = usrp->get_tx_port(USRP_CHANNEL);
+    q->port_rx = usrp->get_rx_port(USRP_CHANNEL);
 
     usleep(1000000);
 
@@ -149,12 +150,12 @@ int main (int argc, char **argv) {
     usrp->start_rx(USRP_CHANNEL);
 
     unsigned int i;
-    if (q.node_type == NODE_MASTER) {
+    if (q->node_type == NODE_MASTER) {
         for (i=0; i<(1<<15); i++)
-            pingdata_txpacket(&q);
+            ping_txpacket(q);
     } else {
         for (i=0; i<(1<<15); i++)
-            pingdata_rxpacket(&q);
+            ping_rxpacket(q);
     }
 
     // stop data transfer
@@ -167,12 +168,12 @@ int main (int argc, char **argv) {
     delete usrp;
 
     // destroy main data object
-    pingdata_destroy(&q);
+    ping_destroy(q);
 
     return 0;
 }
 
-void pingdata_txpacket(pingdata * _q)
+void ping_txpacket(ping _q)
 {
     unsigned int i;
     float g = 0.01f; // transmit gain
@@ -225,8 +226,8 @@ void pingdata_txpacket(pingdata * _q)
 }
 
 
-void pingdata_txack(pingdata * _q,
-                    unsigned int _pid)
+void ping_txack(ping _q,
+                unsigned int _pid)
 {
     // configure frame generator
     _q->fgprops.payload_len = 0;
@@ -270,7 +271,7 @@ void pingdata_txack(pingdata * _q,
 }
 
 
-void pingdata_rxpacket(pingdata * _q)
+void ping_rxpacket(ping _q)
 {
     // read samples from buffer, run through frame synchronizer
     unsigned int i;
@@ -286,7 +287,7 @@ void pingdata_rxpacket(pingdata * _q)
 
 
 // 
-// pingdata internal methods
+// ping internal methods
 //
 
 static int ping_callback(unsigned char * _rx_header,
@@ -296,7 +297,7 @@ static int ping_callback(unsigned char * _rx_header,
                          framesyncstats_s _stats,
                          void * _userdata)
 {
-    pingdata * q = (pingdata*) _userdata;
+    ping q = (ping) _userdata;
 
     int verbose = 1;
     if (verbose) {
@@ -362,44 +363,48 @@ static int ping_callback(unsigned char * _rx_header,
 }
 
 
-void pingdata_init(pingdata * _q)
+ping ping_create()
 {
-    _q->continue_running = 1;
-    _q->node_type = NODE_MASTER;
-    _q->payload_len = 1024;
-    _q->packet_len = packetizer_get_packet_length(_q->payload_len, FEC_NONE, FEC_NONE);
-    _q->pid = 0;
+    ping q = (ping) malloc(sizeof(struct ping_s));
+
+    q->continue_running = 1;
+    q->node_type = NODE_MASTER;
+    q->payload_len = 1024;
+    q->packet_len = packetizer_get_packet_length(q->payload_len, FEC_NONE, FEC_NONE);
+    q->pid = 0;
 
     // create packetizers
-    _q->p_enc = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
-    _q->p_dec = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
+    q->p_enc = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
+    q->p_dec = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
 
     // create frame generator
-    _q->fgprops.rampup_len = 64;
-    _q->fgprops.phasing_len = 64;
-    _q->fgprops.payload_len = _q->packet_len;    // NOTE : payload_len for frame is packet_len
-    _q->fgprops.mod_scheme = MOD_QPSK;
-    _q->fgprops.mod_bps = 2;
-    _q->fgprops.rampdn_len = 64;
-    _q->fg = flexframegen_create(&_q->fgprops);
-    flexframegen_print(_q->fg);
+    q->fgprops.rampup_len = 64;
+    q->fgprops.phasing_len = 64;
+    q->fgprops.payload_len = q->packet_len;    // NOTE : payload_len for frame is packet_len
+    q->fgprops.mod_scheme = MOD_QPSK;
+    q->fgprops.mod_bps = 2;
+    q->fgprops.rampdn_len = 64;
+    q->fg = flexframegen_create(&q->fgprops);
+    flexframegen_print(q->fg);
 
     // create frame synchronizer
-    framesyncprops_init_default(&_q->fsprops);
-    _q->fsprops.squelch_threshold = -30.0f;
-    _q->fs = flexframesync_create(&_q->fsprops, ping_callback, (void*)_q);
+    framesyncprops_init_default(&q->fsprops);
+    q->fsprops.squelch_threshold = -30.0f;
+    q->fs = flexframesync_create(&q->fsprops, ping_callback, (void*)q);
 
     // create interpolator
     unsigned int m=3;
     float beta=0.7f;
-    _q->interp = interp_crcf_create_rrc(2,m,beta,0);
+    q->interp = interp_crcf_create_rrc(2,m,beta,0);
 
     // allocate memory
-    _q->rx_data_len = 1024;
-    _q->rx_data = (unsigned char*) malloc(_q->rx_data_len*sizeof(unsigned char));
+    q->rx_data_len = 1024;
+    q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
+
+    return q;
 }
 
-void pingdata_destroy(pingdata * _q)
+void ping_destroy(ping _q)
 {
     // destroy packetizers
     packetizer_destroy(_q->p_enc);
