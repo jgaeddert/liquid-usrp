@@ -39,8 +39,12 @@
 
 #define USRP_CHANNEL    (0)
 
-#define NODE_MASTER     (0)
-#define NODE_SLAVE      (1)
+#define NODE_MASTER         (0)
+#define NODE_SLAVE          (1)
+
+#define PACKET_TYPE_DATA    (0)
+#define PACKET_TYPE_ACK     (1)
+#define PACKET_TYPE_NACK    (2)
 
 void usage() {
     printf("ping usage:\n");
@@ -95,6 +99,7 @@ static int ping_callback(unsigned char * _rx_header,
 void pingdata_init(pingdata * _q);
 void pingdata_destroy(pingdata * _q);
 void pingdata_txpacket(pingdata * _q);
+void pingdata_txack(pingdata * _q, unsigned int _pid);
 void pingdata_rxpacket(pingdata * _q);
 
 int main (int argc, char **argv) {
@@ -143,13 +148,13 @@ int main (int argc, char **argv) {
     usrp->start_rx(USRP_CHANNEL);
 
     unsigned int i;
-#if 0
-    for (i=0; i<(1<<15); i++)
-        pingdata_txpacket(&q);
-#else
-    for (i=0; i<(1<<15); i++)
-        pingdata_rxpacket(&q);
-#endif
+    if (q.node_type == NODE_MASTER) {
+        for (i=0; i<(1<<15); i++)
+            pingdata_txpacket(&q);
+    } else {
+        for (i=0; i<(1<<15); i++)
+            pingdata_rxpacket(&q);
+    }
 
     // stop data transfer
     usrp->stop_rx(USRP_CHANNEL);
@@ -195,6 +200,7 @@ void pingdata_txpacket(pingdata * _q)
     _q->tx_header[3] = (_q->payload_len     ) & 0xff;
     _q->tx_header[4] = (unsigned char)(FEC_NONE);
     _q->tx_header[5] = (unsigned char)(FEC_NONE);
+    _q->tx_header[6] = PACKET_TYPE_DATA;
 
     // generate frame
     flexframegen_execute(_q->fg, _q->tx_header, packet, frame);
@@ -215,6 +221,51 @@ void pingdata_txpacket(pingdata * _q)
     gport_produce(_q->port_tx, (void*)mfbuffer, 512);
 
     _q->pid++;
+}
+
+
+void pingdata_txack(pingdata * _q,
+                    unsigned int _pid)
+{
+    // configure frame generator
+    _q->fgprops.payload_len = 0;
+    flexframegen_setprops(_q->fg, &_q->fgprops);
+
+    unsigned int i;
+    float g = 0.5f; // transmit gain
+
+    unsigned int frame_len = flexframegen_getframelen(_q->fg);
+    std::complex<float> frame[frame_len];
+    std::complex<float> mfbuffer[2*frame_len];
+
+    printf("[tx] sending ack for packet %u...\n", _q->pid);
+
+    // prepare header
+    _q->tx_header[0] = (_pid >> 8) & 0xff;
+    _q->tx_header[1] = (_pid     ) & 0xff;
+    _q->tx_header[2] = 0;   // payload length (msb)
+    _q->tx_header[3] = 0;   // payload length (lsb)
+    _q->tx_header[4] = (unsigned char)(FEC_NONE);
+    _q->tx_header[5] = (unsigned char)(FEC_NONE);
+    _q->tx_header[6] = PACKET_TYPE_ACK;
+
+    // generate frame
+    flexframegen_execute(_q->fg, _q->tx_header, NULL, frame);
+
+    // run interpolator
+    for (i=0; i<frame_len; i++) {
+        interp_crcf_execute(_q->interp, frame[i]*g, &mfbuffer[2*i]);
+    }
+
+    // produce data in buffer
+    gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
+
+    // flush interpolator with zeros
+    for (i=0; i<256; i++) {
+        interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
+    }
+
+    gport_produce(_q->port_tx, (void*)mfbuffer, 512);
 }
 
 
@@ -258,10 +309,22 @@ static int ping_callback(unsigned char * _rx_header,
         return 0;
     }
     unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
-    if (verbose) printf("packet id: %6u\n", packet_id);
+    if (verbose) printf("packet id: %6u", packet_id);
     unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
     fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
     fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
+
+    unsigned int packet_type = _rx_header[6];
+    if (verbose) {
+        switch (packet_type) {
+        case PACKET_TYPE_DATA:  printf("(data)\n"); break;
+        case PACKET_TYPE_ACK:   printf("(ack)\n");  break;
+        case PACKET_TYPE_NACK:  printf("(nack)\n"); break;
+        default:
+            printf("\n");
+            fprintf(stderr,"error: ping_callback(), invaid packet type: %u\n", packet_type);
+        }
+    }
 
     /*
     // TODO: validate fec0,fec1 before indexing fec_scheme_str
