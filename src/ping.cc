@@ -76,6 +76,8 @@ struct ping_s {
     framesyncprops_s fsprops;       // frame synchronizer properties
     flexframesync fs;               // frame synchronizer
     std::complex<float> rx_buffer[512];   // rx data buffer
+    unsigned int rx_ack_pid;        // receiver ack pid
+    int rx_ack_found;               // receiver ack found flag
 
     // transmitter
     packetizer p_enc;               // packet encoder
@@ -104,6 +106,7 @@ void ping_destroy(ping _q);
 void ping_txpacket(ping _q);
 void ping_txack(ping _q, unsigned int _pid);
 void ping_rxpacket(ping _q);
+int ping_wait_for_ack(ping _q, unsigned int _pid);
 
 int main (int argc, char **argv) {
     // options
@@ -154,8 +157,11 @@ int main (int argc, char **argv) {
         for (i=0; i<(1<<15); i++)
             ping_txpacket(q);
     } else {
-        for (i=0; i<(1<<15); i++)
-            ping_rxpacket(q);
+        for (i=0; i<(1<<15); i++) {
+            //ping_rxpacket(q);
+            int ack_found = ping_wait_for_ack(q,3000);
+            if (ack_found) break;
+        }
     }
 
     // stop data transfer
@@ -285,6 +291,32 @@ void ping_rxpacket(ping _q)
 
 }
 
+int ping_wait_for_ack(ping _q,
+                      unsigned int _pid)
+{
+    // set ack to trigger on a specific packet id
+    _q->rx_ack_pid = _pid;
+    _q->rx_ack_found = 0;
+
+    // read samples from buffer, run through frame synchronizer
+    unsigned int i;
+    for (i=0; i<10; i++) {
+        // grab data from port
+        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+
+        // run through frame synchronizer
+        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
+
+        // check status flag
+        if (_q->rx_ack_found) {
+            printf(" received ack for packet %u!\n", _pid);
+            return 1;
+        }
+    }
+
+    // ack was never received
+    return 0;
+}
 
 // 
 // ping internal methods
@@ -329,6 +361,15 @@ static int ping_callback(unsigned char * _rx_header,
     }
 
     if (packet_type != PACKET_TYPE_DATA) {
+        // TODO : check to see if we were waiting for an ack
+        
+        // check to see if this packet matches the one we are waiting for
+        // TODO : check to see if source/destination ids match as well
+        if (packet_id == q->rx_ack_pid) {
+            // set status flag
+            q->rx_ack_found = 1;
+        }
+
         return 0;
     }
 
