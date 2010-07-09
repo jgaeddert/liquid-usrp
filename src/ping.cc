@@ -42,10 +42,6 @@
 #define NODE_MASTER     (0)
 #define NODE_SLAVE      (1)
 
-void * tx_handler( void * _port );
-void * rx_handler( void * _port );
-void * pm_handler( void * _port );
- 
 void usage() {
     printf("ping usage:\n");
     printf("  u,h   :   usage/help\n");
@@ -67,20 +63,24 @@ typedef struct {
     unsigned int pid;               // packet id
 
     // receiver
-    pthread_mutex_t rx_data_mutex;
-    pthread_cond_t  rx_data_ready;
     unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
     packetizer p_dec;               // packet decoder
     unsigned char * rx_data;
     unsigned int rx_data_len;
     unsigned char rx_header[14];
+    framesyncprops_s fsprops;
+    flexframesync fs;
+    std::complex<float> data_rx[512];   // rx data buffer
 
     // transmitter
-    pthread_mutex_t tx_data_mutex;
-    pthread_cond_t  tx_data_ready;
-    unsigned char * tx_data;
-    unsigned int packet_id_tx;
     packetizer p_enc;               // packet encoder
+    unsigned char * tx_data;
+    unsigned int tx_data_len;
+    unsigned char tx_header[14];
+    unsigned int packet_id_tx;
+    flexframegenprops_s fgprops;
+    flexframegen fg;
+    interp_crcf interp;
 
     // packet manager
     unsigned int num_timeouts;      // running timeout counter
@@ -94,10 +94,8 @@ static int ping_callback(unsigned char * _rx_header,
                          void * _userdata);
 void pingdata_init(pingdata * _q);
 void pingdata_destroy(pingdata * _q);
-
-// initialize timespec given microseconds
-void ping_init_timespec(struct timespec * _ts,
-                        unsigned int _usec);
+void pingdata_txpacket(pingdata * _q);
+void pingdata_rxpacket(pingdata * _q);
 
 int main (int argc, char **argv) {
     // options
@@ -138,40 +136,22 @@ int main (int argc, char **argv) {
     q.port_tx = usrp->get_tx_port(USRP_CHANNEL);
     q.port_rx = usrp->get_rx_port(USRP_CHANNEL);
 
-    // threads
-    pthread_t tx_thread;
-    pthread_t rx_thread;
-    pthread_t pm_thread;
-    pthread_attr_t thread_attr;
-    void * status;
-    
-    // set thread attributes
-    pthread_attr_init(&thread_attr);
-    pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
-
-    // attributes object no longer needed
-    pthread_attr_destroy(&thread_attr);
-
-    printf("waiting to start threads...\n");
     usleep(1000000);
-
-    // create threads
-    pthread_create(&tx_thread, &thread_attr, &tx_handler, (void*) &q);
-    pthread_create(&rx_thread, &thread_attr, &rx_handler, (void*) &q);
-    pthread_create(&pm_thread, &thread_attr, &pm_handler, (void*) &q);
 
     // start data transfer
     usrp->start_tx(USRP_CHANNEL);
     usrp->start_rx(USRP_CHANNEL);
 
-    printf("waiting for threads to exit...\n");
+    unsigned int i;
+#if 0
+    for (i=0; i<(1<<15); i++)
+        pingdata_txpacket(&q);
+#else
+    for (i=0; i<(1<<15); i++)
+        pingdata_rxpacket(&q);
+#endif
 
-    // join threads
-    pthread_join(tx_thread, &status);
-    pthread_join(rx_thread, &status);
-    pthread_join(pm_thread, &status);
-
-    // stop
+    // stop data transfer
     usrp->stop_rx(USRP_CHANNEL);
     usrp->stop_tx(USRP_CHANNEL);
 
@@ -186,166 +166,70 @@ int main (int argc, char **argv) {
     return 0;
 }
 
-void * tx_handler ( void * _userdata )
+void pingdata_txpacket(pingdata * _q)
 {
-    pingdata * q = (pingdata*) _userdata;
-
-    // create flexframe generator
-    flexframegenprops_s fgprops;
-    fgprops.rampup_len = 64;
-    fgprops.phasing_len = 64;
-    fgprops.payload_len = q->packet_len;    // NOTE : payload_len for frame is packet_len
-    fgprops.mod_scheme = MOD_QPSK;
-    fgprops.mod_bps = 2;
-    fgprops.rampdn_len = 64;
-
-    flexframegen fg = flexframegen_create(&fgprops);
-    flexframegen_print(fg);
-
-    // interpolator options
-    unsigned int m=3;
-    float beta=0.7f;
-    interp_crcf interp = interp_crcf_create_rrc(2,m,beta,0);
-
     unsigned int i;
     float g = 0.5f; // transmit gain
 
     // allocate memory for buffers
-    unsigned char header[14];
-    unsigned char payload[q->payload_len];  // raw data
-    unsigned char packet[q->packet_len];    // encoded message length
+    unsigned char payload[_q->payload_len];  // raw data
+    unsigned char packet[_q->packet_len];    // encoded message length
 
-    unsigned int frame_len = flexframegen_getframelen(fg);
+    unsigned int frame_len = flexframegen_getframelen(_q->fg);
     std::complex<float> frame[frame_len];
-
     std::complex<float> mfbuffer[2*frame_len];
 
-    // mutex conditional timed wait
-    struct timespec ts;
-    int rc;
+    printf("[tx] sending packet %u...\n", _q->pid);
 
-    printf("tx thread running...\n");
+    // generate frame data
+    for (i=0; i<_q->payload_len; i++)
+        payload[i] = rand() % 256;
 
-    while (q->continue_running)
-    {
-        // wait for signal condition
-        ping_init_timespec(&ts, 100);
-        pthread_mutex_lock(&q->tx_data_mutex);
-        rc = pthread_cond_timedwait(&q->tx_data_ready,
-                                    &q->tx_data_mutex,
-                                    &ts);
+    // encode packet
+    packetizer_encode(_q->p_enc, payload, packet);
 
-        // check of condition was flagged or just timed out
-        if (rc != 0) {
-            // release tx mutex and continue
-            pthread_mutex_unlock(&q->tx_data_mutex);
-            continue;
-        }
+    // prepare header
+    _q->tx_header[0] = (_q->pid >> 8) & 0xff;
+    _q->tx_header[1] = (_q->pid     ) & 0xff;
+    _q->tx_header[2] = (_q->payload_len >> 8) & 0xff;
+    _q->tx_header[3] = (_q->payload_len     ) & 0xff;
+    _q->tx_header[4] = (unsigned char)(FEC_NONE);
+    _q->tx_header[5] = (unsigned char)(FEC_NONE);
 
-        printf("[tx] sending packet %u...\n", q->pid);
+    // generate frame
+    flexframegen_execute(_q->fg, _q->tx_header, packet, frame);
 
-        // generate frame data
-        for (i=0; i<q->payload_len; i++)
-            payload[i] = rand() % 256;
-
-        // encode packet
-        packetizer_encode(q->p_enc, payload, packet);
-
-        // prepare header
-        header[0] = (q->pid >> 8) & 0xff;
-        header[1] = (q->pid     ) & 0xff;
-        header[2] = (q->payload_len >> 8) & 0xff;
-        header[3] = (q->payload_len     ) & 0xff;
-        header[4] = (unsigned char)(FEC_NONE);
-        header[5] = (unsigned char)(FEC_NONE);
-
-        // generate frame
-        flexframegen_execute(fg, header, packet, frame);
-
-        // release tx mutex
-        pthread_mutex_unlock(&q->tx_data_mutex);
-
-        // run interpolator
-        for (i=0; i<frame_len; i++) {
-            interp_crcf_execute(interp, frame[i]*g, &mfbuffer[2*i]);
-        }
-
-        // produce data in buffer
-        gport_produce(q->port_tx, (void*)mfbuffer, 2*frame_len);
-
-        // flush interpolator with zeros
-        for (i=0; i<256; i++) {
-            interp_crcf_execute(interp, 0, &mfbuffer[2*i]);
-        }
-
-        gport_produce(q->port_tx, (void*)mfbuffer, 512);
+    // run interpolator
+    for (i=0; i<frame_len; i++) {
+        interp_crcf_execute(_q->interp, frame[i]*g, &mfbuffer[2*i]);
     }
 
-    // clean up allocated memory objects
-    flexframegen_destroy(fg);
-    interp_crcf_destroy(interp);
-   
-    printf("tx_handler finished.\n");
-    pthread_exit(0); // exit thread
+    // produce data in buffer
+    gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
+
+    // flush interpolator with zeros
+    for (i=0; i<256; i++) {
+        interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
+    }
+
+    gport_produce(_q->port_tx, (void*)mfbuffer, 512);
+
+    _q->pid++;
 }
 
 
-void * rx_handler ( void * _userdata )
+void pingdata_rxpacket(pingdata * _q)
 {
-    pingdata * q = (pingdata*) _userdata;
-
-    // create flexframe synchronizer
-    framesyncprops_s fsprops;
-    framesyncprops_init_default(&fsprops);
-    fsprops.squelch_threshold = -30.0f;
-    flexframesync fs = flexframesync_create(&fsprops, ping_callback, (void*)q);
-
-    // allocate memory for buffers
-    std::complex<float> data_rx[512];
-
     // read samples from buffer, run through frame synchronizer
-    while (q->continue_running) {
-        // TODO : use mutex lock ?
-
-        // grab data from port
-        gport_consume(q->port_rx,(void*)data_rx,512);
-
-        // run through frame synchronizer
-        flexframesync_execute(fs, data_rx, 512);
-    }
-
-    // clean up allocated memory
-    flexframesync_destroy(fs);
-
-    printf("rx_handler finished.\n");
-    pthread_exit(0); // exit thread
-}
-
-
-void * pm_handler ( void * _userdata )
-{
-    pingdata * q = (pingdata*) _userdata;
-
     unsigned int i;
     for (i=0; i<10; i++) {
-        // send data packet
-        pthread_mutex_lock(&q->tx_data_mutex);
+        // grab data from port
+        gport_consume(_q->port_rx,(void*)_q->data_rx,512);
 
-        // prepare header...
-
-        printf("[pm] sending packet %u...\n", q->pid);
-
-        pthread_mutex_unlock(&q->tx_data_mutex);
-        pthread_cond_signal(&q->tx_data_ready);
-
-        usleep(1000000);
+        // run through frame synchronizer
+        flexframesync_execute(_q->fs, _q->data_rx, 512);
     }
 
-    // signal other threads to stop running
-    q->continue_running = 0;
-
-    printf("pm_handler finished.\n");
-    pthread_exit(0); // exit thread
 }
 
 
@@ -396,9 +280,6 @@ static int ping_callback(unsigned char * _rx_header,
         if (verbose) printf("  <<< payload crc fail >>>\n");
     }
 
-    // lock mutex
-    pthread_mutex_lock(&q->rx_data_mutex);
-
     // re-allocate memory arrays if necessary
     if (q->rx_data_len != payload_len) {
         q->rx_data_len = payload_len;
@@ -408,12 +289,6 @@ static int ping_callback(unsigned char * _rx_header,
     // copy data to internal memory array
     memmove(q->rx_header, _rx_header,  14);
     memmove(q->rx_data,   _rx_payload, q->rx_data_len);
-
-    // unlock mutex
-    pthread_mutex_unlock(&q->rx_data_mutex);
-
-    // signal condition (received packet)
-    pthread_cond_signal(&q->rx_data_ready);
     
     return 0;
 }
@@ -431,15 +306,29 @@ void pingdata_init(pingdata * _q)
     _q->p_enc = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
     _q->p_dec = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
 
+    // create frame generator
+    _q->fgprops.rampup_len = 64;
+    _q->fgprops.phasing_len = 64;
+    _q->fgprops.payload_len = _q->packet_len;    // NOTE : payload_len for frame is packet_len
+    _q->fgprops.mod_scheme = MOD_QPSK;
+    _q->fgprops.mod_bps = 2;
+    _q->fgprops.rampdn_len = 64;
+    _q->fg = flexframegen_create(&_q->fgprops);
+    flexframegen_print(_q->fg);
+
+    // create frame synchronizer
+    framesyncprops_init_default(&_q->fsprops);
+    _q->fsprops.squelch_threshold = -30.0f;
+    _q->fs = flexframesync_create(&_q->fsprops, ping_callback, (void*)_q);
+
+    // create interpolator
+    unsigned int m=3;
+    float beta=0.7f;
+    _q->interp = interp_crcf_create_rrc(2,m,beta,0);
+
     // allocate memory
     _q->rx_data_len = 1024;
     _q->rx_data = (unsigned char*) malloc(_q->rx_data_len*sizeof(unsigned char));
-
-    // create mutexes, conditions
-    pthread_mutex_init(&_q->tx_data_mutex, NULL);
-    pthread_mutex_init(&_q->rx_data_mutex, NULL);
-    pthread_cond_init(&_q->tx_data_ready, NULL);
-    pthread_cond_init(&_q->rx_data_ready, NULL);
 }
 
 void pingdata_destroy(pingdata * _q)
@@ -448,38 +337,16 @@ void pingdata_destroy(pingdata * _q)
     packetizer_destroy(_q->p_enc);
     packetizer_destroy(_q->p_dec);
 
+    // destroy frame generator
+    flexframegen_destroy(_q->fg);
+
+    // destroy frame synchronizer
+    flexframesync_destroy(_q->fs);
+
+    // destroy interpolator
+    interp_crcf_destroy(_q->interp);
+
     // free memory
     free(_q->rx_data);
-
-    // destroy mutexes, conditions
-    pthread_mutex_destroy(&_q->tx_data_mutex);
-    pthread_mutex_destroy(&_q->rx_data_mutex);
-    pthread_cond_destroy(&_q->tx_data_ready);
-    pthread_cond_destroy(&_q->rx_data_ready);
-}
-
-//
-// other useful methods
-//
-
-// initialize timespec given microseconds
-void ping_init_timespec(struct timespec * _ts,
-                        unsigned int _usec)
-{
-    struct timeval tp;
-    int rc = gettimeofday(&tp,NULL);
-
-    if (rc == -1) {
-        fprintf(stderr,"error: ping_init_timespec(), failed to get time of day\n");
-        exit(1);
-    }
-
-    _ts->tv_sec = tp.tv_sec;
-    _ts->tv_nsec = (tp.tv_usec + 1000*_usec) * 1000;
-
-    while (_ts->tv_nsec > 1000000000) {
-        _ts->tv_nsec -= 1000000000;
-        _ts->tv_sec += 1;
-    }
 }
 
