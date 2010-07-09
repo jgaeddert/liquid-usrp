@@ -68,8 +68,12 @@ typedef struct {
 
     // receiver
     pthread_mutex_t rx_data_mutex;
+    pthread_cond_t  rx_data_ready;
     unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
     packetizer p_dec;               // packet decoder
+    unsigned char * rx_data;
+    unsigned int rx_data_len;
+    unsigned char rx_header[14];
 
     // transmitter
     pthread_mutex_t tx_data_mutex;
@@ -270,11 +274,11 @@ void * tx_handler ( void * _userdata )
         gport_produce(q->port_tx, (void*)mfbuffer, 2*frame_len);
 
         // flush interpolator with zeros
-        for (i=0; i<248; i++) {
+        for (i=0; i<256; i++) {
             interp_crcf_execute(interp, 0, &mfbuffer[2*i]);
         }
 
-        gport_produce(q->port_tx, (void*)mfbuffer, 496);
+        gport_produce(q->port_tx, (void*)mfbuffer, 512);
     }
 
     // clean up allocated memory objects
@@ -392,6 +396,25 @@ static int ping_callback(unsigned char * _rx_header,
         if (verbose) printf("  <<< payload crc fail >>>\n");
     }
 
+    // lock mutex
+    pthread_mutex_lock(&q->rx_data_mutex);
+
+    // re-allocate memory arrays if necessary
+    if (q->rx_data_len != payload_len) {
+        q->rx_data_len = payload_len;
+        q->rx_data = (unsigned char*) realloc(q->rx_data, q->rx_data_len*sizeof(unsigned char));
+    }
+
+    // copy data to internal memory array
+    memmove(q->rx_header, _rx_header,  14);
+    memmove(q->rx_data,   _rx_payload, q->rx_data_len);
+
+    // unlock mutex
+    pthread_mutex_unlock(&q->rx_data_mutex);
+
+    // signal condition (received packet)
+    pthread_cond_signal(&q->rx_data_ready);
+    
     return 0;
 }
 
@@ -408,10 +431,15 @@ void pingdata_init(pingdata * _q)
     _q->p_enc = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
     _q->p_dec = packetizer_create(_q->payload_len, FEC_NONE, FEC_NONE);
 
+    // allocate memory
+    _q->rx_data_len = 1024;
+    _q->rx_data = (unsigned char*) malloc(_q->rx_data_len*sizeof(unsigned char));
+
     // create mutexes, conditions
     pthread_mutex_init(&_q->tx_data_mutex, NULL);
     pthread_mutex_init(&_q->rx_data_mutex, NULL);
     pthread_cond_init(&_q->tx_data_ready, NULL);
+    pthread_cond_init(&_q->rx_data_ready, NULL);
 }
 
 void pingdata_destroy(pingdata * _q)
@@ -420,10 +448,14 @@ void pingdata_destroy(pingdata * _q)
     packetizer_destroy(_q->p_enc);
     packetizer_destroy(_q->p_dec);
 
+    // free memory
+    free(_q->rx_data);
+
     // destroy mutexes, conditions
     pthread_mutex_destroy(&_q->tx_data_mutex);
     pthread_mutex_destroy(&_q->rx_data_mutex);
     pthread_cond_destroy(&_q->tx_data_ready);
+    pthread_cond_destroy(&_q->rx_data_ready);
 }
 
 //
