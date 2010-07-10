@@ -116,6 +116,7 @@ void ping_txack(ping _q, unsigned int _pid);
 void ping_rxpacket(ping _q);
 int ping_wait_for_data(ping _q);
 int ping_wait_for_ack(ping _q, unsigned int _pid);
+int ping_mac_clear(ping _q);
 
 int main (int argc, char **argv) {
     // options
@@ -186,6 +187,13 @@ int main (int argc, char **argv) {
             num_attempts = 0;
             do {
                 num_attempts++;
+
+                // wait for clear signal (five clean reports in a row)
+                j = 5;
+                while (j) {
+                    if (ping_mac_clear(q))  j--;
+                    else                    j = 5;
+                }
 
                 // transmit packet
                 printf("transmitting packet %6u (attempt %3u)\n", i, num_attempts);
@@ -409,6 +417,31 @@ int ping_wait_for_ack(ping _q,
     // ack was never received
     return 0;
 }
+
+
+// determine if MAC is clear
+int ping_mac_clear(ping _q)
+{
+    // grab data from port
+    gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+
+    // estimate signal level
+    unsigned int i;
+    float rssi = 0.0;
+    for (i=0; i<512; i++)
+        rssi += abs(_q->rx_buffer[i]) * abs(_q->rx_buffer[i]);
+
+    // TODO : fix rssi computation
+    rssi = 10*log10f(sqrt(rssi/512));
+
+#if 1
+    printf("mac_clear(), rssi : %12.8f dB %c\n", rssi,
+        (rssi < _q->fsprops.squelch_threshold) ? ' ' : '*');
+#endif
+
+    return (rssi < _q->fsprops.squelch_threshold) ? 1 : 0;
+}
+
 
 // 
 // ping internal methods
