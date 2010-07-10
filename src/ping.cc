@@ -103,7 +103,10 @@ static int ping_callback(unsigned char * _rx_header,
                          void * _userdata);
 ping ping_create();
 void ping_destroy(ping _q);
-void ping_txpacket(ping _q);
+void ping_txpacket(ping _q,
+                   unsigned int _pid,
+                   unsigned char * _payload,
+                   unsigned int _payload_len);
 void ping_txack(ping _q, unsigned int _pid);
 void ping_rxpacket(ping _q);
 int ping_wait_for_ack(ping _q, unsigned int _pid);
@@ -153,13 +156,27 @@ int main (int argc, char **argv) {
     usrp->start_rx(USRP_CHANNEL);
 
     unsigned int i;
+    unsigned int n;
     if (q->node_type == NODE_MASTER) {
-        for (i=0; i<(1<<15); i++)
-            ping_txpacket(q);
+        unsigned int payload_len = 1024;
+        unsigned char payload[1024];
+
+        // initialize payload to random data
+        for (n=0; n<payload_len; n++)
+            payload[n] = rand() % 256;
+
+        for (i=0; i<1000; i++) {
+
+            // transmit packet
+            ping_txpacket(q,i,payload,payload_len);
+
+            // wait for acknowledgement
+            //ping_wait_for_ack(q,i);
+        }
     } else {
-        for (i=0; i<(1<<15); i++) {
+        for (i=0; i<1000; i++) {
             //ping_rxpacket(q);
-            int ack_found = ping_wait_for_ack(q,3000);
+            int ack_found = ping_wait_for_ack(q,300);
             if (ack_found) break;
         }
     }
@@ -179,31 +196,39 @@ int main (int argc, char **argv) {
     return 0;
 }
 
-void ping_txpacket(ping _q)
+void ping_txpacket(ping _q,
+                   unsigned int _pid,
+                   unsigned char * _payload,
+                   unsigned int _payload_len)
 {
     unsigned int i;
-    float g = 0.01f; // transmit gain
+    float g = 0.1f; // transmit gain
+
+    // configure frame generator
+    _q->payload_len = _payload_len;
+    _q->packet_len = packetizer_get_packet_length(_q->payload_len, FEC_NONE, FEC_NONE);
+    _q->fgprops.payload_len = _q->packet_len;
+    flexframegen_setprops(_q->fg, &_q->fgprops);
 
     // allocate memory for buffers
-    unsigned char payload[_q->payload_len];  // raw data
+    //unsigned char payload[_q->payload_len];  // raw data
     unsigned char packet[_q->packet_len];    // encoded message length
 
     unsigned int frame_len = flexframegen_getframelen(_q->fg);
     std::complex<float> frame[frame_len];
     std::complex<float> mfbuffer[2*frame_len];
 
-    printf("[tx] sending packet %u...\n", _q->pid);
+    printf("[tx] sending packet %u...\n", _pid);
 
-    // generate frame data
-    for (i=0; i<_q->payload_len; i++)
-        payload[i] = rand() % 256;
+    // recreate packetizer
+    _q->p_enc = packetizer_recreate(_q->p_enc, _q->payload_len, FEC_NONE, FEC_NONE);
 
     // encode packet
-    packetizer_encode(_q->p_enc, payload, packet);
+    packetizer_encode(_q->p_enc, _payload, packet);
 
     // prepare header
-    _q->tx_header[0] = (_q->pid >> 8) & 0xff;
-    _q->tx_header[1] = (_q->pid     ) & 0xff;
+    _q->tx_header[0] = (_pid >> 8) & 0xff;
+    _q->tx_header[1] = (_pid     ) & 0xff;
     _q->tx_header[2] = (_q->payload_len >> 8) & 0xff;
     _q->tx_header[3] = (_q->payload_len     ) & 0xff;
     _q->tx_header[4] = (unsigned char)(FEC_NONE);
@@ -228,7 +253,7 @@ void ping_txpacket(ping _q)
 
     gport_produce(_q->port_tx, (void*)mfbuffer, 512);
 
-    _q->pid++;
+    //_q->pid++;
 }
 
 
