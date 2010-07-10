@@ -46,6 +46,9 @@
 #define PACKET_TYPE_ACK     (1)
 #define PACKET_TYPE_NACK    (2)
 
+#define PING_RX_NULL            (0) // not waiting for anything
+#define PING_RX_WAIT_FOR_DATA   (1) // receiver waiting for data packet
+#define PING_RX_WAIT_FOR_ACK    (2) // receiver waiting for ack
 void usage() {
     printf("ping usage:\n");
     printf("  u,h   :   usage/help\n");
@@ -78,6 +81,7 @@ struct ping_s {
     std::complex<float> rx_buffer[512];   // rx data buffer
     unsigned int rx_ack_pid;        // receiver ack pid
     int rx_ack_found;               // receiver ack found flag
+    unsigned int rx_state;
 
     // transmitter
     packetizer p_enc;               // packet encoder
@@ -109,6 +113,7 @@ void ping_txpacket(ping _q,
                    unsigned int _payload_len);
 void ping_txack(ping _q, unsigned int _pid);
 void ping_rxpacket(ping _q);
+int ping_wait_for_data(ping _q);
 int ping_wait_for_ack(ping _q, unsigned int _pid);
 
 int main (int argc, char **argv) {
@@ -171,13 +176,27 @@ int main (int argc, char **argv) {
             ping_txpacket(q,i,payload,payload_len);
 
             // wait for acknowledgement
-            //ping_wait_for_ack(q,i);
+            while (!ping_wait_for_ack(q,i)) {
+                // ...
+            }
         }
     } else {
         for (i=0; i<1000; i++) {
+            // wait for data packet
+            while (!ping_wait_for_data(q)) {
+                // ...
+            }
+
+            unsigned int pid = q->rx_packet_id;
+
+            // transmit acknowledgement
+            ping_txack(q,pid);
+
+#if 0
             //ping_rxpacket(q);
             int ack_found = ping_wait_for_ack(q,300);
             if (ack_found) break;
+#endif
         }
     }
 
@@ -316,10 +335,37 @@ void ping_rxpacket(ping _q)
 
 }
 
+int ping_wait_for_data(ping _q)
+{
+    _q->rx_state = PING_RX_WAIT_FOR_DATA;
+    _q->rx_ack_found = 0;
+
+    // read samples from buffer, run through frame synchronizer
+    unsigned int i;
+    for (i=0; i<10; i++) {
+        // grab data from port
+        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+
+        // run through frame synchronizer
+        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
+
+        // check status flag
+        if (_q->rx_ack_found) {
+            printf(" received data packet %u!\n", _q->rx_packet_id);
+            return 1;
+        }
+    }
+
+    // ack was never received
+    return 0;
+}
+
+
 int ping_wait_for_ack(ping _q,
                       unsigned int _pid)
 {
     // set ack to trigger on a specific packet id
+    _q->rx_state = PING_RX_WAIT_FOR_ACK;
     _q->rx_ack_pid = _pid;
     _q->rx_ack_found = 0;
 
@@ -376,9 +422,9 @@ static int ping_callback(unsigned char * _rx_header,
     unsigned int packet_type = _rx_header[6];
     if (verbose) {
         switch (packet_type) {
-        case PACKET_TYPE_DATA:  printf("(data)\n"); break;
-        case PACKET_TYPE_ACK:   printf("(ack)\n");  break;
-        case PACKET_TYPE_NACK:  printf("(nack)\n"); break;
+        case PACKET_TYPE_DATA:  printf(" (data)\n"); break;
+        case PACKET_TYPE_ACK:   printf(" (ack)\n");  break;
+        case PACKET_TYPE_NACK:  printf(" (nack)\n"); break;
         default:
             printf("\n");
             fprintf(stderr,"error: ping_callback(), invaid packet type: %u\n", packet_type);
@@ -386,17 +432,26 @@ static int ping_callback(unsigned char * _rx_header,
     }
 
     if (packet_type != PACKET_TYPE_DATA) {
-        // TODO : check to see if we were waiting for an ack
-        
+        // check to see if we were waiting for an ack and
         // check to see if this packet matches the one we are waiting for
+        //
         // TODO : check to see if source/destination ids match as well
-        if (packet_id == q->rx_ack_pid) {
+        if ( (q->rx_state == PING_RX_WAIT_FOR_ACK) && (packet_id == q->rx_ack_pid) ) {
             // set status flag
             q->rx_ack_found = 1;
+        } else {
+            q->rx_ack_found = 0;
         }
 
         return 0;
     }
+
+    // check to see if we were waiting for a data packet
+    if (q->rx_state == PING_RX_WAIT_FOR_DATA)
+        q->rx_ack_found = 1;
+
+    // set internal packet id
+    q->rx_packet_id = packet_id;
 
     /*
     // TODO: validate fec0,fec1 before indexing fec_scheme_str
