@@ -54,6 +54,7 @@ void usage() {
     printf("  u,h   :   usage/help\n");
     printf("  f     :   frequency [Hz], default: 462 MHz\n");
     printf("  b     :   bandwidth [Hz], default: 100 kHz\n");
+    printf("  n     :   number of packets, default: 1000\n");
     printf("  m/s   :   designate node as master/slave, default: slave\n");
 }
 
@@ -120,18 +121,21 @@ int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
     float symbolrate = 100e3f;
+    unsigned int num_packets = 1000;
+    unsigned int max_num_attempts = 100;    // maximum number of tx attempts
 
     // initialize ping structure
     ping q = ping_create();
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhf:b:ms")) != EOF) {
+    while ((d = getopt(argc,argv,"uhf:b:n:ms")) != EOF) {
         switch (d) {
         case 'u':
         case 'h': usage();                      return 0;
         case 'f': frequency = atof(optarg);     break;
         case 'b': symbolrate = atof(optarg);    break;
+        case 'n': num_packets = atoi(optarg);   break;
         case 'm': q->node_type = NODE_MASTER;   break;
         case 's': q->node_type = NODE_SLAVE;    break;
         default:
@@ -160,8 +164,12 @@ int main (int argc, char **argv) {
     usrp->start_tx(USRP_CHANNEL);
     usrp->start_rx(USRP_CHANNEL);
 
+    // TODO : start timer
+
     unsigned int i;
+    unsigned int j;
     unsigned int n;
+    unsigned int num_attempts = 0;
     if (q->node_type == NODE_MASTER) {
         unsigned int payload_len = 1024;
         unsigned char payload[1024];
@@ -170,14 +178,31 @@ int main (int argc, char **argv) {
         for (n=0; n<payload_len; n++)
             payload[n] = rand() % 256;
 
-        for (i=0; i<1000; i++) {
+        int ack_received;
 
-            // transmit packet
-            ping_txpacket(q,i,payload,payload_len);
+        for (i=0; i<num_packets; i++) {
 
-            // wait for acknowledgement
-            while (!ping_wait_for_ack(q,i)) {
-                // ...
+            ack_received = 0;
+            num_attempts = 0;
+            do {
+                num_attempts++;
+
+                // transmit packet
+                printf("transmitting packet %6u (attempt %3u)\n", i, num_attempts);
+                ping_txpacket(q,i,payload,payload_len);
+
+                // wait for acknowledgement (minimum timeout is about 3)
+                for (j=0; j<5; j++) {
+                    if (ping_wait_for_ack(q,i)) {
+                        ack_received = 1;
+                        break;
+                    }
+                }
+            } while (!ack_received && (num_attempts < max_num_attempts) );
+
+            if (num_attempts == max_num_attempts) {
+                printf("transmitter reached maximum number of attemts; bailing\n");
+                break;
             }
         }
     } else {
@@ -191,14 +216,10 @@ int main (int argc, char **argv) {
 
             // transmit acknowledgement
             ping_txack(q,pid);
-
-#if 0
-            //ping_rxpacket(q);
-            int ack_found = ping_wait_for_ack(q,300);
-            if (ack_found) break;
-#endif
         }
     }
+
+    // TODO : stop timer
 
     // stop data transfer
     usrp->stop_rx(USRP_CHANNEL);
@@ -237,7 +258,7 @@ void ping_txpacket(ping _q,
     std::complex<float> frame[frame_len];
     std::complex<float> mfbuffer[2*frame_len];
 
-    printf("[tx] sending packet %u...\n", _pid);
+    //printf("[tx] sending packet %u...\n", _pid);
 
     // recreate packetizer
     _q->p_enc = packetizer_recreate(_q->p_enc, _q->payload_len, FEC_NONE, FEC_NONE);
@@ -380,7 +401,7 @@ int ping_wait_for_ack(ping _q,
 
         // check status flag
         if (_q->rx_ack_found) {
-            printf(" received ack for packet %u!\n", _pid);
+            //printf(" received ack for packet %u!\n", _pid);
             return 1;
         }
     }
