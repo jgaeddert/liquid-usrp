@@ -55,8 +55,7 @@ struct iqpr_s {
     packetizer p_dec;               // packet decoder
     unsigned char * rx_data;        // received payload data
     unsigned int rx_data_len;       // received payload data length
-    unsigned char rx_header[14];    // received header
-    unsigned int rx_packet_id;      // received packet identifier
+    iqprheader_s rx_header;         // received header
     framesyncprops_s fsprops;       // frame synchronizer properties
     flexframesync fs;               // frame synchronizer
     std::complex<float> rx_buffer[512];   // rx data buffer
@@ -68,8 +67,7 @@ struct iqpr_s {
     packetizer p_enc;               // packet encoder
     unsigned char * tx_data;        // transmitted payload data
     unsigned int tx_data_len;       // transmitted payload data length
-    unsigned char tx_header[14];    // transmitted header
-    unsigned int tx_packet_id;      // transmitted packet identifier
+    iqprheader_s tx_header;         // transmitted header
     flexframegenprops_s fgprops;    // frame generator properties
     flexframegen fg;                // frame generator
     interp_crcf interp;             // matched filter
@@ -170,16 +168,18 @@ void iqpr_txpacket(iqpr _q,
     packetizer_encode(_q->p_enc, _payload, packet);
 
     // prepare header
-    _q->tx_header[0] = (_pid >> 8) & 0xff;
-    _q->tx_header[1] = (_pid     ) & 0xff;
-    _q->tx_header[2] = (_q->payload_len >> 8) & 0xff;
-    _q->tx_header[3] = (_q->payload_len     ) & 0xff;
-    _q->tx_header[4] = (unsigned char)(FEC_NONE);
-    _q->tx_header[5] = (unsigned char)(FEC_NONE);
-    _q->tx_header[6] = IQPR_PACKET_TYPE_DATA;
+    unsigned char header[14];
+    _q->tx_header.pid = _pid;
+    _q->tx_header.payload_len = _payload_len;
+    _q->tx_header.fec0 = FEC_NONE;
+    _q->tx_header.fec1 = FEC_NONE;
+    _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
+    _q->tx_header.node_src = 0;
+    _q->tx_header.node_dst = 0;
+    iqprheader_encode(&_q->tx_header, header);
 
     // generate frame
-    flexframegen_execute(_q->fg, _q->tx_header, packet, frame);
+    flexframegen_execute(_q->fg, header, packet, frame);
 
     // run interpolator
     for (i=0; i<frame_len; i++) {
@@ -217,16 +217,19 @@ void iqpr_txack(iqpr _q,
     printf("[tx] sending ack for packet %u...\n", _q->pid);
 
     // prepare header
-    _q->tx_header[0] = (_pid >> 8) & 0xff;
-    _q->tx_header[1] = (_pid     ) & 0xff;
-    _q->tx_header[2] = 0;   // payload length (msb)
-    _q->tx_header[3] = 0;   // payload length (lsb)
-    _q->tx_header[4] = (unsigned char)(FEC_NONE);
-    _q->tx_header[5] = (unsigned char)(FEC_NONE);
-    _q->tx_header[6] = IQPR_PACKET_TYPE_ACK;
+    _q->tx_header.pid = _pid;
+    _q->tx_header.payload_len = 0;
+    _q->tx_header.fec0 = FEC_NONE;
+    _q->tx_header.fec1 = FEC_NONE;
+    _q->tx_header.packet_type = IQPR_PACKET_TYPE_ACK;
+    _q->tx_header.node_src = 0;
+    _q->tx_header.node_dst = 0;
+
+    unsigned char header[14];
+    iqprheader_encode(&_q->tx_header, header);
 
     // generate frame
-    flexframegen_execute(_q->fg, _q->tx_header, NULL, frame);
+    flexframegen_execute(_q->fg, header, NULL, frame);
 
     // run interpolator
     for (i=0; i<frame_len; i++) {
@@ -277,12 +280,12 @@ int iqpr_wait_for_data(iqpr _q,
 
         // check status flag
         if (_q->rx_ack_found) {
-            printf(" received data packet %u!\n", _q->rx_packet_id);
+            printf(" received data packet %u!\n", _q->rx_header.pid);
 
             // set output memory pointer
             *_payload = _q->rx_data;
             *_payload_len = _q->rx_data_len;
-            return _q->rx_packet_id;
+            return _q->rx_header.pid;
         }
     }
 
@@ -381,30 +384,28 @@ int iqpr_callback(unsigned char * _rx_header,
         if (verbose) printf("header crc : FAIL\n");
         return 0;
     }
-    unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
-    if (verbose) printf("packet id: %6u", packet_id);
-    unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
-    fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
-    fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
 
-    unsigned int packet_type = _rx_header[6];
+    // decode header
+    iqprheader_decode(&q->rx_header, _rx_header);
+    if (verbose) printf("packet id: %6u", q->rx_header.pid);
+
     if (verbose) {
-        switch (packet_type) {
+        switch (q->rx_header.packet_type) {
         case IQPR_PACKET_TYPE_DATA:  printf(" (data)\n"); break;
         case IQPR_PACKET_TYPE_ACK:   printf(" (ack)\n");  break;
         case IQPR_PACKET_TYPE_NACK:  printf(" (nack)\n"); break;
         default:
             printf("\n");
-            fprintf(stderr,"error: iqpr_callback(), invaid packet type: %u\n", packet_type);
+            fprintf(stderr,"error: iqpr_callback(), invaid packet type: %u\n", q->rx_header.packet_type);
         }
     }
 
-    if (packet_type != IQPR_PACKET_TYPE_DATA) {
+    if (q->rx_header.packet_type != IQPR_PACKET_TYPE_DATA) {
         // check to see if we were waiting for an ack and
         // check to see if this packet matches the one we are waiting for
         //
         // TODO : check to see if source/destination ids match as well
-        if ( (q->rx_state == IQPR_RX_WAIT_FOR_ACK) && (packet_id == q->rx_ack_pid) ) {
+        if ( (q->rx_state == IQPR_RX_WAIT_FOR_ACK) && (q->rx_header.pid == q->rx_ack_pid) ) {
             // set status flag
             q->rx_ack_found = 1;
         } else {
@@ -418,9 +419,6 @@ int iqpr_callback(unsigned char * _rx_header,
     if (q->rx_state == IQPR_RX_WAIT_FOR_DATA)
         q->rx_ack_found = 1;
 
-    // set internal packet id
-    q->rx_packet_id = packet_id;
-
     /*
     // TODO: validate fec0,fec1 before indexing fec_scheme_str
     printf("    payload len : %u\n", payload_len);
@@ -429,11 +427,14 @@ int iqpr_callback(unsigned char * _rx_header,
     */
 
     // recreate packetizer if necessary
-    q->p_dec = packetizer_recreate(q->p_dec, payload_len, fec0, fec1);
+    q->p_dec = packetizer_recreate(q->p_dec,
+                                   q->rx_header.payload_len,
+                                   q->rx_header.fec0,
+                                   q->rx_header.fec1);
 
     // re-allocate memory arrays if necessary
-    if (q->rx_data_len != payload_len) {
-        q->rx_data_len = payload_len;
+    if (q->rx_data_len != q->rx_header.payload_len) {
+        q->rx_data_len = q->rx_header.payload_len;
         q->rx_data = (unsigned char*) realloc(q->rx_data, q->rx_data_len*sizeof(unsigned char));
     }
 
@@ -444,9 +445,6 @@ int iqpr_callback(unsigned char * _rx_header,
         if (verbose) printf("  <<< payload crc fail >>>\n");
     }
 
-    // copy header data to internal memory array
-    memmove(q->rx_header, _rx_header,  14);
-    
     return 0;
 }
 
