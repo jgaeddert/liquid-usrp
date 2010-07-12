@@ -360,8 +360,27 @@ void usrp_io::initialize()
 {
     std::cout << "initializing usrp..." << std::endl;
 
+    //
+    int which_side = 0;
+    int which_board = 0;
+    int decim = 256;
+    int interp = 512;
+    int fusb_block_size = 1024;
+    int fusb_nblocks = 4;
+    int mode = usrp_standard_rx::FPGA_MODE_NORMAL;
+    int nchannels = 1;
+    int rx_mux = which_side==0 ? 0x00000010 : 0x00000032;
+    int tx_mux = -1;
+
     // create rx object
-    usrp_rx = usrp_standard_rx::make(0, 256);
+    //usrp_rx = usrp_standard_rx::make(0, 256);
+    usrp_rx = usrp_standard_rx::make(which_board,
+                                     decim,
+                                     nchannels,
+                                     rx_mux,
+                                     mode,
+                                     fusb_block_size,
+                                     fusb_nblocks);
     if (!usrp_rx) {
         std::cerr << "error: usrp_io::initialize(), could not create usrp rx"
             << std::endl;
@@ -372,7 +391,14 @@ void usrp_io::initialize()
                                                              usrp_rx->pga_max());
 
     // create tx object
-    usrp_tx = usrp_standard_tx::make(0, 512);
+    //usrp_tx = usrp_standard_tx::make(0, 512);
+    usrp_tx = usrp_standard_tx::make(which_board,
+                                     interp,
+                                     nchannels,
+                                     tx_mux,
+                                     fusb_block_size,
+                                     fusb_nblocks);
+
     if (!usrp_tx) {
         std::cerr << "error: usrp_io::initialize(), could not create usrp tx"
             << std::endl;
