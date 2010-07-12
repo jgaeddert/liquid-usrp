@@ -40,8 +40,6 @@ struct iqpr_s {
     gport port_rx;                  // receive port
 
     // common
-    unsigned int payload_len;       // payload length (raw data)
-    unsigned int packet_len;        // packet length (encoded data)
     unsigned int node_id;           // node identifier
 
     // receiver
@@ -64,25 +62,35 @@ struct iqpr_s {
     flexframegenprops_s fgprops;    // frame generator properties
     flexframegen fg;                // frame generator
     interp_crcf interp;             // matched filter
+    float tx_gain;                  // transmit gain
 };
 
 
+// create iqpr object
 iqpr iqpr_create(unsigned int _node_id)
 {
+    // allocate memory for main object
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
-
-    q->payload_len = 1024;
-    q->packet_len = packetizer_get_packet_length(q->payload_len, FEC_NONE, FEC_NONE);
     q->node_id = _node_id;
 
+    // initialize tx header
+    q->tx_header.payload_len = 1024;
+    q->tx_header.fec0 = FEC_NONE;
+    q->tx_header.fec1 = FEC_NONE;
+
+    // initialize rx header
+    q->rx_header.payload_len = 1024;
+    q->rx_header.fec0 = FEC_NONE;
+    q->rx_header.fec1 = FEC_NONE;
+
     // create packetizers
-    q->p_enc = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
-    q->p_dec = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
+    q->p_enc = packetizer_create(q->tx_header.payload_len, q->tx_header.fec0, q->tx_header.fec1);
+    q->p_dec = packetizer_create(q->rx_header.payload_len, q->rx_header.fec0, q->rx_header.fec1);
 
     // create frame generator
     q->fgprops.rampup_len = 64;
     q->fgprops.phasing_len = 64;
-    q->fgprops.payload_len = q->packet_len;    // NOTE : payload_len for frame is packet_len
+    q->fgprops.payload_len = packetizer_get_enc_msg_len(q->p_enc);  // NOTE : payload_len for frame is packet_len
     q->fgprops.mod_scheme = MOD_QPSK;
     q->fgprops.mod_bps = 2;
     q->fgprops.rampdn_len = 64;
@@ -99,7 +107,10 @@ iqpr iqpr_create(unsigned int _node_id)
     float beta=0.7f;
     q->interp = interp_crcf_create_rrc(2,m,beta,0);
 
-    // allocate memory
+    // set transmit gain
+    q->tx_gain = 0.2f;
+
+    // allocate memory for received data
     q->rx_data_len = 1024;
     q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
 
@@ -131,32 +142,8 @@ void iqpr_txpacket(iqpr _q,
                    unsigned int _payload_len)
 {
     unsigned int i;
-    float g = 0.1f; // transmit gain
-
-    // configure frame generator
-    _q->payload_len = _payload_len;
-    _q->packet_len = packetizer_get_packet_length(_q->payload_len, FEC_NONE, FEC_NONE);
-    _q->fgprops.payload_len = _q->packet_len;
-    flexframegen_setprops(_q->fg, &_q->fgprops);
-
-    // allocate memory for buffers
-    //unsigned char payload[_q->payload_len];  // raw data
-    unsigned char packet[_q->packet_len];    // encoded message length
-
-    unsigned int frame_len = flexframegen_getframelen(_q->fg);
-    std::complex<float> frame[frame_len];
-    std::complex<float> mfbuffer[2*frame_len];
-
-    //printf("[tx] sending packet %u...\n", _pid);
-
-    // recreate packetizer
-    _q->p_enc = packetizer_recreate(_q->p_enc, _q->payload_len, FEC_NONE, FEC_NONE);
-
-    // encode packet
-    packetizer_encode(_q->p_enc, _payload, packet);
 
     // prepare header
-    unsigned char header[14];
     _q->tx_header.pid = _pid;
     _q->tx_header.payload_len = _payload_len;
     _q->tx_header.fec0 = FEC_NONE;
@@ -164,14 +151,41 @@ void iqpr_txpacket(iqpr _q,
     _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
     _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
+
+    // encode header
+    unsigned char header[14];
     iqprheader_encode(&_q->tx_header, header);
+
+    // recreate packetizer
+    _q->p_enc = packetizer_recreate(_q->p_enc,
+                                    _q->tx_header.payload_len,
+                                    _q->tx_header.fec0,
+                                    _q->tx_header.fec1);
+
+
+    // configure frame generator
+    unsigned int packet_len = packetizer_get_enc_msg_len(_q->p_enc);
+    _q->fgprops.payload_len = packet_len;   // NOTE : payload_len for frame is packet_len
+    flexframegen_setprops(_q->fg, &_q->fgprops);
+
+    // allocate memory for buffers
+    unsigned char packet[packet_len];    // encoded message
+
+    unsigned int frame_len = flexframegen_getframelen(_q->fg);
+    std::complex<float> frame[frame_len];       // frame
+    std::complex<float> mfbuffer[2*frame_len];  // frame (interpolated)
+
+    //printf("[tx] sending packet %u...\n", _pid);
+
+    // encode packet
+    packetizer_encode(_q->p_enc, _payload, packet);
 
     // generate frame
     flexframegen_execute(_q->fg, header, packet, frame);
 
     // run interpolator
     for (i=0; i<frame_len; i++) {
-        interp_crcf_execute(_q->interp, frame[i]*g, &mfbuffer[2*i]);
+        interp_crcf_execute(_q->interp, frame[i]*_q->tx_gain, &mfbuffer[2*i]);
     }
 
     // produce data in buffer
@@ -183,8 +197,6 @@ void iqpr_txpacket(iqpr _q,
     }
 
     gport_produce(_q->port_tx, (void*)mfbuffer, 512);
-
-    //_q->pid++;
 }
 
 
@@ -196,7 +208,6 @@ void iqpr_txack(iqpr _q,
     flexframegen_setprops(_q->fg, &_q->fgprops);
 
     unsigned int i;
-    float g = 0.5f; // transmit gain
 
     unsigned int frame_len = flexframegen_getframelen(_q->fg);
     std::complex<float> frame[frame_len];
@@ -221,7 +232,7 @@ void iqpr_txack(iqpr _q,
 
     // run interpolator
     for (i=0; i<frame_len; i++) {
-        interp_crcf_execute(_q->interp, frame[i]*g, &mfbuffer[2*i]);
+        interp_crcf_execute(_q->interp, frame[i]*_q->tx_gain, &mfbuffer[2*i]);
     }
 
     // produce data in buffer

@@ -62,9 +62,6 @@ int main (int argc, char **argv) {
     unsigned int node_type = NODE_MASTER;
     unsigned int node_id = 100;
 
-    // initialize iqpr structure
-    iqpr q = iqpr_create(node_id);
-
     //
     int d;
     while ((d = getopt(argc,argv,"uhf:b:n:ms")) != EOF) {
@@ -81,6 +78,9 @@ int main (int argc, char **argv) {
             exit(1);
         }
     }
+
+    // initialize iqpr structure
+    iqpr q = iqpr_create(node_id);
 
     // create usrp object
     usrp_io * usrp = new usrp_io();
@@ -110,7 +110,7 @@ int main (int argc, char **argv) {
     unsigned int num_attempts = 0;
     if (node_type == NODE_MASTER) {
         unsigned int payload_len = 1024;
-        unsigned char payload[1024];
+        unsigned char payload[payload_len];
 
         // initialize payload to random data
         for (n=0; n<payload_len; n++)
