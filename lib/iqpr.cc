@@ -21,7 +21,7 @@
 //
 // iqpr.cc
 //
-// iqpr basic data packets back and forth
+// iqpr: l(iq)uid (p)acket (r)adio
 //
 
 #include <iostream>
@@ -469,9 +469,11 @@ int iqpr_callback(unsigned char * _rx_header,
 
     // decode packet
     bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, q->rx_data);
-    if (crc_pass) {
-    } else {
+    if (!crc_pass) {
         if (q->verbose) printf("  <<< payload crc fail >>>\n");
+
+        // payload failed check
+        return 0;
     }
 
     // check to see if we were waiting for a data packet

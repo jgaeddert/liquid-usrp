@@ -179,7 +179,7 @@ int main (int argc, char **argv) {
                                                     &stats);
             } while (!packet_found);
 
-            printf("  ping received %4u data samples on packet [%4u] : %.2x %.2x %.2x %.2x\n",
+            printf("  ping received %4u data bytes on packet [%4u] : %.2x %.2x %.2x %.2x\n",
                     payload_len,
                     header.pid,
                     payload[0],
