@@ -34,9 +34,6 @@ extern "C" {
 #   define LIQUID_USE_COMPLEX_H 1
 #endif /* __cplusplus */
 
-#define IQPR_NODE_MASTER        (0)
-#define IQPR_NODE_SLAVE         (1)
-
 #define IQPR_PACKET_TYPE_DATA   (0)
 #define IQPR_PACKET_TYPE_ACK    (1)
 #define IQPR_PACKET_TYPE_NACK   (2)
@@ -55,9 +52,17 @@ void iqpr_txpacket(iqpr _q,
                    unsigned int _payload_len);
 void iqpr_txack(iqpr _q, unsigned int _pid);
 void iqpr_rxpacket(iqpr _q);
-int iqpr_wait_for_data(iqpr _q);
+
+// wait for data packet, returning -1 if not found pid otherwise
+int iqpr_wait_for_data(iqpr _q,
+                       unsigned char * _payload,
+                       unsigned int * _payload_len);
 int iqpr_wait_for_ack(iqpr _q, unsigned int _pid);
 int iqpr_mac_clear(iqpr _q);
+
+// ports
+void iqpr_connect_txport(iqpr _q, gport _p);
+void iqpr_connect_rxport(iqpr _q, gport _p);
 
 // internal methods
 int iqpr_callback(unsigned char * _rx_header,

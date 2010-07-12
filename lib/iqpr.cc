@@ -45,7 +45,6 @@ struct iqpr_s {
 
     // common
     int continue_running;           // continue running transceiver flag
-    int node_type;                  // master/slave
     unsigned int payload_len;       // payload length (raw data)
     unsigned int packet_len;        // packet length (encoded data)
     unsigned int pid;               // packet id
@@ -200,7 +199,9 @@ void iqpr_rxpacket(iqpr _q)
 
 }
 
-int iqpr_wait_for_data(iqpr _q)
+int iqpr_wait_for_data(iqpr _q,
+                       unsigned char * _payload,
+                       unsigned int * _payload_len)
 {
     _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
     _q->rx_ack_found = 0;
@@ -217,12 +218,16 @@ int iqpr_wait_for_data(iqpr _q)
         // check status flag
         if (_q->rx_ack_found) {
             printf(" received data packet %u!\n", _q->rx_packet_id);
-            return 1;
+
+            // set output memory pointer
+            *_payload = NULL;
+            *_payload_len = 0;
+            return _q->rx_packet_id;
         }
     }
 
     // ack was never received
-    return 0;
+    return -1;
 }
 
 
@@ -278,6 +283,19 @@ int iqpr_mac_clear(iqpr _q)
     return (rssi < _q->fsprops.squelch_threshold) ? 1 : 0;
 }
 
+
+// ports
+
+
+void iqpr_connect_txport(iqpr _q, gport _p)
+{
+    _q->port_tx = _p;
+}
+
+void iqpr_connect_rxport(iqpr _q, gport _p)
+{
+    _q->port_rx = _p;
+}
 
 // 
 // iqpr internal methods
@@ -379,7 +397,6 @@ iqpr iqpr_create(unsigned int _node_id)
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
 
     q->continue_running = 1;
-    q->node_type = IQPR_NODE_MASTER;
     q->payload_len = 1024;
     q->packet_len = packetizer_get_packet_length(q->payload_len, FEC_NONE, FEC_NONE);
     q->pid = 0;
