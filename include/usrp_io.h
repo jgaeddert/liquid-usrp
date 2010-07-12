@@ -23,6 +23,9 @@
 //
 //
 
+#ifndef __USRP_IO_H__
+#define __USRP_IO_H__
+
 #include <pthread.h>
 #include <liquid/liquid.h>
 
@@ -110,6 +113,9 @@ public:
     void enable_auto_tx(int _channel);
     void disable_auto_tx(int _channel);
 
+    void enable_verbose()  { verbose = true; }
+    void disable_verbose() { verbose = false; }
+
     // port handling
     gport get_tx_port(int _channel) { return port_resamp_tx; }
     gport get_rx_port(int _channel) { return port_resamp_rx; }
@@ -146,6 +152,8 @@ protected:
     bool tx_active;     // tx thread controller flag
     bool rx_running;    // rx thread status flag
     bool tx_running;    // tx thread status flag
+
+    bool verbose;
 
     // tx/rx processing threads
     pthread_t tx_thread;
@@ -185,6 +193,10 @@ protected:
     unsigned int tx_interp0, tx_interp1;
     unsigned int rx_decim0, rx_decim1;
 
+    // halfband interpolator/decimator
+    resamp2_crcf rx_halfband_resamp;
+    resamp2_crcf tx_halfband_resamp;
+
     // arbitrary resampling properties/objects
     float rx_resamp_rate;
     float tx_resamp_rate;
@@ -193,3 +205,4 @@ protected:
     resamp_crcf tx_resamp;
 };
 
+#endif  // __USRP_IO_H__

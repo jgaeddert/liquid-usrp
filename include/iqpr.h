@@ -1,5 +1,27 @@
+/*
+ * Copyright (c) 2010 Joseph Gaeddert
+ * Copyright (c) 2010 Virginia Polytechnic Institute & State University
+ *
+ * This file is part of liquid.
+ *
+ * liquid is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * liquid is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with liquid.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 //
-// liquid packet radio
+// iqpr.cc
+//
+// iqpr basic data packets back and forth
 //
 
 #ifndef __IQPR_H__
@@ -12,102 +34,114 @@ extern "C" {
 #   define LIQUID_USE_COMPLEX_H 1
 #endif /* __cplusplus */
 
+#include <liquid/liquid.h>
+
+#define IQPR_PACKET_TYPE_DATA   (0)
+#define IQPR_PACKET_TYPE_ACK    (1)
+
+#define IQPR_RX_NULL            (0) // not waiting for anything
+#define IQPR_RX_WAIT_FOR_DATA   (1) // receiver waiting for data packet
+#define IQPR_RX_WAIT_FOR_ACK    (2) // receiver waiting for ack
+
+
+// iqpr packet header descriptor
+struct iqprheader_s {
+    unsigned int pid;           // [0,1] packet identifier
+    unsigned int payload_len;   // [2,3] payload length
+    fec_scheme fec0;            // [4]   inner fec scheme
+    fec_scheme fec1;            // [5]   outer fec scheme
+    unsigned int packet_type;   // [6]   packet type (data, ack, etc.)
+    unsigned int node_src;      // [7]   source node id
+    unsigned int node_dst;      // [8]   destination node id
+
+    unsigned char userdata[5];  // [9:13] user data
+};
+
+// encode header (structure > array)
+//  _q      :   iqpr heade structure
+//  _header :   14-byte headr array
+void iqprheader_encode(iqprheader_s * _q, unsigned char * _header);
+
+// decode header (array > structure))
+//  _q      :   iqpr heade structure
+//  _header :   14-byte headr array
+void iqprheader_decode(iqprheader_s * _q, unsigned char * _header);
+
+
+// 
+// iqpr object interface declarations
+//
+
 typedef struct iqpr_s * iqpr;
 
-iqpr iqpr_create(unsigned int _node_id);
+// create iqpr object
+//  _node_id    :   id of this node
+//  _tx_port    :   transmitter port
+//  _rx_port    :   receiver port
+iqpr iqpr_create(unsigned int _node_id,
+                 gport _port_tx,
+                 gport _port_rx);
+
+// destroy iqpr object
 void iqpr_destroy(iqpr _q);
+
+// print iqpr object internals
 void iqpr_print(iqpr _q);
 
-// open connection to remote node
-//  _q          :   iqpr packetizer object
-//  _node_id    :   identification of destination node
-//  _link_type  :   tcp/udp/...
-//
-// returns:
-//  -1          :   link cannot be established (timeout)
-//   0          :   link cannot be established (connection refused)
-//   1          :   link established
-int iqpr_open_connection(iqpr _q,
-                         unsigned int _node_id,
-                         unsigned int _link_type);
+// set verbosity on/off
+void iqpr_setverbose(iqpr _q, int _verbose);
 
-// close connection to remote node
-//  _q          :   iqpr packetizer object
-//  _node_id    :   identification of destination node
-//
-// returns:
-//  -1          :   link to destination node does not exist
-//   0          :   link cannot be established (refused)
-//   1          :   link established
-int iqpr_close_connection(iqpr _q, unsigned int _node_id);
+// transmit packet
+//  _q              :   iqpr object
+//  _payload        :   payload data
+//  _payload_len    :   number of bytes in payload
+//  _ms             :   modulation scheme
+//  _bps            :   modulation depth
+//  _fec0           :   inner fec scheme
+//  _fec1           :   outer fec scheme
+void iqpr_txpacket(iqpr _q,
+                   unsigned int _pid,
+                   unsigned char * _payload,
+                   unsigned int _payload_len,
+                   modulation_scheme _ms,
+                   unsigned int _bps,
+                   fec_scheme _fec0,
+                   fec_scheme _fec1);
 
-// print connections
-void iqpr_print_connections(iqpr _q);
+// transmit ACK packet (acknowledgement) on packet [pid]
+void iqpr_txack(iqpr _q, unsigned int _pid);
 
-// configure properties
-//
-// properties available:
-//  f   :   center frequency
-//  b   :   bandwidth (symbol rate)
-//  n   :   payload length (bytes)
-//  m   :   mod. scheme: psk, dpsk, ask, qam, apsk...
-//  p   :   mod. depth: 1,2,...,8
-//  r   :   ramp up/dn length
-//  z   :   phasing length
-//  c   :   fec coding scheme (inner)
-//  k   :   fec coding scheme (outer)
-//  g   :   tx gain [dB]
-//  w   :   backoff time (us)
-void iqpr_configure(iqpr _q, void * _props);
+// wait for data packet, returning 1 if found, 0 if not
+//  _q              :   iqpr object
+//  _payload        :   payload data
+//  _payload_len    :   number of bytes in payload
+//  _header         :   received header structure
+//  _stats          :   received frame statistics
+int iqpr_wait_for_packet(iqpr _q,
+                         unsigned char ** _payload,
+                         unsigned int * _payload_len,
+                         iqprheader_s * _header,
+                         framesyncstats_s * _stats);
 
-//
-//  s   :   signal-to-noise ratio (estimate) [dB]
-//  r   :   data rate
-//  p   :   packets received
-//  h   :   valid headers received
-//  v   :   valid packets received
-//  g   :   rssi
-//  c   :   cpu usage
-void iqpr_get_internals(iqpr _q, void * _props);
+// wait for ACK packet (acknowlegement)
+//  _q              :   iqpr object
+//  _pid            :   packet identifier to wait for
+//  _header         :   received header structure
+//  _stats          :   received frame statistics
+int iqpr_wait_for_ack(iqpr _q,
+                      unsigned int _pid,
+                      iqprheader_s * _header,
+                      framesyncstats_s * _stats);
 
-#define IQPR_UDP        0       // UDP-like packet (don't wait for 'ACK')
-#define IQPR_TCP        1       // TCP-like packet (wait for 'ACK')
-#define IQPR_BROADCAST  2       // broadcast packet
+// get channel rssi, estimated on 512 samples
+float iqpr_mac_getrssi(iqpr _q);
 
-// internal definitions
-#define IQPR_CONNECT    20      // request link connection
-#define IQPR_DISCONNECT 21      // request link disconnection
-
-// send data packet to _node_id
-int iqpr_send(iqpr _q,
-              unsigned int _node_id,
-              unsigned char * _data,
-              unsigned int _n,
-              int _packet_type);
-
-// wait to receive packet
-int iqpr_recv(iqpr _q,
-              unsigned int * _node_id,
-              unsigned char * _data,
-              unsigned int * _n,
-              int * _packet_type);
-
-// iqpr_select()
-int iqpr_select(iqpr _q);
 
 // 
 // internal methods
 //
 
-// start/stop transmit/receive threads
-void iqpr_start_threads(iqpr _q);
-void iqpr_stop_threads(iqpr _q);
-
-// threads
-void * iqpr_tx_process(void * _q);
-void * iqpr_rx_process(void * _q);
-
-// receiver callback function
+// iqpr internal callback method
 int iqpr_callback(unsigned char * _rx_header,
                   int _rx_header_valid,
                   unsigned char * _rx_payload,
@@ -115,51 +149,6 @@ int iqpr_callback(unsigned char * _rx_header,
                   framesyncstats_s _stats,
                   void * _userdata);
 
-
-// iqpr header 
-struct iqpr_header_s {
-    unsigned int packet_id;     // header[0:1]
-    unsigned int payload_len;   // header[2:3]
-    fec_scheme fec0;            // header[4]
-    fec_scheme fec1;            // header[5]
-    unsigned int node_id_src;   // header[6]
-    unsigned int node_id_dst;   // header[7]
-    unsigned int packet_type;   // header[8]
-};
-
-// print header to screen
-void iqpr_header_print(struct iqpr_header_s _header);
-
-// encode header into buffer
-void iqpr_header_encode(struct iqpr_header_s _header,
-                        unsigned char * _header_data);
-
-// decode header from buffer
-void iqpr_header_decode(unsigned char * _header_data,
-                        struct iqpr_header_s * _header);
-
-#if 0
-// 
-// iqpr connection
-//
-struct iqpr_connection_s {
-    unsigned int node_id_dst;   // destination node id
-    unsigned char * buffer;
-    flexframegenprops_s fgprops;
-
-    // status variables
-    int ack_waiting;            // waiting for ack?
-    unsigned int ack_packet_id; // packet id for ack
-
-    unsigned int num_packets_received;
-    unsigned int num_valid_headers_received;
-    unsigned int num_valid_packets_received;
-    unsigned int num_bytes_received;
-};
-
-// initialize structure
-void iqpr_connection_init(struct iqpr_connection_s * _c);
-#endif
 
 #ifdef __cplusplus
 } /* extern "C" */

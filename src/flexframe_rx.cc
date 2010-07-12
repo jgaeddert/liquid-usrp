@@ -164,7 +164,7 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(512));
+    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(512));
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
@@ -200,17 +200,13 @@ int main (int argc, char **argv)
 #endif
     flexframesync fs = flexframesync_create(&props,callback,(void*)&fd);
 
-    // create decimator
-    resamp2_crcf decimator = resamp2_crcf_create(37,0.0f,60.0f);
-    std::complex<float> decim_out[256];
-
     std::complex<float> data_rx[512];
  
     // start usrp data transfer
     uio->start_rx(USRP_CHANNEL);
     printf("usrp data transfer started\n");
  
-    unsigned int i, n;
+    unsigned int i;
     struct rusage start;
     struct rusage finish;
     getrusage(RUSAGE_SELF, &start);
@@ -219,13 +215,8 @@ int main (int argc, char **argv)
         // grab data from port
         gport_consume(port_rx, (void*)data_rx, 512);
 
-        // run decimator
-        for (n=0; n<256; n++) {
-            resamp2_crcf_decim_execute(decimator, &data_rx[2*n], &decim_out[n]);
-        }
-
         // run through frame synchronizer
-        flexframesync_execute(fs, decim_out, 256);
+        flexframesync_execute(fs, data_rx, 512);
     }
     getrusage(RUSAGE_SELF, &finish);
 
@@ -254,7 +245,6 @@ int main (int argc, char **argv)
     // clean it up
     flexframesync_destroy(fs);
     packetizer_destroy(p);
-    resamp2_crcf_destroy(decimator);
 
     delete uio;
     return 0;

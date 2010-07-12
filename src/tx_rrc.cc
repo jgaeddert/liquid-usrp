@@ -114,18 +114,12 @@ int main (int argc, char **argv)
     float dt=0.0f;      // fractional sample delay
     //float beta=0.3f;    // excess bandwidth factor
 
-    // create filter
-    unsigned int h_len = 2*k*m+1;
-    float h[h_len];
-    design_rrc_filter(k,m,beta,dt,h);
-    interp_crcf nyquist_filter = interp_crcf_create(k,h,h_len);
-
-    resamp2_crcf interpolator = resamp2_crcf_create(37,0.0f,60.0f);
-    std::complex<float> data_tx[512];
+    // create matched-filter interpolator
+    interp_crcf nyquist_filter = interp_crcf_create_rrc(k,m,beta,dt);
 
     // 
     std::complex<float> symbols[num_symbols];
-    std::complex<float> interp_out[2*num_symbols];
+    std::complex<float> data_tx[2*num_symbols];
 
     // modem
     modulation_scheme ms = MOD_QPSK;
@@ -149,20 +143,15 @@ int main (int argc, char **argv)
 
         // run nyquist filter/interpolator
         for (n=0; n<num_symbols; n++)
-            interp_crcf_execute(nyquist_filter,symbols[n],&interp_out[2*n]);
+            interp_crcf_execute(nyquist_filter,symbols[n],&data_tx[2*n]);
 
-        // run half-band interpolator
-        for (n=0; n<2*num_symbols; n++)
-            resamp2_crcf_interp_execute(interpolator,interp_out[n],&data_tx[2*n]);
-
-        gport_produce(port_tx,(void*)data_tx,512);
+        gport_produce(port_tx,(void*)data_tx,2*num_symbols);
     }
  
     uio->stop_tx(0);  // Stop data transfer
     printf("usrp data transfer complete\n");
 
     // clean it up
-    resamp2_crcf_destroy(interpolator);
     interp_crcf_destroy(nyquist_filter);
     modem_destroy(mod);
     delete uio;

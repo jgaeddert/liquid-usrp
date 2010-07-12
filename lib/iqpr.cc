@@ -1,168 +1,151 @@
+/*
+ * Copyright (c) 2010 Joseph Gaeddert
+ * Copyright (c) 2010 Virginia Polytechnic Institute & State University
+ *
+ * This file is part of liquid.
+ *
+ * liquid is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * liquid is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with liquid.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 //
-// liquid packet radio
+// iqpr.cc
+//
+// iqpr: l(iq)uid (p)acket (r)adio
 //
 
 #include <iostream>
-#include <complex>
-#include <math.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <complex>
 #include <liquid/liquid.h>
 
 #include "iqpr.h"
-#include "usrp_io.h"
 
-#define USRP_CHANNEL        (0)
-
-// packet header structure
-//
-//  id      num bytes   description
-//  -----------------------------
-//  plen    2           packet length
-//  fec0    1           fec scheme (inner)
-//  fec1    1           fec scheme (outer)
-//
-
+// iqpr data structure
 struct iqpr_s {
-    unsigned int node_id;           // node identification
-    unsigned int net_id;            // network identification
+    gport port_tx;                  // transmit port
+    gport port_rx;                  // receive port
 
-    usrp_io * uio;                  // usrp input/output device
+    // common
+    unsigned int node_id;           // node identifier
 
-    // framing objects
-    flexframegen fg;                // frame generator
-    flexframegenprops_s fgprops;    // frame generator properties
-    flexframesync fs;               // frame synchronizer
-    framesyncprops_s fsprops;       // frame synchronizer properties
-
-    // filtering objects
-    interp_crcf  mf_interp;         // matched filter interpolator
-    resamp2_crcf interp;            // half-band interpolator
-    resamp2_crcf decim;             // half-band decimator
-
-    // packetizer objects
-    packetizer p_enc;               // packet encoder
+    // receiver
     packetizer p_dec;               // packet decoder
+    unsigned char * rx_data;        // received payload data
+    unsigned int rx_data_len;       // received payload data length
+    iqprheader_s rx_header;         // received header
+    framesyncprops_s fsprops;       // frame synchronizer properties
+    flexframesync fs;               // frame synchronizer
+    std::complex<float> rx_buffer[512];   // rx data buffer
+    unsigned int rx_packet_pid;     // receiver packet pid
+    int rx_packet_found;            // receiver packet found flag
+    unsigned int rx_state;          // receiver state (waiting on a packet or ack?)
+    framesyncstats_s rx_stats;      // frame synchronizer stats
 
-    // certain properties
-    float gain_tx;                  // transmit gain
+    // transmitter
+    packetizer p_enc;               // packet encoder
+    unsigned char * tx_data;        // transmitted payload data
+    unsigned int tx_data_len;       // transmitted payload data length
+    iqprheader_s tx_header;         // transmitted header
+    flexframegenprops_s fgprops;    // frame generator properties
+    flexframegen fg;                // frame generator
+    interp_crcf interp;             // matched filter
+    float tx_gain;                  // transmit gain
 
-    // MAC layer
-    int tx_mutex;                   // transmit mutex lock for...
-    unsigned char header_tx[9];     // transmit header
-    unsigned char header_rx[9];     // receive header
-
-    // buffers
-    unsigned int payload_len;       // decoded message length (bytes)
-    unsigned int packet_len;        // encoded message length (bytes)
-    unsigned int frame_len;         // frame length (complex samples)
-    std::complex<float> * frame;    // transmitter frame [size: 1 x frame_len]
-    std::complex<float> mf_buffer[256];
-    std::complex<float> data_tx[512];
-    unsigned int data_rx_numalloc;  // number of bytes allocated to data_rx
-    unsigned int data_rx_len;       // received data buffer length
-    unsigned char * data_rx;        // received data buffer
-
-    // status variables
+    // debugging
     int verbose;
-    unsigned int num_packets_received;
-    unsigned int num_valid_headers_received;
-    unsigned int num_valid_packets_received;
-    unsigned int num_bytes_received;
-    unsigned int num_collisions;
-
-    // threads
-    pthread_t tx_thread;
-    pthread_t rx_thread;
 };
 
-iqpr iqpr_create(unsigned int _node_id)
+
+// create iqpr object
+iqpr iqpr_create(unsigned int _node_id,
+                 gport _port_tx,
+                 gport _port_rx)
 {
+    // allocate memory for main object
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
+    q->node_id = _node_id;  // node id
+    q->port_tx = _port_tx;  // transmit port
+    q->port_rx = _port_rx;  // receive port
 
-    // set properties
-    q->node_id = _node_id;
 
-    // create usrp_io
-    q->uio = new usrp_io();
-    q->uio->set_rx_freq(USRP_CHANNEL, 462e6f);
-    q->uio->set_tx_freq(USRP_CHANNEL, 462e6f);
-    q->uio->set_rx_samplerate(2.0f*62.5e3f);
-    q->uio->set_tx_samplerate(2.0f*62.5e3f);
-    q->uio->enable_auto_tx(USRP_CHANNEL);
+    // initialize tx header
+    q->tx_header.payload_len = 1024;
+    q->tx_header.fec0 = FEC_NONE;
+    q->tx_header.fec1 = FEC_NONE;
 
-    // buffers, etc.
-    q->payload_len = 64;
-    q->packet_len = packetizer_get_packet_length(q->payload_len,
-                                                 FEC_NONE,
-                                                 FEC_NONE);
+    // initialize rx header
+    q->rx_header.payload_len = 1024;
+    q->rx_header.fec0 = FEC_NONE;
+    q->rx_header.fec1 = FEC_NONE;
+
+    // create packetizers
+    q->p_enc = packetizer_create(q->tx_header.payload_len, q->tx_header.fec0, q->tx_header.fec1);
+    q->p_dec = packetizer_create(q->rx_header.payload_len, q->rx_header.fec0, q->rx_header.fec1);
 
     // create frame generator
-    q->fgprops.rampup_len = 16;
+    q->fgprops.rampup_len = 64;
     q->fgprops.phasing_len = 64;
-    q->fgprops.payload_len = 0;
+    q->fgprops.payload_len = packetizer_get_enc_msg_len(q->p_enc);  // NOTE : payload_len for frame is packet_len
     q->fgprops.mod_scheme = MOD_QPSK;
     q->fgprops.mod_bps = 2;
-    q->fgprops.rampdn_len = 16;
+    q->fgprops.rampdn_len = 64;
     q->fg = flexframegen_create(&q->fgprops);
+    flexframegen_print(q->fg);
 
     // create frame synchronizer
     framesyncprops_init_default(&q->fsprops);
+    q->fsprops.squelch_threshold = -30.0f;
     q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
 
-    // filtering objects
-    q->mf_interp = interp_crcf_create_rrc(2,3,0.7f,0.0f);
-    q->interp = resamp2_crcf_create(37,0.0f,60.0f);
-    q->decim  = resamp2_crcf_create(37,0.0f,60.0f);
+    // create interpolator
+    unsigned int m=3;
+    float beta=0.7f;
+    q->interp = interp_crcf_create_rrc(2,m,beta,0);
 
-    // packetizer objects
-    q->p_enc = packetizer_create(0,FEC_NONE,FEC_NONE);
-    q->p_dec = packetizer_create(0,FEC_NONE,FEC_NONE);
+    // set transmit gain
+    q->tx_gain = 0.2f;
 
-    // allocate memory for arrays
-    q->frame_len = flexframegen_getframelen(q->fg);
-    q->frame = (std::complex<float>*) malloc( q->frame_len * sizeof(std::complex<float>) );
-    q->data_rx_numalloc = 64;
-    q->data_rx_len = 0;
-    q->data_rx = (unsigned char*) malloc( q->data_rx_numalloc * sizeof(unsigned char) );
+    // allocate memory for received data
+    q->rx_data_len = 1024;
+    q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
 
-    // clear status
-    q->verbose = 1;
+    // debugging
+    q->verbose = 0;
 
-    // start tx/rx threads
-    iqpr_start_threads(q);
-
-    // return object
     return q;
 }
 
 void iqpr_destroy(iqpr _q)
 {
-    // stop tx/rx threads
-    iqpr_stop_threads(_q);
-
-    // destroy usrp_io object
-    delete _q->uio;
-
-    // destroy framing objects
-    flexframegen_destroy(_q->fg);
-    flexframesync_destroy(_q->fs);
-
-    // destroy filter objects
-    interp_crcf_destroy(_q->mf_interp);
-    resamp2_crcf_destroy(_q->interp);
-    resamp2_crcf_destroy(_q->decim);
-
-    // destroy packetizer objects
+    // destroy packetizers
     packetizer_destroy(_q->p_enc);
     packetizer_destroy(_q->p_dec);
 
-    // free allocated memory
-    free(_q->frame);
+    // destroy frame generator
+    flexframegen_destroy(_q->fg);
 
-    // free main object
-    free(_q);
+    // destroy frame synchronizer
+    flexframesync_destroy(_q->fs);
+
+    // destroy interpolator
+    interp_crcf_destroy(_q->interp);
+
+    // free memory
+    free(_q->rx_data);
 }
 
 void iqpr_print(iqpr _q)
@@ -170,11 +153,241 @@ void iqpr_print(iqpr _q)
     printf("iqpr:\n");
 }
 
+void iqpr_setverbose(iqpr _q, int _verbose)
+{
+    _q->verbose = _verbose ? 1 : 0;
+}
+
+void iqpr_txpacket(iqpr _q,
+                   unsigned int _pid,
+                   unsigned char * _payload,
+                   unsigned int _payload_len,
+                   modulation_scheme _ms,
+                   unsigned int _bps,
+                   fec_scheme _fec0,
+                   fec_scheme _fec1)
+{
+    unsigned int i;
+
+    // prepare header
+    _q->tx_header.pid = _pid;
+    _q->tx_header.payload_len = _payload_len;
+    _q->tx_header.fec0 = _fec0;
+    _q->tx_header.fec1 = _fec1;
+    _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
+    _q->tx_header.node_src = _q->node_id;
+    _q->tx_header.node_dst = 0;
+
+    // encode header
+    unsigned char header[14];
+    iqprheader_encode(&_q->tx_header, header);
+
+    // recreate packetizer
+    _q->p_enc = packetizer_recreate(_q->p_enc,
+                                    _q->tx_header.payload_len,
+                                    _q->tx_header.fec0,
+                                    _q->tx_header.fec1);
+
+
+    // configure frame generator
+    unsigned int packet_len = packetizer_get_enc_msg_len(_q->p_enc);
+    _q->fgprops.mod_scheme = _ms;
+    _q->fgprops.mod_bps    = _bps;
+    _q->fgprops.payload_len = packet_len;   // NOTE : payload_len for frame is packet_len
+    flexframegen_setprops(_q->fg, &_q->fgprops);
+
+    // allocate memory for buffers
+    unsigned char packet[packet_len];    // encoded message
+
+    unsigned int frame_len = flexframegen_getframelen(_q->fg);
+    std::complex<float> frame[frame_len];       // frame
+    std::complex<float> mfbuffer[2*frame_len];  // frame (interpolated)
+
+    //printf("[tx] sending packet %u...\n", _pid);
+
+    // encode packet
+    packetizer_encode(_q->p_enc, _payload, packet);
+
+    // generate frame
+    flexframegen_execute(_q->fg, header, packet, frame);
+
+    // run interpolator
+    for (i=0; i<frame_len; i++) {
+        interp_crcf_execute(_q->interp, frame[i]*_q->tx_gain, &mfbuffer[2*i]);
+    }
+
+    // produce data in buffer
+    gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
+
+    // flush interpolator with zeros
+    for (i=0; i<64; i++) {
+        interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
+    }
+
+    gport_produce(_q->port_tx, (void*)mfbuffer, 128);
+}
+
+
+void iqpr_txack(iqpr _q,
+                unsigned int _pid)
+{
+    // configure frame generator
+    _q->fgprops.payload_len = 0;
+    flexframegen_setprops(_q->fg, &_q->fgprops);
+
+    unsigned int i;
+
+    unsigned int frame_len = flexframegen_getframelen(_q->fg);
+    std::complex<float> frame[frame_len];
+    std::complex<float> mfbuffer[2*frame_len];
+
+    if (_q->verbose) printf("[tx] sending ack for packet %u...\n", _pid);
+
+    // prepare header
+    _q->tx_header.pid = _pid;
+    _q->tx_header.payload_len = 0;
+    _q->tx_header.fec0 = FEC_NONE;
+    _q->tx_header.fec1 = FEC_NONE;
+    _q->tx_header.packet_type = IQPR_PACKET_TYPE_ACK;
+    _q->tx_header.node_src = _q->node_id;
+    _q->tx_header.node_dst = 0;
+
+    unsigned char header[14];
+    iqprheader_encode(&_q->tx_header, header);
+
+    // generate frame
+    flexframegen_execute(_q->fg, header, NULL, frame);
+
+    // run interpolator
+    for (i=0; i<frame_len; i++) {
+        interp_crcf_execute(_q->interp, frame[i]*_q->tx_gain, &mfbuffer[2*i]);
+    }
+
+    // produce data in buffer
+    gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
+
+    // flush interpolator with zeros
+    for (i=0; i<64; i++) {
+        interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
+    }
+
+    gport_produce(_q->port_tx, (void*)mfbuffer, 128);
+}
+
+#if 0
+void iqpr_rxpacket(iqpr _q)
+{
+    // read samples from buffer, run through frame synchronizer
+    unsigned int i;
+    for (i=0; i<10; i++) {
+        // grab data from port
+        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+
+        // run through frame synchronizer
+        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
+    }
+
+}
+#endif
+
+int iqpr_wait_for_packet(iqpr _q,
+                         unsigned char ** _payload,
+                         unsigned int * _payload_len,
+                         iqprheader_s * _header,
+                         framesyncstats_s * _stats)
+{
+    _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
+    _q->rx_packet_found = 0;
+
+    // read samples from buffer, run through frame synchronizer
+    unsigned int i;
+    for (i=0; i<10; i++) {
+        // grab data from port
+        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+
+        // run through frame synchronizer
+        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
+
+        // check status flag
+        if (_q->rx_packet_found) {
+            if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
+
+            // set outputs
+            *_payload = _q->rx_data;
+            *_payload_len = _q->rx_data_len;
+            memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
+            memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
+            return 1;
+        }
+    }
+
+    // ack was never received
+    return 0;
+}
+
+
+int iqpr_wait_for_ack(iqpr _q,
+                      unsigned int _pid,
+                      iqprheader_s * _header,
+                      framesyncstats_s * _stats)
+{
+    // set ack to trigger on a specific packet id
+    _q->rx_state = IQPR_RX_WAIT_FOR_ACK;
+    _q->rx_packet_pid = _pid;
+    _q->rx_packet_found = 0;
+
+    // read samples from buffer, run through frame synchronizer
+    unsigned int i;
+    for (i=0; i<10; i++) {
+        // grab data from port
+        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+
+        // run through frame synchronizer
+        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
+
+        // check status flag
+        if (_q->rx_packet_found) {
+            if (_q->verbose) printf(" received ack for packet %u!\n", _pid);
+
+            memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
+            memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
+            return 1;
+        }
+    }
+
+    // ack was never received
+    return 0;
+}
+
+
+// determine if MAC is clear
+float iqpr_mac_getrssi(iqpr _q)
+{
+    // grab data from port
+    gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+
+    // estimate signal level
+    unsigned int i;
+    float rssi = 0.0;
+    for (i=0; i<512; i++)
+        rssi += abs(_q->rx_buffer[i]) * abs(_q->rx_buffer[i]);
+
+    // TODO : fix rssi computation
+    rssi = 10*log10f(sqrt(rssi/512));
+
+    if (_q->verbose) {
+        printf("mac_clear(), rssi : %12.8f dB %c\n", rssi,
+            (rssi < _q->fsprops.squelch_threshold) ? ' ' : '*');
+    }
+
+    return rssi;
+}
+
+
 // 
-// internal methods
+// iqpr internal methods
 //
 
-// callback
 int iqpr_callback(unsigned char * _rx_header,
                   int _rx_header_valid,
                   unsigned char * _rx_payload,
@@ -184,168 +397,121 @@ int iqpr_callback(unsigned char * _rx_header,
 {
     iqpr q = (iqpr) _userdata;
 
-    q->num_packets_received++;
-    if (q->verbose) printf("********* iqpr callback invoked, ");
+    if (q->verbose) {
+        printf("********* callback invoked, ");
+        printf("SNR=%5.1fdB, ", _stats.SNR);
+        printf("rssi=%5.1fdB, ", _stats.rssi);
+    }
 
     if ( !_rx_header_valid ) {
         if (q->verbose) printf("header crc : FAIL\n");
         return 0;
     }
-    q->num_valid_headers_received++;
+
+    // save statistics
+    memmove(&q->rx_stats, &_stats, sizeof(framesyncstats_s));
 
     // decode header
-    struct iqpr_header_s header;
-    iqpr_header_decode(_rx_header, &header);
+    iqprheader_decode(&q->rx_header, _rx_header);
+    if (q->verbose) printf("packet id: %6u", q->rx_header.pid);
 
-    if (q->verbose) printf("packet id: %6u\n", header.packet_id);
-
-    q->p_dec = packetizer_recreate(q->p_dec,
-                                   header.payload_len,
-                                   header.fec0,
-                                   header.fec1);
-
-    // decode packet, reallocating buffer if necessary
-    if (header.payload_len > q->data_rx_numalloc) {
-        printf("iqpr, reallocating rx data length to %u bytes\n", header.payload_len);
-        q->data_rx_numalloc = header.payload_len;
-        q->data_rx = (unsigned char*) realloc(q->data_rx, q->data_rx_numalloc*sizeof(unsigned char));
-        if (q->data_rx == NULL) {
-            fprintf(stderr,"error, could not allocate memory for received data array\n");
-            exit(1);
+    if (q->verbose) {
+        switch (q->rx_header.packet_type) {
+        case IQPR_PACKET_TYPE_DATA:  printf(" (data)\n"); break;
+        case IQPR_PACKET_TYPE_ACK:   printf(" (ack)\n");  break;
+        default:
+            printf("\n");
+            fprintf(stderr,"error: iqpr_callback(), invaid packet type: %u\n", q->rx_header.packet_type);
         }
     }
-    q->data_rx_len = header.payload_len;
-    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, q->data_rx);
-    if (crc_pass) {
-        q->num_valid_packets_received++;
-        q->num_bytes_received += header.payload_len;
 
-        // TODO : check packet type, send request for immediate ACK if necessary
-    } else {
-        if (q->verbose) printf("  <<< payload crc fail >>>\n");
+    if (q->rx_header.packet_type == IQPR_PACKET_TYPE_ACK) {
+        // check to see if we were waiting for an ack and
+        // check to see if this packet matches the one we are waiting for
+        //
+        // TODO : check to see if source/destination ids match as well?
+        if ( (q->rx_state == IQPR_RX_WAIT_FOR_ACK) && (q->rx_header.pid == q->rx_packet_pid) ) {
+            // set status flag
+            q->rx_packet_found = 1;
+        } else {
+            q->rx_packet_found = 0;
+        }
+
+        return 0;
     }
+
+    /*
+    // TODO: validate fec0,fec1 before indexing fec_scheme_str
+    printf("    payload len : %u\n", payload_len);
+    printf("    fec0        : %s\n", fec_scheme_str[fec0]);
+    printf("    fec1        : %s\n", fec_scheme_str[fec1]);
+    */
+
+    // recreate packetizer if necessary
+    q->p_dec = packetizer_recreate(q->p_dec,
+                                   q->rx_header.payload_len,
+                                   q->rx_header.fec0,
+                                   q->rx_header.fec1);
+
+    // re-allocate memory arrays if necessary
+    if (q->rx_data_len != q->rx_header.payload_len) {
+        q->rx_data_len = q->rx_header.payload_len;
+        q->rx_data = (unsigned char*) realloc(q->rx_data, q->rx_data_len*sizeof(unsigned char));
+    }
+
+    // decode packet
+    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, q->rx_data);
+    if (!crc_pass) {
+        if (q->verbose) printf("  <<< payload crc fail >>>\n");
+
+        // payload failed check
+        return 0;
+    }
+
+    // check to see if we were waiting for a data packet
+    if (q->rx_state == IQPR_RX_WAIT_FOR_DATA)
+        q->rx_packet_found = 1;
 
     return 0;
 }
 
-// start threads
-void iqpr_start_threads(iqpr _q)
+// encode header
+void iqprheader_encode(iqprheader_s * _q,
+                       unsigned char * _header)
 {
-    // start usrp_io
-    _q->uio->start_rx(USRP_CHANNEL);
-    _q->uio->start_tx(USRP_CHANNEL);
-
-    // set thread attributes
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-    // create tx/rx threads
-    pthread_create(&_q->tx_thread, &attr, iqpr_tx_process, (void*)_q);
-    pthread_create(&_q->rx_thread, &attr, iqpr_rx_process, (void*)_q);
+    // prepare header
+    _header[0] = (_q->pid >> 8) & 0xff;
+    _header[1] = (_q->pid     ) & 0xff;
+    _header[2] = (_q->payload_len >> 8) & 0xff;
+    _header[3] = (_q->payload_len     ) & 0xff;
+    _header[4] = (unsigned char)(_q->fec0);
+    _header[5] = (unsigned char)(_q->fec1);
+    _header[6] = _q->packet_type & 0xff;
+    _header[7] = _q->node_src & 0xff;
+    _header[8] = _q->node_dst & 0xff;
 }
 
-// stop threads
-void iqpr_stop_threads(iqpr _q)
+
+// decode header
+void iqprheader_decode(iqprheader_s * _q,
+                       unsigned char * _header)
 {
-    void * status;
-    pthread_join(_q->tx_thread, &status);
-    pthread_join(_q->rx_thread, &status);
-}
+    // decode packet identifier
+    _q->pid = (_header[0] << 8) | _header[1];
 
-void * iqpr_tx_process(void * _q)
-{
-    //iqpr q = (iqpr) _q;
-
-    // TODO : wait for data to become avilable
-
-    printf("iqpr tx process complete.\n");
-    pthread_exit(NULL);
-}
-
-void * iqpr_rx_process(void * _q)
-{
-    iqpr q = (iqpr) _q;
-
-    // ports, buffers, etc.
-    gport port_rx = q->uio->get_rx_port(USRP_CHANNEL);
-    std::complex<float> data_rx[512];
-    std::complex<float> decim_out[256];
-
-    // continuously read data, blocking on tx_mutex
-    unsigned int i,n;
-    unsigned int num_blocks = 1000;
-    for (i=0; i<num_blocks; i++) {
-        // grab data from port
-        gport_consume(port_rx, (void*)data_rx, 512);
-
-        // run decimator
-        for (n=0; n<256; n++) {
-            resamp2_crcf_decim_execute(q->decim, &data_rx[2*n], &decim_out[n]);
-        }
-
-        // run through frame synchronizer
-        flexframesync_execute(q->fs, decim_out, 256);
-    }
-
-    printf("iqpr rx process complete.\n");
-    pthread_exit(NULL);
-}
-
-void iqpr_header_print(struct iqpr_header_s _header)
-{
-    printf("iqpr header:\n");
-    printf("    packet id       :   %u\n", _header.packet_id);
-    printf("    payload length  :   %u\n", _header.payload_len);
-    printf("    fec (inner)     :   %s\n", fec_scheme_str[_header.fec0]);
-    printf("    fec (outer)     :   %s\n", fec_scheme_str[_header.fec1]);
-    printf("    source node id  :   %u\n", _header.node_id_src);
-    printf("    dest. node id   :   %u\n", _header.node_id_dst);
-    printf("    packet type     :   %u\n", _header.packet_type);
-}
-
-void iqpr_header_encode(struct iqpr_header_s _header,
-                        unsigned char * _header_data)
-{
-    // encode packet id
-    _header_data[0] = (_header.packet_id >> 8) & 0x00ff;
-    _header_data[1] = (_header.packet_id     ) & 0x00ff;
-
-    // encode payload length
-    _header_data[2] = (_header.payload_len >> 8) & 0x00ff;
-    _header_data[3] = (_header.payload_len     ) & 0x00ff;
-
-    // encode fec schemes
-    _header_data[4] = (unsigned char) _header.fec0;
-    _header_data[5] = (unsigned char) _header.fec1;
-
-    // encode source/destination node IDs
-    _header_data[6] = (unsigned char) _header.node_id_src;
-    _header_data[7] = (unsigned char) _header.node_id_dst;
-
-    // encode packet type
-    _header_data[8] = _header.packet_type & 0x00ff;
-}
-
-void iqpr_header_decode(unsigned char * _header_data,
-                        struct iqpr_header_s * _header)
-{
-    // decode packet id
-    _header->packet_id = (_header_data[0] << 8) | _header_data[1];
-
-    // decode packet length
-    _header->payload_len = (_header_data[2] << 8) | _header_data[3];
+    // decode payload length
+    _q->payload_len = (_header[2] << 8) | _header[3];
 
     // decode fec schemes
-    _header->fec0 = (fec_scheme)(_header_data[4]);
-    _header->fec1 = (fec_scheme)(_header_data[5]);
-
-    // decode source/destination node IDs
-    _header->node_id_src = _header_data[6];
-    _header->node_id_dst = _header_data[7];
+    _q->fec0 = (fec_scheme)(_header[4]);
+    _q->fec1 = (fec_scheme)(_header[5]);
 
     // decode packet type
-    _header->packet_type = _header_data[8];
-}
+    _q->packet_type = _header[6];
 
+    // decode source and destination nodes
+    _q->node_src = _header[7];
+    _q->node_dst = _header[8];
+
+}
 
