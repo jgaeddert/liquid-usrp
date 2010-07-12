@@ -55,6 +55,8 @@ usrp_io::usrp_io()
     rx_running = false; // rx thread status flag
     tx_running = false; // tx thread status flag
 
+    verbose = true;
+
     initialize();
 
     // buffering
@@ -507,7 +509,7 @@ void* usrp_io_tx_process(void * _u)
                       << rc << " actually written)" << std::endl;
         }
 
-        if (underrun)
+        if (underrun && usrp->verbose)
             std::cerr << "underrun" << std::endl;
     }
 
@@ -552,7 +554,7 @@ void* usrp_io_rx_process(void * _u)
                       << rc << " actually written)" << std::endl;
         }
 
-        if (overrun)
+        if (overrun && usrp->verbose)
             std::cerr << "overrun" << std::endl;
 
         // convert to complex float

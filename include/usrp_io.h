@@ -113,6 +113,9 @@ public:
     void enable_auto_tx(int _channel);
     void disable_auto_tx(int _channel);
 
+    void enable_verbose()  { verbose = true; }
+    void disable_verbose() { verbose = false; }
+
     // port handling
     gport get_tx_port(int _channel) { return port_resamp_tx; }
     gport get_rx_port(int _channel) { return port_resamp_rx; }
@@ -149,6 +152,8 @@ protected:
     bool tx_active;     // tx thread controller flag
     bool rx_running;    // rx thread status flag
     bool tx_running;    // tx thread status flag
+
+    bool verbose;
 
     // tx/rx processing threads
     pthread_t tx_thread;
