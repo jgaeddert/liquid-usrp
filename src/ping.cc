@@ -108,6 +108,13 @@ int main (int argc, char **argv) {
     unsigned int j;
     unsigned int n;
     unsigned int num_attempts = 0;
+
+    // received frame header
+    iqprheader_s header;
+
+    // received frame statistics (SNR, rssi)
+    framesyncstats_s stats;
+
     if (node_type == NODE_MASTER) {
         unsigned int payload_len = 1024;
         unsigned char payload[payload_len];
@@ -138,10 +145,10 @@ int main (int argc, char **argv) {
 
                 // wait for acknowledgement (minimum timeout is about 3)
                 for (j=0; j<5; j++) {
-                    if (iqpr_wait_for_ack(q,i)) {
-                        ack_received = 1;
+                    ack_received = iqpr_wait_for_ack(q, i, &header, &stats);
+
+                    if (ack_received)
                         break;
-                    }
                 }
             } while (!ack_received && (num_attempts < max_num_attempts) );
 
@@ -153,23 +160,28 @@ int main (int argc, char **argv) {
     } else {
         unsigned char * payload = NULL;
         unsigned int payload_len;
-        int pid;
+        unsigned int packet_found;
         for (i=0; i<1000; i++) {
             // wait for data packet
-            pid = -1;
             do {
-                pid = iqpr_wait_for_data(q,&payload,&payload_len);
-            } while ( pid == -1 );
+                // attempt to receive data packet
+                packet_found = iqpr_wait_for_packet(q,
+                                                    &payload,
+                                                    &payload_len,
+                                                    &header,
+                                                    &stats);
+            } while (!packet_found);
 
             printf("  ping received %4u data samples on packet [%4u] : %.2x %.2x %.2x %.2x\n",
-                    payload_len, pid,
+                    payload_len,
+                    header.pid,
                     payload[0],
                     payload[1],
                     payload[2],
                     payload[3]);
 
             // transmit acknowledgement
-            iqpr_txack(q,pid);
+            iqpr_txack(q, header.pid);
         }
     }
 

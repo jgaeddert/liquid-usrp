@@ -53,6 +53,7 @@ struct iqpr_s {
     unsigned int rx_ack_pid;        // receiver ack pid
     int rx_ack_found;               // receiver ack found flag
     unsigned int rx_state;
+    framesyncstats_s rx_stats;      // frame synchronizer stats
 
     // transmitter
     packetizer p_enc;               // packet encoder
@@ -262,7 +263,7 @@ void iqpr_txack(iqpr _q,
     gport_produce(_q->port_tx, (void*)mfbuffer, 128);
 }
 
-
+#if 0
 void iqpr_rxpacket(iqpr _q)
 {
     // read samples from buffer, run through frame synchronizer
@@ -276,10 +277,13 @@ void iqpr_rxpacket(iqpr _q)
     }
 
 }
+#endif
 
-int iqpr_wait_for_data(iqpr _q,
-                       unsigned char ** _payload,
-                       unsigned int * _payload_len)
+int iqpr_wait_for_packet(iqpr _q,
+                         unsigned char ** _payload,
+                         unsigned int * _payload_len,
+                         iqprheader_s * _header,
+                         framesyncstats_s * _stats)
 {
     _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
     _q->rx_ack_found = 0;
@@ -297,20 +301,24 @@ int iqpr_wait_for_data(iqpr _q,
         if (_q->rx_ack_found) {
             if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
 
-            // set output memory pointer
+            // set outputs
             *_payload = _q->rx_data;
             *_payload_len = _q->rx_data_len;
-            return _q->rx_header.pid;
+            memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
+            memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
+            return 1;
         }
     }
 
     // ack was never received
-    return -1;
+    return 0;
 }
 
 
 int iqpr_wait_for_ack(iqpr _q,
-                      unsigned int _pid)
+                      unsigned int _pid,
+                      iqprheader_s * _header,
+                      framesyncstats_s * _stats)
 {
     // set ack to trigger on a specific packet id
     _q->rx_state = IQPR_RX_WAIT_FOR_ACK;
@@ -329,6 +337,9 @@ int iqpr_wait_for_ack(iqpr _q,
         // check status flag
         if (_q->rx_ack_found) {
             if (_q->verbose) printf(" received ack for packet %u!\n", _pid);
+
+            memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
+            memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
             return 1;
         }
     }
@@ -380,11 +391,11 @@ void iqpr_connect_rxport(iqpr _q, gport _p)
 //
 
 int iqpr_callback(unsigned char * _rx_header,
-                         int _rx_header_valid,
-                         unsigned char * _rx_payload,
-                         unsigned int _rx_payload_len,
-                         framesyncstats_s _stats,
-                         void * _userdata)
+                  int _rx_header_valid,
+                  unsigned char * _rx_payload,
+                  unsigned int _rx_payload_len,
+                  framesyncstats_s _stats,
+                  void * _userdata)
 {
     iqpr q = (iqpr) _userdata;
 
@@ -398,6 +409,9 @@ int iqpr_callback(unsigned char * _rx_header,
         if (q->verbose) printf("header crc : FAIL\n");
         return 0;
     }
+
+    // save statistics
+    memmove(&q->rx_stats, &_stats, sizeof(framesyncstats_s));
 
     // decode header
     iqprheader_decode(&q->rx_header, _rx_header);
