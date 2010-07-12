@@ -38,7 +38,6 @@ extern "C" {
 
 #define IQPR_PACKET_TYPE_DATA   (0)
 #define IQPR_PACKET_TYPE_ACK    (1)
-#define IQPR_PACKET_TYPE_NACK   (2)
 
 #define IQPR_RX_NULL            (0) // not waiting for anything
 #define IQPR_RX_WAIT_FOR_DATA   (1) // receiver waiting for data packet

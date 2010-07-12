@@ -52,7 +52,7 @@ struct iqpr_s {
     std::complex<float> rx_buffer[512];   // rx data buffer
     unsigned int rx_ack_pid;        // receiver ack pid
     int rx_ack_found;               // receiver ack found flag
-    unsigned int rx_state;
+    unsigned int rx_state;          // receiver state (waiting on a packet or ack?)
     framesyncstats_s rx_stats;      // frame synchronizer stats
 
     // transmitter
@@ -427,18 +427,17 @@ int iqpr_callback(unsigned char * _rx_header,
         switch (q->rx_header.packet_type) {
         case IQPR_PACKET_TYPE_DATA:  printf(" (data)\n"); break;
         case IQPR_PACKET_TYPE_ACK:   printf(" (ack)\n");  break;
-        case IQPR_PACKET_TYPE_NACK:  printf(" (nack)\n"); break;
         default:
             printf("\n");
             fprintf(stderr,"error: iqpr_callback(), invaid packet type: %u\n", q->rx_header.packet_type);
         }
     }
 
-    if (q->rx_header.packet_type != IQPR_PACKET_TYPE_DATA) {
+    if (q->rx_header.packet_type == IQPR_PACKET_TYPE_ACK) {
         // check to see if we were waiting for an ack and
         // check to see if this packet matches the one we are waiting for
         //
-        // TODO : check to see if source/destination ids match as well
+        // TODO : check to see if source/destination ids match as well?
         if ( (q->rx_state == IQPR_RX_WAIT_FOR_ACK) && (q->rx_header.pid == q->rx_ack_pid) ) {
             // set status flag
             q->rx_ack_found = 1;
@@ -448,10 +447,6 @@ int iqpr_callback(unsigned char * _rx_header,
 
         return 0;
     }
-
-    // check to see if we were waiting for a data packet
-    if (q->rx_state == IQPR_RX_WAIT_FOR_DATA)
-        q->rx_ack_found = 1;
 
     /*
     // TODO: validate fec0,fec1 before indexing fec_scheme_str
@@ -478,6 +473,10 @@ int iqpr_callback(unsigned char * _rx_header,
     } else {
         if (q->verbose) printf("  <<< payload crc fail >>>\n");
     }
+
+    // check to see if we were waiting for a data packet
+    if (q->rx_state == IQPR_RX_WAIT_FOR_DATA)
+        q->rx_ack_found = 1;
 
     return 0;
 }
