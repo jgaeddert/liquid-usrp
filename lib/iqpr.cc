@@ -208,11 +208,11 @@ void iqpr_txpacket(iqpr _q,
     gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
 
     // flush interpolator with zeros
-    for (i=0; i<256; i++) {
+    for (i=0; i<64; i++) {
         interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
     }
 
-    gport_produce(_q->port_tx, (void*)mfbuffer, 512);
+    gport_produce(_q->port_tx, (void*)mfbuffer, 128);
 }
 
 
@@ -255,11 +255,11 @@ void iqpr_txack(iqpr _q,
     gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
 
     // flush interpolator with zeros
-    for (i=0; i<256; i++) {
+    for (i=0; i<64; i++) {
         interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
     }
 
-    gport_produce(_q->port_tx, (void*)mfbuffer, 512);
+    gport_produce(_q->port_tx, (void*)mfbuffer, 128);
 }
 
 
