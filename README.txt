@@ -1,12 +1,33 @@
-Install basic USRP libraries:
-    # apt-get install usrp usrp-firmware
+==============================================================================
 
-Install from gnuradio's git repo (still testing).
-    $ git checkout 9a9582715d # known good revision
+    liquid-usrp applications
+
+==============================================================================
+
+Build dependencies
+    usrp-0.12   :   currently liquid-usrp only supports the legacy usrp
+                    code (grab from ftp.gnu.org/gnu/gnuradio/old/usrp-0.12)
+
+============================================
+  Installation : liquid-usrp
+============================================
+
+    $ ./reconf
+    $ ./configure --enable-legacy
+    $ make
+
+============================================
+  Installation : usrp-0.12
+============================================
+
+Install basic USRP libraries from ftp.gnu.org/gnu/gnuradio/old/usrp-0.12
 
 Configure USB and change USRP permissions
 
-To be able to run a waveform that uses the USRP you will either need to have root permissions or give access to your user to use the USRP. The process for each distribution is different but for Fedora 5 or 6: Define a group named usrp (as root):
+To be able to run a waveform that uses the USRP you will either need to
+have root permissions or give access to your user to use the USRP. The
+process for each distribution is different but for Fedora 5 or 6: Define
+a group named usrp (as root):
 
     # /usr/sbin/groupadd usrp
 
@@ -18,7 +39,10 @@ or, if your copy of usermod does not support this syntax try
 
     # /usr/sbin/usermod -G usrp -a [username]
 
-Create a file named /etc/udev/rules.d/10-usrp.rules with the following contents, and be sure to include the : in MODE:="0660" otherwise the default usb_device rule will override MODE to "0640". This also applies to the GROUP setting.
+Create a file named /etc/udev/rules.d/10-usrp.rules with the following
+contents, and be sure to include the : in MODE:="0660" otherwise the
+default usb_device rule will override MODE to "0640". This also applies
+to the GROUP setting.
 
     # rule to grant read/write access on USRP to group named usrp.
     # to use, install this file in /etc/udev/rules.d as 10-usrp.rules
@@ -28,7 +52,8 @@ Restart the udev daemon to enable he changes.
 
     # killall -HUP udevd
 
-You can check if this is working by examining /dev/bus/usb after plugging in a USRP:
+You can check if this is working by examining /dev/bus/usb after
+plugging in a USRP:
 
     $ ls -lR /dev/bus/usb
 
@@ -36,28 +61,34 @@ You should see a device file with group usrp and mode crw-rw----
 
 Now restart your machine.
 
-Troubleshooting
+============================================
+  Troubleshooting
+============================================
 
-Here are a list of common problems users have encountered while compiling, or trying to run the USRP device in OSSIE waveforms.
+Here are a list of common problems users have encountered while
+compiling, or trying to run the USRP device in OSSIE waveforms.
 
-Problem: When installing usrp-0.12 I get the following error when running ./configure
+Problem: When installing usrp-0.12 I get the following error when
+         running ./configure
 
-error: USRP requires libusb. usb.h not found, stop. See http://libusb.sf.net
+    error: USRP requires libusb. usb.h not found, stop. See http://libusb.sf.net
 
-Solution: You need the libusb development tools. They are easily installed via yum, viz.
+Solution: You need the libusb development tools. They are easily
+          installed via apt-get, viz.
 
-    # yum install libusb-devel
+    # apt-get install libusb-devel
 
-Problem: When installing usrp-0.12 I get the following error when running ./configure
+Problem: When installing usrp-0.12 I get the following error when
+         running ./configure
 
-configure: error: USRP requires sdcc. sdcc not found, stop. See http://sdcc.sf.net
+    configure: error: USRP requires sdcc. sdcc not found, stop. See http://sdcc.sf.net
 
 Solution: You need to install SDCC (see instructions above).
 
-Problem: When running nodeBooter, I get the following error:
+Problem: When running an application, I get the following error:
 
-bin/USRP: error while loading shared libraries: libusrp.so.0: cannot open
-shared object file: No such file or directory
+    bin/USRP: error while loading shared libraries: libusrp.so.0: cannot open
+    shared object file: No such file or directory
 
 Solution: As root, run
 
@@ -70,6 +101,7 @@ Problem: installing old(er) version of gnuradio gives error during configure:
     configure: error: cannot find usable Python headers
 
 Solution: for some reason configure fails if you don't have the fort77
-compiler.
+          compiler.
+
     # apt-get install fort77
 
