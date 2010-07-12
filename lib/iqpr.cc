@@ -63,6 +63,9 @@ struct iqpr_s {
     flexframegen fg;                // frame generator
     interp_crcf interp;             // matched filter
     float tx_gain;                  // transmit gain
+
+    // debugging
+    int verbose;
 };
 
 
@@ -114,6 +117,9 @@ iqpr iqpr_create(unsigned int _node_id)
     q->rx_data_len = 1024;
     q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
 
+    // debugging
+    q->verbose = 0;
+
     return q;
 }
 
@@ -134,6 +140,16 @@ void iqpr_destroy(iqpr _q)
 
     // free memory
     free(_q->rx_data);
+}
+
+void iqpr_print(iqpr _q)
+{
+    printf("iqpr:\n");
+}
+
+void iqpr_setverbose(iqpr _q, int _verbose)
+{
+    _q->verbose = _verbose ? 1 : 0;
 }
 
 void iqpr_txpacket(iqpr _q,
@@ -213,7 +229,7 @@ void iqpr_txack(iqpr _q,
     std::complex<float> frame[frame_len];
     std::complex<float> mfbuffer[2*frame_len];
 
-    printf("[tx] sending ack for packet %u...\n", _pid);
+    if (_q->verbose) printf("[tx] sending ack for packet %u...\n", _pid);
 
     // prepare header
     _q->tx_header.pid = _pid;
@@ -279,7 +295,7 @@ int iqpr_wait_for_data(iqpr _q,
 
         // check status flag
         if (_q->rx_ack_found) {
-            printf(" received data packet %u!\n", _q->rx_header.pid);
+            if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
 
             // set output memory pointer
             *_payload = _q->rx_data;
@@ -312,7 +328,7 @@ int iqpr_wait_for_ack(iqpr _q,
 
         // check status flag
         if (_q->rx_ack_found) {
-            //printf(" received ack for packet %u!\n", _pid);
+            if (_q->verbose) printf(" received ack for packet %u!\n", _pid);
             return 1;
         }
     }
@@ -337,10 +353,10 @@ int iqpr_mac_clear(iqpr _q)
     // TODO : fix rssi computation
     rssi = 10*log10f(sqrt(rssi/512));
 
-#if 1
-    printf("mac_clear(), rssi : %12.8f dB %c\n", rssi,
-        (rssi < _q->fsprops.squelch_threshold) ? ' ' : '*');
-#endif
+    if (_q->verbose) {
+        printf("mac_clear(), rssi : %12.8f dB %c\n", rssi,
+            (rssi < _q->fsprops.squelch_threshold) ? ' ' : '*');
+    }
 
     return (rssi < _q->fsprops.squelch_threshold) ? 1 : 0;
 }
@@ -372,23 +388,22 @@ int iqpr_callback(unsigned char * _rx_header,
 {
     iqpr q = (iqpr) _userdata;
 
-    int verbose = 1;
-    if (verbose) {
+    if (q->verbose) {
         printf("********* callback invoked, ");
         printf("SNR=%5.1fdB, ", _stats.SNR);
         printf("rssi=%5.1fdB, ", _stats.rssi);
     }
 
     if ( !_rx_header_valid ) {
-        if (verbose) printf("header crc : FAIL\n");
+        if (q->verbose) printf("header crc : FAIL\n");
         return 0;
     }
 
     // decode header
     iqprheader_decode(&q->rx_header, _rx_header);
-    if (verbose) printf("packet id: %6u", q->rx_header.pid);
+    if (q->verbose) printf("packet id: %6u", q->rx_header.pid);
 
-    if (verbose) {
+    if (q->verbose) {
         switch (q->rx_header.packet_type) {
         case IQPR_PACKET_TYPE_DATA:  printf(" (data)\n"); break;
         case IQPR_PACKET_TYPE_ACK:   printf(" (ack)\n");  break;
@@ -441,7 +456,7 @@ int iqpr_callback(unsigned char * _rx_header,
     bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, q->rx_data);
     if (crc_pass) {
     } else {
-        if (verbose) printf("  <<< payload crc fail >>>\n");
+        if (q->verbose) printf("  <<< payload crc fail >>>\n");
     }
 
     return 0;

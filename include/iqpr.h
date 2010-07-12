@@ -66,6 +66,9 @@ typedef struct iqpr_s * iqpr;
 
 iqpr iqpr_create(unsigned int _node_id);
 void iqpr_destroy(iqpr _q);
+void iqpr_print(iqpr _q);
+void iqpr_setverbose(iqpr _q, int _verbose);
+
 void iqpr_txpacket(iqpr _q,
                    unsigned int _pid,
                    unsigned char * _payload,
