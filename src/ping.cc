@@ -115,6 +115,13 @@ int main (int argc, char **argv) {
     // received frame statistics (SNR, rssi)
     framesyncstats_s stats;
 
+    // parameters
+    modulation_scheme ms = MOD_PSK;
+    unsigned int bps = 2;
+    fec_scheme fec0 = FEC_NONE;
+    fec_scheme fec1 = FEC_NONE;
+
+
     if (node_type == NODE_MASTER) {
         unsigned int payload_len = 1024;
         unsigned char payload[payload_len];
@@ -141,7 +148,7 @@ int main (int argc, char **argv) {
 
                 // transmit packet
                 printf("transmitting packet %6u (attempt %3u)\n", i, num_attempts);
-                iqpr_txpacket(q,i,payload,payload_len);
+                iqpr_txpacket(q,i,payload,payload_len,ms,bps,fec0,fec1);
 
                 // wait for acknowledgement (minimum timeout is about 3)
                 for (j=0; j<5; j++) {

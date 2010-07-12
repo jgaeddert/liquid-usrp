@@ -156,15 +156,19 @@ void iqpr_setverbose(iqpr _q, int _verbose)
 void iqpr_txpacket(iqpr _q,
                    unsigned int _pid,
                    unsigned char * _payload,
-                   unsigned int _payload_len)
+                   unsigned int _payload_len,
+                   modulation_scheme _ms,
+                   unsigned int _bps,
+                   fec_scheme _fec0,
+                   fec_scheme _fec1)
 {
     unsigned int i;
 
     // prepare header
     _q->tx_header.pid = _pid;
     _q->tx_header.payload_len = _payload_len;
-    _q->tx_header.fec0 = FEC_NONE;
-    _q->tx_header.fec1 = FEC_NONE;
+    _q->tx_header.fec0 = _fec0;
+    _q->tx_header.fec1 = _fec1;
     _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
     _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
@@ -182,6 +186,8 @@ void iqpr_txpacket(iqpr _q,
 
     // configure frame generator
     unsigned int packet_len = packetizer_get_enc_msg_len(_q->p_enc);
+    _q->fgprops.mod_scheme = _ms;
+    _q->fgprops.mod_bps    = _bps;
     _q->fgprops.payload_len = packet_len;   // NOTE : payload_len for frame is packet_len
     flexframegen_setprops(_q->fg, &_q->fgprops);
 

@@ -74,7 +74,12 @@ void iqpr_setverbose(iqpr _q, int _verbose);
 void iqpr_txpacket(iqpr _q,
                    unsigned int _pid,
                    unsigned char * _payload,
-                   unsigned int _payload_len);
+                   unsigned int _payload_len,
+                   modulation_scheme _ms,
+                   unsigned int _bps,
+                   fec_scheme _fec0,
+                   fec_scheme _fec1);
+
 void iqpr_txack(iqpr _q, unsigned int _pid);
 
 // wait for data packet, returning -1 if not found pid otherwise
