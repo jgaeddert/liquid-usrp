@@ -23,6 +23,9 @@
 //
 //
 
+#ifndef __USRP_IO_H__
+#define __USRP_IO_H__
+
 #include <pthread.h>
 #include <liquid/liquid.h>
 
@@ -197,3 +200,4 @@ protected:
     resamp_crcf tx_resamp;
 };
 
+#endif  // __USRP_IO_H__
