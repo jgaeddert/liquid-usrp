@@ -58,8 +58,8 @@ usrp_io::usrp_io()
     initialize();
 
     // buffering
-    tx_buffer_length = 512;
-    rx_buffer_length = 512;
+    tx_buffer_length = 128;
+    rx_buffer_length = 128;
 
     tx_port_buffer = new std::complex<float>[tx_buffer_length*sizeof(short)];
     rx_port_buffer = new std::complex<float>[rx_buffer_length*sizeof(short)];
@@ -566,10 +566,11 @@ void* usrp_io_tx_resamp_process(void * _u)
     usrp_io * usrp = (usrp_io*) _u;
 
     // local buffers
-    unsigned int n = usrp->tx_buffer_length;
-    std::complex<float> data_in[n];
-    std::complex<float> data_resamp[2*n];
-    std::complex<float> data_out[4*n];
+    unsigned int n_max = usrp->tx_buffer_length;    // maximum gport consume
+    unsigned int n;                                 // actual gport consume
+    std::complex<float> data_in[n_max];
+    std::complex<float> data_resamp[2*n_max];
+    std::complex<float> data_out[4*n_max];
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
@@ -578,9 +579,10 @@ void* usrp_io_tx_resamp_process(void * _u)
     while (usrp->tx_active && !gport_eom) {
         // get data from port_resamp_tx
         gport_eom =
-        gport_consume(usrp->port_resamp_tx,
-                      (void*)data_in,
-                      n);
+        gport_consume_available(usrp->port_resamp_tx,
+                                (void*)data_in,
+                                n_max,
+                                &n);
 
         if (gport_eom) break;
 
@@ -618,10 +620,11 @@ void* usrp_io_rx_resamp_process(void * _u)
     usrp_io * usrp = (usrp_io*) _u;
 
     // local buffers
-    unsigned int n = usrp->rx_buffer_length;
-    std::complex<float> data_in[n];
-    std::complex<float> data_resamp[n/2];
-    std::complex<float> data_out[n];
+    unsigned int n_max = usrp->rx_buffer_length;
+    unsigned int n;
+    std::complex<float> data_in[n_max];
+    std::complex<float> data_resamp[n_max/2];
+    std::complex<float> data_out[n_max];
     unsigned int num_written;
     unsigned int num_written_total;
     unsigned int i;
@@ -636,9 +639,10 @@ void* usrp_io_rx_resamp_process(void * _u)
     while (usrp->rx_active && !gport_eom) {
         // get data from port_rx
         gport_eom =
-        gport_consume(usrp->port_rx,
-                      (void*)data_in,
-                      n);
+        gport_consume_available(usrp->port_rx,
+                                (void*)data_in,
+                                n_max,
+                                &n);
 
         if (gport_eom) break;
 
