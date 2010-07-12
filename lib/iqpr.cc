@@ -79,6 +79,66 @@ struct iqpr_s {
 };
 
 
+iqpr iqpr_create(unsigned int _node_id)
+{
+    iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
+
+    q->continue_running = 1;
+    q->payload_len = 1024;
+    q->packet_len = packetizer_get_packet_length(q->payload_len, FEC_NONE, FEC_NONE);
+    q->pid = 0;
+    q->node_id = _node_id;
+
+    // create packetizers
+    q->p_enc = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
+    q->p_dec = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
+
+    // create frame generator
+    q->fgprops.rampup_len = 64;
+    q->fgprops.phasing_len = 64;
+    q->fgprops.payload_len = q->packet_len;    // NOTE : payload_len for frame is packet_len
+    q->fgprops.mod_scheme = MOD_QPSK;
+    q->fgprops.mod_bps = 2;
+    q->fgprops.rampdn_len = 64;
+    q->fg = flexframegen_create(&q->fgprops);
+    flexframegen_print(q->fg);
+
+    // create frame synchronizer
+    framesyncprops_init_default(&q->fsprops);
+    q->fsprops.squelch_threshold = -30.0f;
+    q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
+
+    // create interpolator
+    unsigned int m=3;
+    float beta=0.7f;
+    q->interp = interp_crcf_create_rrc(2,m,beta,0);
+
+    // allocate memory
+    q->rx_data_len = 1024;
+    q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
+
+    return q;
+}
+
+void iqpr_destroy(iqpr _q)
+{
+    // destroy packetizers
+    packetizer_destroy(_q->p_enc);
+    packetizer_destroy(_q->p_dec);
+
+    // destroy frame generator
+    flexframegen_destroy(_q->fg);
+
+    // destroy frame synchronizer
+    flexframesync_destroy(_q->fs);
+
+    // destroy interpolator
+    interp_crcf_destroy(_q->interp);
+
+    // free memory
+    free(_q->rx_data);
+}
+
 void iqpr_txpacket(iqpr _q,
                    unsigned int _pid,
                    unsigned char * _payload,
@@ -200,7 +260,7 @@ void iqpr_rxpacket(iqpr _q)
 }
 
 int iqpr_wait_for_data(iqpr _q,
-                       unsigned char * _payload,
+                       unsigned char ** _payload,
                        unsigned int * _payload_len)
 {
     _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
@@ -220,8 +280,8 @@ int iqpr_wait_for_data(iqpr _q,
             printf(" received data packet %u!\n", _q->rx_packet_id);
 
             // set output memory pointer
-            *_payload = NULL;
-            *_payload_len = 0;
+            *_payload = _q->rx_data;
+            *_payload_len = _q->rx_data_len;
             return _q->rx_packet_id;
         }
     }
@@ -368,15 +428,8 @@ int iqpr_callback(unsigned char * _rx_header,
     printf("    fec1        : %s\n", fec_scheme_str[fec1]);
     */
 
+    // recreate packetizer if necessary
     q->p_dec = packetizer_recreate(q->p_dec, payload_len, fec0, fec1);
-
-    // decode packet
-    unsigned char msg_dec[payload_len];
-    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, msg_dec);
-    if (crc_pass) {
-    } else {
-        if (verbose) printf("  <<< payload crc fail >>>\n");
-    }
 
     // re-allocate memory arrays if necessary
     if (q->rx_data_len != payload_len) {
@@ -384,71 +437,56 @@ int iqpr_callback(unsigned char * _rx_header,
         q->rx_data = (unsigned char*) realloc(q->rx_data, q->rx_data_len*sizeof(unsigned char));
     }
 
-    // copy data to internal memory array
+    // decode packet
+    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, q->rx_data);
+    if (crc_pass) {
+    } else {
+        if (verbose) printf("  <<< payload crc fail >>>\n");
+    }
+
+    // copy header data to internal memory array
     memmove(q->rx_header, _rx_header,  14);
-    memmove(q->rx_data,   _rx_payload, q->rx_data_len);
     
     return 0;
 }
 
-
-iqpr iqpr_create(unsigned int _node_id)
+// encode header
+void iqprheader_encode(iqprheader_s * _q,
+                       unsigned char * _header)
 {
-    iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
-
-    q->continue_running = 1;
-    q->payload_len = 1024;
-    q->packet_len = packetizer_get_packet_length(q->payload_len, FEC_NONE, FEC_NONE);
-    q->pid = 0;
-    q->node_id = _node_id;
-
-    // create packetizers
-    q->p_enc = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
-    q->p_dec = packetizer_create(q->payload_len, FEC_NONE, FEC_NONE);
-
-    // create frame generator
-    q->fgprops.rampup_len = 64;
-    q->fgprops.phasing_len = 64;
-    q->fgprops.payload_len = q->packet_len;    // NOTE : payload_len for frame is packet_len
-    q->fgprops.mod_scheme = MOD_QPSK;
-    q->fgprops.mod_bps = 2;
-    q->fgprops.rampdn_len = 64;
-    q->fg = flexframegen_create(&q->fgprops);
-    flexframegen_print(q->fg);
-
-    // create frame synchronizer
-    framesyncprops_init_default(&q->fsprops);
-    q->fsprops.squelch_threshold = -30.0f;
-    q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
-
-    // create interpolator
-    unsigned int m=3;
-    float beta=0.7f;
-    q->interp = interp_crcf_create_rrc(2,m,beta,0);
-
-    // allocate memory
-    q->rx_data_len = 1024;
-    q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
-
-    return q;
+    // prepare header
+    _header[0] = (_q->pid >> 8) & 0xff;
+    _header[1] = (_q->pid     ) & 0xff;
+    _header[2] = (_q->payload_len >> 8) & 0xff;
+    _header[3] = (_q->payload_len     ) & 0xff;
+    _header[4] = (unsigned char)(_q->fec0);
+    _header[5] = (unsigned char)(_q->fec1);
+    _header[6] = _q->packet_type & 0xff;
+    _header[7] = _q->node_src & 0xff;
+    _header[8] = _q->node_dst & 0xff;
 }
 
-void iqpr_destroy(iqpr _q)
+
+// decode header
+void iqprheader_decode(iqprheader_s * _q,
+                       unsigned char * _header)
 {
-    // destroy packetizers
-    packetizer_destroy(_q->p_enc);
-    packetizer_destroy(_q->p_dec);
+    // decode packet identifier
+    _q->pid = (_header[0] << 8) | _header[1];
 
-    // destroy frame generator
-    flexframegen_destroy(_q->fg);
+    // decode payload length
+    _q->payload_len = (_header[2] << 8) | _header[3];
 
-    // destroy frame synchronizer
-    flexframesync_destroy(_q->fs);
+    // decode fec schemes
+    _q->fec0 = (fec_scheme)(_header[4]);
+    _q->fec1 = (fec_scheme)(_header[5]);
 
-    // destroy interpolator
-    interp_crcf_destroy(_q->interp);
+    // decode packet type
+    _q->packet_type = _header[6];
 
-    // free memory
-    free(_q->rx_data);
+    // decode source and destination nodes
+    _q->node_src = _header[7];
+    _q->node_dst = _header[8];
+
 }
 

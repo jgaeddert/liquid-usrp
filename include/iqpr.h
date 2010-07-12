@@ -42,6 +42,26 @@ extern "C" {
 #define IQPR_RX_WAIT_FOR_DATA   (1) // receiver waiting for data packet
 #define IQPR_RX_WAIT_FOR_ACK    (2) // receiver waiting for ack
 
+
+// iqpr packet header descriptor
+struct iqprheader_s {
+    unsigned int pid;           // [0,1] packet identifier
+    unsigned int payload_len;   // [2,3] payload length
+    fec_scheme fec0;            // [4]   inner fec scheme
+    fec_scheme fec1;            // [5]   outer fec scheme
+    unsigned int packet_type;   // [6]   packet type (data, ack, etc.)
+    unsigned int node_src;      // [7]   source node id
+    unsigned int node_dst;      // [8]   destination node id
+};
+
+void iqprheader_encode(iqprheader_s * _q, unsigned char * _header);
+void iqprheader_decode(iqprheader_s * _q, unsigned char * _header);
+
+
+// 
+// iqpr object interface declarations
+//
+
 typedef struct iqpr_s * iqpr;
 
 iqpr iqpr_create(unsigned int _node_id);
@@ -55,7 +75,7 @@ void iqpr_rxpacket(iqpr _q);
 
 // wait for data packet, returning -1 if not found pid otherwise
 int iqpr_wait_for_data(iqpr _q,
-                       unsigned char * _payload,
+                       unsigned char ** _payload,
                        unsigned int * _payload_len);
 int iqpr_wait_for_ack(iqpr _q, unsigned int _pid);
 int iqpr_mac_clear(iqpr _q);
@@ -71,6 +91,7 @@ int iqpr_callback(unsigned char * _rx_header,
                          unsigned int _rx_payload_len,
                          framesyncstats_s _stats,
                          void * _userdata);
+
 
 #ifdef __cplusplus
 } /* extern "C" */

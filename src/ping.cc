@@ -152,12 +152,21 @@ int main (int argc, char **argv) {
         }
     } else {
         unsigned char * payload = NULL;
-        unsigned int pid;
+        unsigned int payload_len;
+        int pid;
         for (i=0; i<1000; i++) {
             // wait for data packet
-            while ( iqpr_wait_for_data(q,payload,&pid) == -1) {
-                // ...
-            }
+            pid = -1;
+            do {
+                pid = iqpr_wait_for_data(q,&payload,&payload_len);
+            } while ( pid == -1 );
+
+            printf("  ping received %4u data samples on packet [%4u] : %.2x %.2x %.2x %.2x\n",
+                    payload_len, pid,
+                    payload[0],
+                    payload[1],
+                    payload[2],
+                    payload[3]);
 
             // transmit acknowledgement
             iqpr_txack(q,pid);
