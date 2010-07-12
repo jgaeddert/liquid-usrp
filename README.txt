@@ -1,9 +1,6 @@
 Install basic USRP libraries:
     # apt-get install usrp usrp-firmware
 
-Install from gnuradio's git repo (still testing).
-    $ git checkout 9a9582715d # known good revision
-
 Configure USB and change USRP permissions
 
 To be able to run a waveform that uses the USRP you will either need to have root permissions or give access to your user to use the USRP. The process for each distribution is different but for Fedora 5 or 6: Define a group named usrp (as root):
