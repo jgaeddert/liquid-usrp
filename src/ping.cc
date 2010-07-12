@@ -79,9 +79,6 @@ int main (int argc, char **argv) {
         }
     }
 
-    // initialize iqpr structure
-    iqpr q = iqpr_create(node_id);
-
     // create usrp object
     usrp_io * usrp = new usrp_io();
 
@@ -92,9 +89,10 @@ int main (int argc, char **argv) {
     usrp->set_rx_samplerate(2*symbolrate);
     usrp->enable_auto_tx(USRP_CHANNEL);
 
-    // initialize ports
-    iqpr_connect_txport(q, usrp->get_tx_port(USRP_CHANNEL));
-    iqpr_connect_rxport(q, usrp->get_rx_port(USRP_CHANNEL));
+    // initialize iqpr structure
+    iqpr q = iqpr_create(node_id,
+                         usrp->get_tx_port(USRP_CHANNEL),
+                         usrp->get_rx_port(USRP_CHANNEL));
 
     usleep(1000000);
 

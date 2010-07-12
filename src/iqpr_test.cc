@@ -57,9 +57,11 @@ int main (int argc, char **argv)
         }
     }
 
+#if 0
     iqpr q = iqpr_create(node_id);
 
     iqpr_destroy(q);
+#endif
 
     return 0;
 }

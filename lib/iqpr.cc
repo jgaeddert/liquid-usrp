@@ -50,8 +50,8 @@ struct iqpr_s {
     framesyncprops_s fsprops;       // frame synchronizer properties
     flexframesync fs;               // frame synchronizer
     std::complex<float> rx_buffer[512];   // rx data buffer
-    unsigned int rx_ack_pid;        // receiver ack pid
-    int rx_ack_found;               // receiver ack found flag
+    unsigned int rx_packet_pid;     // receiver packet pid
+    int rx_packet_found;            // receiver packet found flag
     unsigned int rx_state;          // receiver state (waiting on a packet or ack?)
     framesyncstats_s rx_stats;      // frame synchronizer stats
 
@@ -71,11 +71,16 @@ struct iqpr_s {
 
 
 // create iqpr object
-iqpr iqpr_create(unsigned int _node_id)
+iqpr iqpr_create(unsigned int _node_id,
+                 gport _port_tx,
+                 gport _port_rx)
 {
     // allocate memory for main object
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
-    q->node_id = _node_id;
+    q->node_id = _node_id;  // node id
+    q->port_tx = _port_tx;  // transmit port
+    q->port_rx = _port_rx;  // receive port
+
 
     // initialize tx header
     q->tx_header.payload_len = 1024;
@@ -292,7 +297,7 @@ int iqpr_wait_for_packet(iqpr _q,
                          framesyncstats_s * _stats)
 {
     _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
-    _q->rx_ack_found = 0;
+    _q->rx_packet_found = 0;
 
     // read samples from buffer, run through frame synchronizer
     unsigned int i;
@@ -304,7 +309,7 @@ int iqpr_wait_for_packet(iqpr _q,
         flexframesync_execute(_q->fs, _q->rx_buffer, 512);
 
         // check status flag
-        if (_q->rx_ack_found) {
+        if (_q->rx_packet_found) {
             if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
 
             // set outputs
@@ -328,8 +333,8 @@ int iqpr_wait_for_ack(iqpr _q,
 {
     // set ack to trigger on a specific packet id
     _q->rx_state = IQPR_RX_WAIT_FOR_ACK;
-    _q->rx_ack_pid = _pid;
-    _q->rx_ack_found = 0;
+    _q->rx_packet_pid = _pid;
+    _q->rx_packet_found = 0;
 
     // read samples from buffer, run through frame synchronizer
     unsigned int i;
@@ -341,7 +346,7 @@ int iqpr_wait_for_ack(iqpr _q,
         flexframesync_execute(_q->fs, _q->rx_buffer, 512);
 
         // check status flag
-        if (_q->rx_ack_found) {
+        if (_q->rx_packet_found) {
             if (_q->verbose) printf(" received ack for packet %u!\n", _pid);
 
             memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
@@ -378,19 +383,6 @@ int iqpr_mac_clear(iqpr _q)
     return (rssi < _q->fsprops.squelch_threshold) ? 1 : 0;
 }
 
-
-// ports
-
-
-void iqpr_connect_txport(iqpr _q, gport _p)
-{
-    _q->port_tx = _p;
-}
-
-void iqpr_connect_rxport(iqpr _q, gport _p)
-{
-    _q->port_rx = _p;
-}
 
 // 
 // iqpr internal methods
@@ -438,11 +430,11 @@ int iqpr_callback(unsigned char * _rx_header,
         // check to see if this packet matches the one we are waiting for
         //
         // TODO : check to see if source/destination ids match as well?
-        if ( (q->rx_state == IQPR_RX_WAIT_FOR_ACK) && (q->rx_header.pid == q->rx_ack_pid) ) {
+        if ( (q->rx_state == IQPR_RX_WAIT_FOR_ACK) && (q->rx_header.pid == q->rx_packet_pid) ) {
             // set status flag
-            q->rx_ack_found = 1;
+            q->rx_packet_found = 1;
         } else {
-            q->rx_ack_found = 0;
+            q->rx_packet_found = 0;
         }
 
         return 0;
@@ -478,7 +470,7 @@ int iqpr_callback(unsigned char * _rx_header,
 
     // check to see if we were waiting for a data packet
     if (q->rx_state == IQPR_RX_WAIT_FOR_DATA)
-        q->rx_ack_found = 1;
+        q->rx_packet_found = 1;
 
     return 0;
 }
