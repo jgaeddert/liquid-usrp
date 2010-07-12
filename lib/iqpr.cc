@@ -29,14 +29,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <getopt.h>
-#include <pthread.h>
-#include <sys/time.h>
 #include <complex>
 #include <liquid/liquid.h>
 
 #include "iqpr.h"
-#include "usrp_io.h"
 
 // iqpr data structure
 struct iqpr_s {
@@ -44,14 +40,11 @@ struct iqpr_s {
     gport port_rx;                  // receive port
 
     // common
-    int continue_running;           // continue running transceiver flag
     unsigned int payload_len;       // payload length (raw data)
     unsigned int packet_len;        // packet length (encoded data)
-    unsigned int pid;               // packet id
     unsigned int node_id;           // node identifier
 
     // receiver
-    unsigned int ack_timeout_us;    // time to wait for acknowledgement (us)
     packetizer p_dec;               // packet decoder
     unsigned char * rx_data;        // received payload data
     unsigned int rx_data_len;       // received payload data length
@@ -71,9 +64,6 @@ struct iqpr_s {
     flexframegenprops_s fgprops;    // frame generator properties
     flexframegen fg;                // frame generator
     interp_crcf interp;             // matched filter
-
-    // packet manager
-    unsigned int num_timeouts;      // running timeout counter
 };
 
 
@@ -81,10 +71,8 @@ iqpr iqpr_create(unsigned int _node_id)
 {
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
 
-    q->continue_running = 1;
     q->payload_len = 1024;
     q->packet_len = packetizer_get_packet_length(q->payload_len, FEC_NONE, FEC_NONE);
-    q->pid = 0;
     q->node_id = _node_id;
 
     // create packetizers
@@ -174,7 +162,7 @@ void iqpr_txpacket(iqpr _q,
     _q->tx_header.fec0 = FEC_NONE;
     _q->tx_header.fec1 = FEC_NONE;
     _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
-    _q->tx_header.node_src = 0;
+    _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
     iqprheader_encode(&_q->tx_header, header);
 
@@ -214,7 +202,7 @@ void iqpr_txack(iqpr _q,
     std::complex<float> frame[frame_len];
     std::complex<float> mfbuffer[2*frame_len];
 
-    printf("[tx] sending ack for packet %u...\n", _q->pid);
+    printf("[tx] sending ack for packet %u...\n", _pid);
 
     // prepare header
     _q->tx_header.pid = _pid;
@@ -222,7 +210,7 @@ void iqpr_txack(iqpr _q,
     _q->tx_header.fec0 = FEC_NONE;
     _q->tx_header.fec1 = FEC_NONE;
     _q->tx_header.packet_type = IQPR_PACKET_TYPE_ACK;
-    _q->tx_header.node_src = 0;
+    _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
 
     unsigned char header[14];
