@@ -361,7 +361,7 @@ int iqpr_wait_for_ack(iqpr _q,
 
 
 // determine if MAC is clear
-int iqpr_mac_clear(iqpr _q)
+float iqpr_mac_getrssi(iqpr _q)
 {
     // grab data from port
     gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
@@ -380,7 +380,7 @@ int iqpr_mac_clear(iqpr _q)
             (rssi < _q->fsprops.squelch_threshold) ? ' ' : '*');
     }
 
-    return (rssi < _q->fsprops.squelch_threshold) ? 1 : 0;
+    return rssi;
 }
 
 

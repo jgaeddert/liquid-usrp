@@ -140,8 +140,12 @@ int main (int argc, char **argv) {
                 // wait for clear signal (five clean reports in a row)
                 j = 5;
                 while (j) {
-                    if (iqpr_mac_clear(q))  j--;
-                    else                    j = 5;
+                    float rssi = iqpr_mac_getrssi(q);
+                    int clear = rssi < -30.0f;
+                    printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
+
+                    if (clear) j--;
+                    else       j = 5;
                 }
 
                 // transmit packet
