@@ -50,7 +50,9 @@ void usage() {
     printf("  f     :   frequency [Hz], default: 462 MHz\n");
     printf("  b     :   bandwidth [Hz], default: 100 kHz\n");
     printf("  n     :   number of packets, default: 1000\n");
+    printf("  a     :   number of tx attempts (master), default: 100\n");
     printf("  m/s   :   designate node as master/slave, default: slave\n");
+    printf("  v/q   :   set verbose/quiet mode, default: verbose\n");
 }
 
 int main (int argc, char **argv) {
@@ -61,18 +63,22 @@ int main (int argc, char **argv) {
     unsigned int max_num_attempts = 100;    // maximum number of tx attempts
     unsigned int node_type = NODE_MASTER;
     unsigned int node_id = 100;
+    int verbose = 1;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhf:b:n:ms")) != EOF) {
+    while ((d = getopt(argc,argv,"uhf:b:n:a:msvq")) != EOF) {
         switch (d) {
         case 'u':
-        case 'h': usage();                      return 0;
-        case 'f': frequency = atof(optarg);     break;
-        case 'b': symbolrate = atof(optarg);    break;
-        case 'n': num_packets = atoi(optarg);   break;
-        case 'm': node_type = NODE_MASTER;      break;
-        case 's': node_type = NODE_SLAVE;       break;
+        case 'h': usage();                          return 0;
+        case 'f': frequency = atof(optarg);         break;
+        case 'b': symbolrate = atof(optarg);        break;
+        case 'n': num_packets = atoi(optarg);       break;
+        case 'a': max_num_attempts = atoi(optarg);  break;
+        case 'm': node_type = NODE_MASTER;          break;
+        case 's': node_type = NODE_SLAVE;           break;
+        case 'v': verbose = 1;                      break;
+        case 'q': verbose = 0;                      break;
         default:
             fprintf(stderr,"error: %s, unsupported option\n", argv[0]);
             exit(1);
@@ -89,11 +95,15 @@ int main (int argc, char **argv) {
     usrp->set_rx_samplerate(2*symbolrate);
     usrp->enable_auto_tx(USRP_CHANNEL);
 
+    if (verbose) usrp->enable_verbose();
+    else         usrp->disable_verbose();
+
     // initialize iqpr structure
     iqpr q = iqpr_create(node_id,
                          usrp->get_tx_port(USRP_CHANNEL),
                          usrp->get_rx_port(USRP_CHANNEL));
 
+    // sleep for a small time before starting tx/rx processes
     usleep(1000000);
 
     // start data transfer
@@ -102,7 +112,8 @@ int main (int argc, char **argv) {
 
     // TODO : start timer
 
-    unsigned int i;
+    //unsigned int i;
+    unsigned int pid;
     unsigned int j;
     unsigned int n;
     unsigned int num_attempts = 0;
@@ -121,16 +132,19 @@ int main (int argc, char **argv) {
 
 
     if (node_type == NODE_MASTER) {
+        // 
+        // MASTER NODE
+        //
         unsigned int payload_len = 1024;
         unsigned char payload[payload_len];
 
-        // initialize payload to random data
-        for (n=0; n<payload_len; n++)
-            payload[n] = rand() % 256;
-
         int ack_received;
 
-        for (i=0; i<num_packets; i++) {
+        for (pid=0; pid<num_packets; pid++) {
+
+            // initialize payload to random data
+            for (n=0; n<payload_len; n++)
+                payload[n] = rand() % 256;
 
             ack_received = 0;
             num_attempts = 0;
@@ -142,19 +156,19 @@ int main (int argc, char **argv) {
                 while (j) {
                     float rssi = iqpr_mac_getrssi(q);
                     int clear = rssi < -30.0f;
-                    printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
+                    if (verbose) printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
 
                     if (clear) j--;
                     else       j = 5;
                 }
 
                 // transmit packet
-                printf("transmitting packet %6u (attempt %3u)\n", i, num_attempts);
-                iqpr_txpacket(q,i,payload,payload_len,ms,bps,fec0,fec1);
+                printf("transmitting packet %6u (attempt %3u)\n", pid, num_attempts);
+                iqpr_txpacket(q,pid,payload,payload_len,ms,bps,fec0,fec1);
 
                 // wait for acknowledgement (minimum timeout is about 3)
                 for (j=0; j<5; j++) {
-                    ack_received = iqpr_wait_for_ack(q, i, &header, &stats);
+                    ack_received = iqpr_wait_for_ack(q, pid, &header, &stats);
 
                     if (ack_received)
                         break;
@@ -167,10 +181,15 @@ int main (int argc, char **argv) {
             }
         }
     } else {
+        // 
+        // SLAVE NODE
+        //
         unsigned char * payload = NULL;
         unsigned int payload_len;
         unsigned int packet_found;
-        for (i=0; i<1000; i++) {
+        pid = 0;
+
+        do {
             // wait for data packet
             do {
                 // attempt to receive data packet
@@ -181,7 +200,7 @@ int main (int argc, char **argv) {
                                                     &stats);
             } while (!packet_found);
 
-            printf("  ping received %4u data bytes on packet [%4u] : %.2x %.2x %.2x %.2x\n",
+            printf("  ping received %4u data bytes on packet [%4u] : %.2x %.2x %.2x %.2x ...\n",
                     payload_len,
                     header.pid,
                     payload[0],
@@ -191,10 +210,16 @@ int main (int argc, char **argv) {
 
             // transmit acknowledgement
             iqpr_txack(q, header.pid);
-        }
+
+            pid = header.pid;
+
+        } while (pid != num_packets-1);
     }
 
     // TODO : stop timer
+
+    // sleep for a small time before stopping tx/rx processes
+    usleep(100000);
 
     // stop data transfer
     usrp->stop_rx(USRP_CHANNEL);
