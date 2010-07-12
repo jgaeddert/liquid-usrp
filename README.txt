@@ -1,6 +1,5 @@
 ==============================================================================
 
-<<<<<<< HEAD
     liquid-usrp applications
 
 ==============================================================================
@@ -23,8 +22,6 @@ Build dependencies
 
 Install basic USRP libraries from ftp.gnu.org/gnu/gnuradio/old/usrp-0.12
 
-=======
->>>>>>> b964c4ea6dd6c4bc3bb37b064930eb49ab2f123c
 Configure USB and change USRP permissions
 
 To be able to run a waveform that uses the USRP you will either need to
