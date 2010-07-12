@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include <liquid/liquid.h>
 
-#include "iqpr.h"
+#include "iqpr.threaded.h"
 #include "usrp_io.h"
 
 #define USRP_CHANNEL        (0)
