@@ -23,7 +23,7 @@
 #
 
 AC_INIT([liquid-usrp],[0.1.0],[liquid@vt.edu])
-#AC_CONFIG_SRCDIR([libliquid.c])
+#AC_CONFIG_SRCDIR([libliquidusrp.c])
 
 # Autoheader
 AC_CONFIG_HEADER(config.h)
@@ -120,14 +120,28 @@ AC_TYPE_UINT8_T
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(unsigned int)
 
+# Check canonical system
+AC_CANONICAL_TARGET
+case $target_os in
+darwin*)
+    SH_LIB=libliquidusrp.dylib
+    REBIND=""
+    ;;
+*)
+    SH_LIB=libliquidusrp.so
+    REBIND=ldconfig
+    ;;
+esac
+
+
 #
 # autoconf variable substitutions
 #
 AC_SUBST(LIBS)              # shared libraries (-lc, -lm, etc.)
 AC_SUBST(LEGACY_LIBS)       # usrp legacy library source files
 
-#AC_SUBST(SH_LIB)            # output shared library target
-#AC_SUBST(REBIND)            # rebinding tool (e.g. ldconfig)
+AC_SUBST(SH_LIB)            # output shared library target
+AC_SUBST(REBIND)            # rebinding tool (e.g. ldconfig)
 #AC_SUBST(ARCH_OPTION)       # compiler architecture option
 
 AC_CONFIG_FILES([makefile])

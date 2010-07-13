@@ -1,6 +1,10 @@
 # ignore all object files
-src/*.o
-lib/*.o
+*.o
+*.d
+*.dylib
+*.dSYM
+*.a
+*.so
 
 # ignore all configure files
 autom4te.cache/
