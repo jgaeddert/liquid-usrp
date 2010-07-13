@@ -24,18 +24,9 @@
 #    all                 :   dynamic shared-library object (e.g. libliquidusrp.so)
 #    install             :   install the dynamic shared library object and
 #                            header file(s)
-#    clean               :   clean all targets (bench, check, examples, etc)
-#    check               :   build and run autotest program
-#    bench               :   build and run benchmarking program
-#    examples            :   build all examples
-#    todolist            :   generate list of todos (text file)
-#    todolist.html       :   generate list of todos (html file)
-#
-#    clean-[modulename]  :   clean module [modulename]
-#    clean-modules       :   clean all modules
-#    clean-examples      :   clean examples
-#    clean-check         :   clean autotest program
-#    clean-bench         :   clean benchmark program
+#    uninstall           :   uninstall the library and header file(s)
+#    examples            :   build all example programs
+#    clean               :   clean all targets
 #
 
 # paths
@@ -55,6 +46,9 @@ SED	:= sed
 AR	:= ar
 RANLIB	:= ranlib
 
+# shared library object
+SHARED_LIB	= @SH_LIB@
+
 # flags
 INCLUDE_CFLAGS	= $(addprefix -I ,$(include_dirs))
 CFLAGS		+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
@@ -62,17 +56,20 @@ CPPFLAGS	+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
 LDFLAGS		+= @LIBS@
 ARFLAGS		= r
 
+# library header files
 local_headers	:=		\
 	iqpr.h			\
 	usrp_io.h		\
 	usrp_rx_gain_correction.h
 
+# library source files
 local_src	:=		\
 	@LEGACY_LIBS@		\
 	iqpr.cc			\
 	usrp_io.cc		\
 	usrp_rx_gain_correction.cc
 
+# example programs
 local_progs	:=			\
 	src/usrp_init_test.cc		\
 	src/usrp_io_test.cc		\
@@ -103,14 +100,14 @@ objects		= $(patsubst %.cc,%.cc.o,$(sources))
 programs	= $(patsubst %.cc,%,$(local_progs))
 headers		= $(addprefix include/,$(local_headers))
 
-all: $(programs)
-
 ##
 ## TARGET : Shared library
 ##
-SHARED_LIB	= @SH_LIB@
-.PHONY: all
 all: libliquidusrp.a $(SHARED_LIB)
+
+# build library objects from source files
+$(objects): %.cc.o : %.cc $(headers)
+	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 .PHONY: libraries
 libraries: $(libraries)
@@ -132,7 +129,7 @@ libliquidusrp.so: $(libraries)
 	$(CC) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
 
 ## 
-## TARGET: install
+## TARGET : install
 ##
 
 # Installs the libraries and header files in the host system
@@ -157,7 +154,7 @@ install:
 	@echo ""
 
 ## 
-## TARGET: uninstall
+## TARGET : uninstall
 ##
 
 # Uninstalls the libraries and header files in the host system
@@ -174,12 +171,17 @@ uninstall:
 	@echo "done."
 
 
-$(objects): %.cc.o : %.cc $(headers)
-	$(CXX) $(CPPFLAGS) -c $< -o $@
+##
+## TARGET : examples
+##
+examples: $(programs)
 
 $(programs): % : %.cc $(objects)
 	$(CXX) $(CPPFLAGS) $(objects) $(LDFLAGS) $< -o $@
 
+##
+## TARGET : clean
+##
 clean:
 	$(RM) $(objects)
 	$(RM) $(programs)
