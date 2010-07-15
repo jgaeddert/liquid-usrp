@@ -367,8 +367,8 @@ void usrp_io::initialize()
     int which_board = 0;
     int decim = 256;
     int interp = 512;
-    int fusb_block_size = 1024;
-    int fusb_nblocks = 4;
+    int fusb_block_size = 0;
+    int fusb_nblocks = 0;
     int mode = usrp_standard_rx::FPGA_MODE_NORMAL;
     int nchannels = 1;
     int rx_mux = which_side==0 ? 0x00000010 : 0x00000032;
