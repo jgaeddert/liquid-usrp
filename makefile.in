@@ -57,20 +57,20 @@ LDFLAGS		+= @LIBS@
 ARFLAGS		= r
 
 # library header files
-local_headers	:=		\
-	iqpr.h			\
-	usrp_io.h		\
+library_headers	:=			\
+	iqpr.h				\
+	usrp_io.h			\
 	usrp_rx_gain_correction.h
 
 # library source files
-local_src	:=		\
-	@LEGACY_LIBS@		\
-	iqpr.cc			\
-	usrp_io.cc		\
-	usrp_rx_gain_correction.cc
+library_src	:=			\
+	@LEGACY_LIBS@			\
+	lib/iqpr.cc			\
+	lib/usrp_io.cc			\
+	lib/usrp_rx_gain_correction.cc
 
 # example programs
-local_progs	:=			\
+example_src	:=			\
 	src/usrp_init_test.cc		\
 	src/usrp_io_test.cc		\
 	src/fmtx.cc 			\
@@ -95,10 +95,8 @@ local_progs	:=			\
 #	src/gr_usrp_rx_test.cc
 #	src/gr_usrp_tx_test.cc
 
-sources		= $(addprefix lib/,$(local_src))
-objects		= $(patsubst %.cc,%.cc.o,$(sources))
-programs	= $(patsubst %.cc,%,$(local_progs))
-headers		= $(addprefix include/,$(local_headers))
+library_objs	= $(patsubst %.cc,%.o,$(library_src))
+headers		= $(addprefix include/,$(library_headers))
 
 ##
 ## TARGET : Shared library
@@ -106,7 +104,7 @@ headers		= $(addprefix include/,$(local_headers))
 all: libliquidusrp.a $(SHARED_LIB)
 
 # build library objects from source files
-$(objects): %.cc.o : %.cc $(headers)
+$(library_objs): %.o : %.cc $(headers)
 	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 .PHONY: libraries
@@ -114,7 +112,7 @@ libraries: $(libraries)
 
 # Liquid library definition
 # TODO: link from module libraries, not object files (for compactness)
-libliquidusrp.a: $(objects)
+libliquidusrp.a: $(library_objs)
 	$(AR) $(ARFLAGS) $@ $^
 	$(RANLIB) $@
 
@@ -174,14 +172,24 @@ uninstall:
 ##
 ## TARGET : examples
 ##
-examples: $(programs)
 
-$(programs): % : %.cc $(objects)
-	$(CXX) $(CPPFLAGS) $(objects) $(LDFLAGS) $< -o $@
+example_objs	= $(patsubst %.cc,%.o,$(example_src))
+example_progs	= $(patsubst %.cc,%,  $(example_src))
+
+$(example_objs) : %.o : %.cc
+
+$(example_progs) : % : %.o libliquidusrp.a
+
+examples: $(example_progs)
+
+clean-examples:
+	$(RM) $(example_objs)
+	$(RM) $(example_progs)
 
 ##
 ## TARGET : clean
 ##
-clean:
-	$(RM) $(objects)
-	$(RM) $(programs)
+clean: clean-examples
+	$(RM) $(library_objs)
+	$(RM) libliquidusrp.a
+	$(RM) $(SHARED_LIB)

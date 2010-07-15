@@ -41,7 +41,7 @@ AH_BOTTOM([
 AC_ARG_ENABLE(legacy,
     AS_HELP_STRING([--enable-legacy],[enable building of legacy usrp code]),
     [ AC_DEFINE(USRP_LEGACY,[1],[enable/disable legacy code])
-      LEGACY_LIBS="basic.cc dbsrx.cc flex.cc lf.cc ossie_db_base.cc tvrx.cc"],
+      LEGACY_LIBS="lib/basic.cc lib/dbsrx.cc lib/flex.cc lib/lf.cc lib/ossie_db_base.cc lib/tvrx.cc"],
     [ AC_DEFINE(USRP_LEGACY,[0],[enable/disable legacy code]) LEGACY_LIBS=""],
 )
 
