@@ -36,6 +36,8 @@ static unsigned int num_valid_headers_received;
 static unsigned int num_valid_packets_received;
 static unsigned int num_bytes_received;
 
+static float SNRdB_av;
+
 typedef struct {
     unsigned char * header;
     unsigned char * payload;
@@ -55,6 +57,11 @@ static int callback(unsigned char * _rx_header,
         printf("SNR=%5.1fdB, ", _stats.SNR);
         printf("rssi=%5.1fdB, ", _stats.rssi);
     }
+
+    // make better estimate of SNR
+    float noise_floor = -38.0f; // noise floor estimate
+    float SNRdB = _stats.rssi - noise_floor;
+    SNRdB_av += SNRdB;
 
     if ( !_rx_header_valid ) {
         if (verbose) printf("header crc : FAIL\n");
@@ -179,6 +186,7 @@ int main (int argc, char **argv)
     num_valid_packets_received = 0;
     num_valid_headers_received = 0;
     num_bytes_received = 0;
+    SNRdB_av = 0.0f;
 
     // framing
     packetizer p = packetizer_create(0,FEC_NONE,FEC_NONE);
@@ -189,7 +197,8 @@ int main (int argc, char **argv)
     // set properties to default
     framesyncprops_s props;
     framesyncprops_init_default(&props);
-    props.squelch_threshold = -30.0f;
+    props.squelch_threshold = -37.0f;
+    props.squelch_enabled = 0;
 #if 0
     props.agc_bw0 = 1e-3f;
     props.agc_bw1 = 1e-5f;
@@ -234,13 +243,32 @@ int main (int argc, char **argv)
     float percent_packets_valid = (num_packets_received == 0) ?
                           0.0f :
                           100.0f * (float)num_valid_packets_received / (float)num_packets_received;
+    if (num_packets_received > 0)
+        SNRdB_av /= num_packets_received;
+    float PER = 1.0f - 0.01f*percent_packets_valid;
+    float spectral_efficiency = data_rate / bandwidth;
     printf("    packets received    : %6u\n", num_packets_received);
     printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
     printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
+    printf("    packet error rate   : %16.8e\n", PER);
+    printf("    average SNR [dB]    : %8.4f\n", SNRdB_av);
     printf("    bytes_received      : %6u\n", num_bytes_received);
     printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
+    printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
     printf("    execution time      : %12.8f s\n", extime);
     printf("    %% cpu               : %12.8f\n", 100.0f*extime / num_seconds);
+
+    printf("    # rx   # ok      %% ok        # data     %% data       PER          SNR      sp. eff.\n");
+    printf("    %-6u %-6u  %12.4e  %-6u   %12.4e %12.4e  %8.4f  %6.4f\n",
+            num_packets_received,
+            num_valid_headers_received,
+            percent_headers_valid * 0.01f,
+            num_valid_packets_received,
+            percent_packets_valid * 0.01f,
+            PER,
+            SNRdB_av,
+            spectral_efficiency);
+
 
     // clean it up
     flexframesync_destroy(fs);
