@@ -38,11 +38,9 @@
  
 static bool verbose;
 
-static float SNRdB_av;
-
-unsigned int num_steps = 36;
-float SNRdB_min =  -5.0f;
-float SNRdB_max =  30.0f;
+unsigned int num_steps = 51;
+float SNRdB_min =  -3.0f;
+float SNRdB_max =  22.0f;
 float * SNRdB;
 static unsigned int * num_packets_received;
 static unsigned int * num_valid_headers_received;
@@ -63,7 +61,7 @@ static int callback(unsigned char * _rx_header,
                     void * _userdata)
 {
     // estimate SNR
-    float noise_floor = -38.0f;
+    float noise_floor = -40.0f;
     float SNRdB_hat = _stats.rssi - noise_floor;
 
     // compute array index
@@ -85,9 +83,6 @@ static int callback(unsigned char * _rx_header,
         printf("SNR=%5.1fdB, ", _stats.SNR);
         printf("rssi=%5.1fdB, ", _stats.rssi);
     }
-
-    // make better estimate of SNR
-    SNRdB_av += SNRdB_hat;
 
     if ( !_rx_header_valid ) {
         if (verbose) printf("header crc : FAIL\n");
@@ -231,8 +226,6 @@ int main (int argc, char **argv)
     // retrieve rx port
     gport port_rx = uio->get_rx_port(USRP_CHANNEL);
 
-    SNRdB_av = 0.0f;
-
     // framing
     packetizer p = packetizer_create(0,FEC_NONE,FEC_NONE);
     framedata fd;
@@ -244,11 +237,11 @@ int main (int argc, char **argv)
     framesyncprops_init_default(&props);
     props.squelch_threshold = -37.0f;
     props.squelch_enabled = 0;
+    props.agc_gmin = 1e-3f;
+    props.agc_gmax = 1e4f;
 #if 0
     props.agc_bw0 = 1e-3f;
     props.agc_bw1 = 1e-5f;
-    props.agc_gmin = 1e-3f;
-    props.agc_gmax = 1e4f;
     props.pll_bw0 = 1e-3f;
     props.pll_bw1 = 3e-5f;
 #endif
@@ -282,54 +275,30 @@ int main (int argc, char **argv)
     packetizer_destroy(p);
     delete uio;
 
-#if 0
-    // print results
-    double extime = calculate_execution_time(start,finish);
-    float data_rate = 8.0f * (float)(num_bytes_received) / num_seconds;
-    float percent_headers_valid = (num_packets_received == 0) ?
-                          0.0f :
-                          100.0f * (float)num_valid_headers_received / (float)num_packets_received;
-    float percent_packets_valid = (num_packets_received == 0) ?
-                          0.0f :
-                          100.0f * (float)num_valid_packets_received / (float)num_packets_received;
-    if (num_packets_received > 0)
-        SNRdB_av /= num_packets_received;
-    float PER = 1.0f - 0.01f*percent_packets_valid;
-    float spectral_efficiency = data_rate / bandwidth;
-    printf("    packets received    : %6u\n", num_packets_received);
-    printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
-    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
-    printf("    packet error rate   : %16.8e\n", PER);
-    printf("    average SNR [dB]    : %8.4f\n", SNRdB_av);
-    printf("    bytes_received      : %6u\n", num_bytes_received);
-    printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
-    printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
-    printf("    execution time      : %12.8f s\n", extime);
-    printf("    %% cpu               : %12.8f\n", 100.0f*extime / num_seconds);
-
-    printf("    # rx   # ok      %% ok        # data     %% data       PER          SNR      sp. eff.\n");
-    printf("    %-6u %-6u  %12.4e  %-6u   %12.4e %12.4e  %8.4f  %6.4f\n",
-            num_packets_received,
-            num_valid_headers_received,
-            percent_headers_valid * 0.01f,
-            num_valid_packets_received,
-            percent_packets_valid * 0.01f,
-            PER,
-            SNRdB_av,
-            spectral_efficiency);
-#else
-    printf("    SNR [dB]    detected    headers     payloads    rate [kbps]\n");
+    printf("    SNR [dB]    detected        headers (%%)     payloads (%%)     rate [kbps]\n");
     for (i=0; i<num_steps; i++) {
+        // compute percentage of valid headers received
+        float percent_valid_headers_received = (num_packets_received[i] == 0) ?
+            0.0f : 100.0f * (float) num_valid_headers_received[i] / (float) num_packets_received[i];
+
+        // compute percentage of valid packets received
+        float percent_valid_packets_received = (num_packets_received[i] == 0) ?
+            0.0f : 100.0f * (float) num_valid_packets_received[i] / (float) num_packets_received[i];
+
+        // compute data rate (TODO fix this)
         float rate = (num_valid_packets_received[i] == 0) ? 0 :
             num_bytes_received[i] * 8.0f * 1e-3f;
-        printf("    %6.2f      %-6u      %-6u      %-6u    %8.3f\n",
+
+        printf("    %6.2f      %-5u           %-5u (%6.2f)  %-5u (%6.2f)  %8.3f\n",
                SNRdB[i],
                num_packets_received[i],
                num_valid_headers_received[i],
+               percent_valid_headers_received,
                num_valid_packets_received[i],
+               percent_valid_packets_received,
                rate);
     }
-#endif
+
     // save results to output file
     FILE * fid = fopen(filename,"w");
     if (!fid) {
@@ -339,14 +308,12 @@ int main (int argc, char **argv)
     fprintf(fid,"# framestats data\n");
     fprintf(fid,"#   SNR [dB]    detected    headers     payloads    rate [kbps]\n");
     for (i=0; i<num_steps; i++) {
-        float rate = (num_valid_packets_received[i] == 0) ? 0 :
-            num_bytes_received[i] * 8.0f * 1e-3f;
         fprintf(fid,"    %6.2f      %-6u      %-6u      %-6u    %12.4e\n",
                 SNRdB[i],
                 num_packets_received[i],
                 num_valid_headers_received[i],
                 num_valid_packets_received[i],
-                rate);
+                (float)num_bytes_received[i]);
     }
 
     fclose(fid);
