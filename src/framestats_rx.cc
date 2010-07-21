@@ -40,9 +40,9 @@ static bool verbose;
 
 static float SNRdB_av;
 
-unsigned int num_steps = 31;
-float SNRdB_min =  0.0f;
-float SNRdB_max = 30.0f;
+unsigned int num_steps = 36;
+float SNRdB_min =  -5.0f;
+float SNRdB_max =  30.0f;
 float * SNRdB;
 static unsigned int * num_packets_received;
 static unsigned int * num_valid_headers_received;
@@ -320,12 +320,14 @@ int main (int argc, char **argv)
 #else
     printf("    SNR [dB]    detected    headers     payloads    rate [kbps]\n");
     for (i=0; i<num_steps; i++) {
+        float rate = (num_valid_packets_received[i] == 0) ? 0 :
+            num_bytes_received[i] * 8.0f * 1e-3f;
         printf("    %6.2f      %-6u      %-6u      %-6u    %8.3f\n",
                SNRdB[i],
                num_packets_received[i],
                num_valid_headers_received[i],
                num_valid_packets_received[i],
-               num_bytes_received[i] * 8.0f * 1e-3f);
+               rate);
     }
 #endif
     // save results to output file
@@ -337,12 +339,14 @@ int main (int argc, char **argv)
     fprintf(fid,"# framestats data\n");
     fprintf(fid,"#   SNR [dB]    detected    headers     payloads    rate [kbps]\n");
     for (i=0; i<num_steps; i++) {
+        float rate = (num_valid_packets_received[i] == 0) ? 0 :
+            num_bytes_received[i] * 8.0f * 1e-3f;
         fprintf(fid,"    %6.2f      %-6u      %-6u      %-6u    %12.4e\n",
                 SNRdB[i],
                 num_packets_received[i],
                 num_valid_headers_received[i],
                 num_valid_packets_received[i],
-                num_bytes_received[i] * 8.0f * 1e-3f);
+                rate);
     }
 
     fclose(fid);

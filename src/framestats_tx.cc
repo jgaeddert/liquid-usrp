@@ -68,9 +68,9 @@ int main (int argc, char **argv)
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
-    float txgain_dB = -3.0f;
     float gmin_dB   = -25.0f;
     float gmax_dB   =   0.0f;
+    float txgain_dB = gmax_dB;
 
     unsigned int packet_spacing=0;
     unsigned int payload_len=200;
@@ -182,6 +182,7 @@ int main (int argc, char **argv)
     uio->start_tx(USRP_CHANNEL);
 
     // transmitter gain (linear)
+    float gstep_dB = 0.1f;
     float g = powf(10.0f, txgain_dB/10.0f);
  
     unsigned int i, j, pid=0;
@@ -190,7 +191,9 @@ int main (int argc, char **argv)
         // generate the frame / transmit silence
         if ((i%(packet_spacing+1))==0) {
             // generate random tx gain
-            txgain_dB = gmin_dB + randf() * (gmax_dB - gmin_dB);
+            txgain_dB -= gstep_dB;
+            if (txgain_dB < gmin_dB)
+                txgain_dB += gmax_dB - gmin_dB;
             g = powf(10.0f, txgain_dB/10.0f);
 
             // generate random data
