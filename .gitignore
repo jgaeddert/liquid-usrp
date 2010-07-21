@@ -24,6 +24,8 @@ octave-core
 src/firpfbch_tx
 src/flexframe_rx
 src/flexframe_tx
+src/framestats_rx
+src/framestats_tx
 src/fmtx
 src/iqpr_test
 src/jammer
@@ -41,3 +43,4 @@ src/usrp_rx_gain_correction_test
 
 # miscellany
 *.swp
+*.dat

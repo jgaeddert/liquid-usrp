@@ -74,6 +74,8 @@ example_src	:=			\
 	src/usrp_init_test.cc		\
 	src/usrp_io_test.cc		\
 	src/fmtx.cc 			\
+	src/framestats_rx.cc		\
+	src/framestats_tx.cc		\
 	src/jammer.cc 			\
 	src/tx_rrc.cc			\
 	src/flexframe_tx.cc 		\
