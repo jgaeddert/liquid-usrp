@@ -275,6 +275,15 @@ int main (int argc, char **argv)
     packetizer_destroy(p);
     delete uio;
 
+    // save results to output file and print to screen
+    FILE * fid = fopen(filename,"w");
+    if (!fid) {
+        fprintf(stderr,"error: could not open '%s' for writing\n", filename);
+        exit(1);
+    }
+    fprintf(fid,"# framestats data\n");
+    fprintf(fid,"#   SNR [dB]    detected    headers  (%%)          payloads    (%%)           rate [kbps]\n");
+
     printf("    SNR [dB]    detected        headers (%%)     payloads (%%)     rate [kbps]\n");
     for (i=0; i<num_steps; i++) {
         // compute percentage of valid headers received
@@ -297,23 +306,15 @@ int main (int argc, char **argv)
                num_valid_packets_received[i],
                percent_valid_packets_received,
                rate);
-    }
 
-    // save results to output file
-    FILE * fid = fopen(filename,"w");
-    if (!fid) {
-        fprintf(stderr,"error: could not open '%s' for writing\n", filename);
-        exit(1);
-    }
-    fprintf(fid,"# framestats data\n");
-    fprintf(fid,"#   SNR [dB]    detected    headers     payloads    rate [kbps]\n");
-    for (i=0; i<num_steps; i++) {
-        fprintf(fid,"    %6.2f      %-6u      %-6u      %-6u    %12.4e\n",
+        fprintf(fid,"    %6.2f      %-6u      %-6u %12.4e   %-6u    %12.4e  %12.4e\n",
                 SNRdB[i],
                 num_packets_received[i],
                 num_valid_headers_received[i],
+                percent_valid_headers_received,
                 num_valid_packets_received[i],
-                (float)num_bytes_received[i]);
+                percent_valid_packets_received,
+                (float) (num_bytes_received[i]));
     }
 
     fclose(fid);
