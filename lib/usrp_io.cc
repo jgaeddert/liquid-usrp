@@ -649,7 +649,7 @@ void* usrp_io_rx_resamp_process(void * _u)
 
     // local buffers
     unsigned int n_max = usrp->rx_buffer_length;
-    unsigned int n;
+    unsigned int n = n_max;
     std::complex<float> data_in[n_max];
     std::complex<float> data_resamp[n_max/2];
     std::complex<float> data_out[n_max];
