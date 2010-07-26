@@ -247,6 +247,7 @@ int main (int argc, char **argv)
         SNRdB_av /= num_packets_received;
     float PER = 1.0f - 0.01f*percent_packets_valid;
     float spectral_efficiency = data_rate / bandwidth;
+    float cpu_speed = 2.4e9;    // cpu clock frequency (estimate)
     printf("    packets received    : %6u\n", num_packets_received);
     printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
     printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
@@ -257,7 +258,15 @@ int main (int argc, char **argv)
     printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
     printf("    execution time      : %12.8f s\n", extime);
     printf("    %% cpu               : %12.8f\n", 100.0f*extime / num_seconds);
+    printf("    clock cycles / bit  : ");
+    if (num_bytes_received == 0)
+        printf("-\n");
+    else
+        printf("%12.4e\n", cpu_speed * extime / (8.0f*num_bytes_received));
 
+    printf("%12.8f %11.4e\n", spectral_efficiency, cpu_speed * extime / (8.0f*num_bytes_received));
+
+#if 0
     printf("    # rx   # ok      %% ok        # data     %% data       PER          SNR      sp. eff.\n");
     printf("    %-6u %-6u  %12.4e  %-6u   %12.4e %12.4e  %8.4f  %6.4f\n",
             num_packets_received,
@@ -268,7 +277,7 @@ int main (int argc, char **argv)
             PER,
             SNRdB_av,
             spectral_efficiency);
-
+#endif
 
     // clean it up
     flexframesync_destroy(fs);
