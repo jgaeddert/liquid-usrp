@@ -286,6 +286,10 @@ int main (int argc, char **argv)
 
     printf("    SNR [dB]    detected        headers (%%)     payloads (%%)     rate [kbps]\n");
     for (i=0; i<num_steps; i++) {
+        // ignore array elements with zero received headers
+        if (num_valid_headers_received[i]==0)
+            continue;
+
         // compute percentage of valid headers received
         float percent_valid_headers_received = (num_packets_received[i] == 0) ?
             0.0f : 100.0f * (float) num_valid_headers_received[i] / (float) num_packets_received[i];
