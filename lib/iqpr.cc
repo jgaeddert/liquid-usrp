@@ -108,7 +108,8 @@ iqpr iqpr_create(unsigned int _node_id,
 
     // create frame synchronizer
     framesyncprops_init_default(&q->fsprops);
-    q->fsprops.squelch_threshold = -30.0f;
+    q->fsprops.squelch_threshold = -37.0f;
+    q->fsprops.squelch_enabled = 1;
     q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
 
     // create interpolator
@@ -117,7 +118,7 @@ iqpr iqpr_create(unsigned int _node_id,
     q->interp = interp_crcf_create_rrc(2,m,beta,0);
 
     // set transmit gain
-    q->tx_gain = 0.2f;
+    q->tx_gain = 1.0f;
 
     // allocate memory for received data
     q->rx_data_len = 1024;
