@@ -167,7 +167,9 @@ int main (int argc, char **argv) {
                 }
 
                 // transmit packet
-                printf("transmitting packet %6u/%6u (attempt %4u/%4u)\n", pid, num_packets, num_attempts, max_num_attempts);
+                printf("transmitting packet %6u/%6u (attempt %4u/%4u) %c\n",
+                        pid, num_packets, num_attempts, max_num_attempts,
+                        num_attempts > 1 ? '*' : ' ');
                 iqpr_txpacket(q,pid,payload,payload_len,ms,bps,fec0,fec1);
 
                 // wait for acknowledgement (minimum timeout is about 3)
