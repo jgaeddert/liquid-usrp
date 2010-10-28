@@ -133,8 +133,9 @@ int iqpr_wait_for_ack(iqpr _q,
                       iqprheader_s * _header,
                       framesyncstats_s * _stats);
 
-// get channel rssi, estimated on 512 samples
-float iqpr_mac_getrssi(iqpr _q);
+// get channel rssi, estimated on _num_samples samples
+float iqpr_mac_getrssi(iqpr _q,
+                       unsigned int _num_samples);
 
 
 // 

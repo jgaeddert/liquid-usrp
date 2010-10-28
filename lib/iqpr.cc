@@ -361,19 +361,26 @@ int iqpr_wait_for_ack(iqpr _q,
 
 
 // determine if MAC is clear
-float iqpr_mac_getrssi(iqpr _q)
+float iqpr_mac_getrssi(iqpr _q,
+                       unsigned int _num_samples)
 {
+    // validate input
+    if (_num_samples < 1) {
+        fprintf(stderr,"warning: iqpr_mac_getrssi(), must use at least 1 sample\n");
+        _num_samples = 1;
+    }
+
     // grab data from port
-    gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+    gport_consume(_q->port_rx, (void*)_q->rx_buffer, _num_samples);
 
     // estimate signal level
     unsigned int i;
     float rssi = 0.0;
-    for (i=0; i<512; i++)
+    for (i=0; i<_num_samples; i++)
         rssi += abs(_q->rx_buffer[i]) * abs(_q->rx_buffer[i]);
 
     // TODO : fix rssi computation
-    rssi = 10*log10f(sqrt(rssi/512));
+    rssi = 10*log10f(sqrt(rssi/_num_samples));
 
     if (_q->verbose) {
         printf("mac_clear(), rssi : %12.8f dB %c\n", rssi,

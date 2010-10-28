@@ -63,6 +63,10 @@ int main (int argc, char **argv) {
     unsigned int max_num_attempts = 100;    // maximum number of tx attempts
     unsigned int node_type = NODE_MASTER;
     unsigned int node_id = 100;
+    unsigned int rssi_samples = 128;        // number of samples with which to estimate rssi
+    float rssi_clear_threshold = -35.0f;    // rssi threshold to determine if channel is 'clear'
+    unsigned int mac_timeout = 5;           // number of 'clear' flags before transmission
+    //unsigned int mac_timeout_backoff = 5;   // random backoff
     int verbose = 1;
 
     //
@@ -152,18 +156,21 @@ int main (int argc, char **argv) {
                 num_attempts++;
 
                 // wait for clear signal (five clean reports in a row)
-                j = 5;
+                j = mac_timeout;
                 while (j) {
-                    float rssi = iqpr_mac_getrssi(q);
-                    int clear = rssi < -30.0f;
+                    float rssi = iqpr_mac_getrssi(q,rssi_samples);
+                    int clear = rssi < rssi_clear_threshold;
                     if (verbose) printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
 
                     if (clear) j--;
-                    else       j = 5;
+                    else       j = mac_timeout;
                 }
 
+                if (pid == 1000)
+                    fec0 = FEC_CONV_V27;
+
                 // transmit packet
-                printf("transmitting packet %6u (attempt %3u)\n", pid, num_attempts);
+                printf("transmitting packet %6u/%6u (attempt %4u/%4u)\n", pid, num_packets, num_attempts, max_num_attempts);
                 iqpr_txpacket(q,pid,payload,payload_len,ms,bps,fec0,fec1);
 
                 // wait for acknowledgement (minimum timeout is about 3)
