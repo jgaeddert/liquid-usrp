@@ -51,20 +51,19 @@ struct iqprheader_s {
     fec_scheme fec0;            // [4]   inner fec scheme
     fec_scheme fec1;            // [5]   outer fec scheme
     unsigned int packet_type;   // [6]   packet type (data, ack, etc.)
-    unsigned int node_src;      // [7]   source node id
-    unsigned int node_dst;      // [8]   destination node id
 
-    unsigned char userdata[5];  // [9:13] user data
+    unsigned int node_src;      // [7/0:3] source node id
+    unsigned int node_dst;      // [8/4:7] destination node id
 };
 
 // encode header (structure > array)
 //  _q      :   iqpr heade structure
-//  _header :   14-byte headr array
+//  _header :   8-byte header array
 void iqprheader_encode(iqprheader_s * _q, unsigned char * _header);
 
 // decode header (array > structure))
 //  _q      :   iqpr heade structure
-//  _header :   14-byte headr array
+//  _header :   8-byte header array
 void iqprheader_decode(iqprheader_s * _q, unsigned char * _header);
 
 

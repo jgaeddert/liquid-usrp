@@ -179,7 +179,7 @@ void iqpr_txpacket(iqpr _q,
     _q->tx_header.node_dst = 0;
 
     // encode header
-    unsigned char header[14];
+    unsigned char header[8];
     iqprheader_encode(&_q->tx_header, header);
 
     // recreate packetizer
@@ -252,7 +252,7 @@ void iqpr_txack(iqpr _q,
     _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
 
-    unsigned char header[14];
+    unsigned char header[8];
     iqprheader_encode(&_q->tx_header, header);
 
     // generate frame
@@ -493,9 +493,10 @@ void iqprheader_encode(iqprheader_s * _q,
     _header[3] = (_q->payload_len     ) & 0xff;
     _header[4] = (unsigned char)(_q->fec0);
     _header[5] = (unsigned char)(_q->fec1);
+
     _header[6] = _q->packet_type & 0xff;
-    _header[7] = _q->node_src & 0xff;
-    _header[8] = _q->node_dst & 0xff;
+    _header[7] = (_q->node_src & 0x0f);
+    _header[8] = (_q->node_dst & 0x0f) << 4;
 }
 
 
@@ -517,8 +518,7 @@ void iqprheader_decode(iqprheader_s * _q,
     _q->packet_type = _header[6];
 
     // decode source and destination nodes
-    _q->node_src = _header[7];
-    _q->node_dst = _header[8];
-
+    _q->node_src = (_header[7]     ) & 0x0f;
+    _q->node_dst = (_header[7] >> 4) & 0x0f;
 }
 

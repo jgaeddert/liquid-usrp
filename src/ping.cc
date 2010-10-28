@@ -62,7 +62,7 @@ int main (int argc, char **argv) {
     unsigned int num_packets = 1000;
     unsigned int max_num_attempts = 100;    // maximum number of tx attempts
     unsigned int node_type = NODE_MASTER;
-    unsigned int node_id = 100;
+    unsigned int node_id = 15;              // node id in [0,15]
     unsigned int rssi_samples = 128;        // number of samples with which to estimate rssi
     float rssi_clear_threshold = -35.0f;    // rssi threshold to determine if channel is 'clear'
     unsigned int mac_timeout = 5;           // number of 'clear' flags before transmission
@@ -165,9 +165,6 @@ int main (int argc, char **argv) {
                     if (clear) j--;
                     else       j = mac_timeout;
                 }
-
-                if (pid == 1000)
-                    fec0 = FEC_CONV_V27;
 
                 // transmit packet
                 printf("transmitting packet %6u/%6u (attempt %4u/%4u)\n", pid, num_packets, num_attempts, max_num_attempts);
