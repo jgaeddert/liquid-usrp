@@ -90,6 +90,9 @@ void iqpr_print(iqpr _q);
 // set verbosity on/off
 void iqpr_setverbose(iqpr _q, int _verbose);
 
+// set transmit gain (linear)
+void iqpr_settxgain(iqpr _q, float _txgain);
+
 // transmit packet
 //  _q              :   iqpr object
 //  _payload        :   payload data

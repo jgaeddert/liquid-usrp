@@ -67,6 +67,7 @@ int main (int argc, char **argv) {
     float rssi_clear_threshold = -35.0f;    // rssi threshold to determine if channel is 'clear'
     unsigned int mac_timeout = 5;           // number of 'clear' flags before transmission
     //unsigned int mac_timeout_backoff = 5;   // random backoff
+    float tx_gain = 0.9f;                   // transmit gain
     int verbose = 1;
 
     //
@@ -106,6 +107,9 @@ int main (int argc, char **argv) {
     iqpr q = iqpr_create(node_id,
                          usrp->get_tx_port(USRP_CHANNEL),
                          usrp->get_rx_port(USRP_CHANNEL));
+
+    // set transmit gain
+    iqpr_settxgain(q,tx_gain);
 
     // sleep for a small time before starting tx/rx processes
     usleep(1000000);

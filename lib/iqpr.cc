@@ -159,6 +159,16 @@ void iqpr_setverbose(iqpr _q, int _verbose)
     _q->verbose = _verbose ? 1 : 0;
 }
 
+void iqpr_settxgain(iqpr _q, float _txgain)
+{
+    // validate input
+    if (_txgain <= 0.0f || _txgain > 1.0f) {
+        fprintf(stderr,"error: iqpr_settxgain(), tx gain must be in (0,1]\n");
+        exit(1);
+    }
+    _q->tx_gain = _txgain;
+}
+
 void iqpr_txpacket(iqpr _q,
                    unsigned int _pid,
                    unsigned char * _payload,
