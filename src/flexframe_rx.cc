@@ -25,10 +25,13 @@
 #include <stdlib.h>
 #include <sys/resource.h>
 #include <liquid/liquid.h>
-#include <liquid/liquidrm.h>
-#include <liquid/liquidfpm.h>
 
 #include "usrp_io.h"
+
+#include "config.h"
+#if HAVE_LIBLIQUIDRM
+#include <liquid/liquidrm.h>
+#endif
  
 #define USRP_CHANNEL        (0)
  
@@ -213,17 +216,11 @@ int main (int argc, char **argv)
 
     std::complex<float> data_rx[512];
 
-    // test fpm
-    q32_t a = q32_one >> 1;
-    q32_t b = q32_one << 1;
-    q32_t c = q32_mul(a,b);
-    printf("%f * %f = %f\n", q32_fixed_to_float(a),
-                             q32_fixed_to_float(b),
-                             q32_fixed_to_float(c));
-
+#if HAVE_LIBLIQUIDRM
     // test r/m daemon
     rmdaemon rmd = rmdaemon_create();
     rmdaemon_start(rmd);
+#endif
  
     // start usrp data transfer
     uio->start_rx(USRP_CHANNEL);
@@ -241,6 +238,7 @@ int main (int argc, char **argv)
         // run through frame synchronizer
         flexframesync_execute(fs, data_rx, 512);
 
+#if HAVE_LIBLIQUIDRM
         // compute cpu load
         double runtime = rmdaemon_gettime(rmd);
         if ( runtime > 0.7 ) {
@@ -248,11 +246,14 @@ int main (int argc, char **argv)
             rmdaemon_resettimer(rmd);
             printf("  cpuload : %f\n", cpuload);
         }
+#endif
     }
     getrusage(RUSAGE_SELF, &finish);
 
+#if HAVE_LIBLIQUIDRM
     rmdaemon_stop(rmd);
     rmdaemon_destroy(rmd);
+#endif
 
     double extime = calculate_execution_time(start,finish);
 

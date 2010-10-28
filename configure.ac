@@ -65,9 +65,6 @@ AC_CHECK_LIB([m], [sinf, cosf, expf, cargf, cexpf, crealf, cimagf, sqrtf], [],
 AC_CHECK_LIB([liquid], [gport_create], [],
              [AC_MSG_ERROR(Need liquid-dsp library!)],
              [])
-AC_CHECK_LIB([liquidrm], [rmdaemon_create], [],
-             [AC_MSG_ERROR(Need liquid-rm library!)],
-             [])
 AC_CHECK_LIB([usrp], [main], [],
              [AC_MSG_ERROR(Need usrp library!)],
              [])
@@ -110,6 +107,9 @@ AC_CHECK_LIB([fec], [create_viterbi27], [],
              [])
 AC_CHECK_LIB([liquidfpm], [q32_mul], [],
              [AC_MSG_WARN(fixed-point math library useful but not required)],
+             [])
+AC_CHECK_LIB([liquidrm], [rmdaemon_create], [],
+             [AC_MSG_WARN(liquid resource monitoring library useful but not required)],
              [])
 
 # Checks for typedefs, structures, and compiler characteristics.
