@@ -25,6 +25,8 @@
 #include <stdlib.h>
 #include <sys/resource.h>
 #include <liquid/liquid.h>
+#include <liquid/liquidrm.h>
+#include <liquid/liquidfpm.h>
 
 #include "usrp_io.h"
  
@@ -198,7 +200,7 @@ int main (int argc, char **argv)
     framesyncprops_s props;
     framesyncprops_init_default(&props);
     props.squelch_threshold = -37.0f;
-    props.squelch_enabled = 0;
+    props.squelch_enabled = 1;
 #if 0
     props.agc_bw0 = 1e-3f;
     props.agc_bw1 = 1e-5f;
@@ -210,6 +212,18 @@ int main (int argc, char **argv)
     flexframesync fs = flexframesync_create(&props,callback,(void*)&fd);
 
     std::complex<float> data_rx[512];
+
+    // test fpm
+    q32_t a = q32_one >> 1;
+    q32_t b = q32_one << 1;
+    q32_t c = q32_mul(a,b);
+    printf("%f * %f = %f\n", q32_fixed_to_float(a),
+                             q32_fixed_to_float(b),
+                             q32_fixed_to_float(c));
+
+    // test r/m daemon
+    rmdaemon rmd = rmdaemon_create();
+    rmdaemon_start(rmd);
  
     // start usrp data transfer
     uio->start_rx(USRP_CHANNEL);
@@ -226,8 +240,19 @@ int main (int argc, char **argv)
 
         // run through frame synchronizer
         flexframesync_execute(fs, data_rx, 512);
+
+        // compute cpu load
+        double runtime = rmdaemon_gettime(rmd);
+        if ( runtime > 0.7 ) {
+            double cpuload = rmdaemon_getcpuload(rmd);
+            rmdaemon_resettimer(rmd);
+            printf("  cpuload : %f\n", cpuload);
+        }
     }
     getrusage(RUSAGE_SELF, &finish);
+
+    rmdaemon_stop(rmd);
+    rmdaemon_destroy(rmd);
 
     double extime = calculate_execution_time(start,finish);
 

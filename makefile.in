@@ -180,8 +180,10 @@ example_objs	= $(patsubst %.cc,%.o,$(example_src))
 example_progs	= $(patsubst %.cc,%,  $(example_src))
 
 $(example_objs) : %.o : %.cc
+	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 $(example_progs) : % : %.o libliquidusrp.a
+	$(CXX) $(CPPFLAGS) $(LDFLAGS) $^ -o $@
 
 examples: $(example_progs)
 

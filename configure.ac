@@ -65,6 +65,9 @@ AC_CHECK_LIB([m], [sinf, cosf, expf, cargf, cexpf, crealf, cimagf, sqrtf], [],
 AC_CHECK_LIB([liquid], [gport_create], [],
              [AC_MSG_ERROR(Need liquid-dsp library!)],
              [])
+AC_CHECK_LIB([liquidrm], [rmdaemon_create], [],
+             [AC_MSG_ERROR(Need liquid-rm library!)],
+             [])
 AC_CHECK_LIB([usrp], [main], [],
              [AC_MSG_ERROR(Need usrp library!)],
              [])
