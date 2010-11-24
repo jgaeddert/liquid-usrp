@@ -119,7 +119,11 @@ int main (int argc, char **argv)
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_rx_freq(0, frequency);
+#if 0
     uio->set_rx_decim(decim_rate);
+#else
+    uio->set_rx_samplerate(bandwidth);
+#endif
     uio->enable_auto_tx(0);
 
     // retrieve rx port
@@ -154,7 +158,8 @@ int main (int argc, char **argv)
     uio->start_rx(USRP_CHANNEL);
     printf("usrp data transfer started\n");
  
-    unsigned int i, n;
+    unsigned int i;
+    num_blocks = 12;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
         gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
