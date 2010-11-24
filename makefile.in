@@ -89,6 +89,8 @@ example_src	:=			\
 	src/ofdmframe64_rx.cc		\
 	src/ofdmoqamframe64_tx.cc	\
 	src/ofdmoqamframe64_rx.cc	\
+	src/ofdmoqamframe_tx.cc		\
+	src/ofdmoqamframe_rx.cc		\
 	src/firpfbch_tx.cc		\
 	src/usrp_rx_gain_correction_test.cc
 #	src/dsa_ofdmoqam.cc
