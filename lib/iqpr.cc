@@ -80,6 +80,7 @@ iqpr iqpr_create(unsigned int _node_id,
     q->port_rx = _port_rx;  // receive port
 
     // create frame generator
+    flexframegenprops_init_default(&q->fgprops);
     q->fgprops.rampup_len   = 16;
     q->fgprops.phasing_len  = 64;
     q->fgprops.payload_len  = 0;
