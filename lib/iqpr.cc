@@ -93,16 +93,19 @@ iqpr iqpr_create(unsigned int _node_id,
     q->rx_header.fec1 = FEC_NONE;
 
     // create packetizers
-    q->p_enc = packetizer_create(q->tx_header.payload_len, q->tx_header.fec0, q->tx_header.fec1);
-    q->p_dec = packetizer_create(q->rx_header.payload_len, q->rx_header.fec0, q->rx_header.fec1);
+    q->p_enc = packetizer_create(q->tx_header.payload_len, CRC_32, q->tx_header.fec0, q->tx_header.fec1);
+    q->p_dec = packetizer_create(q->rx_header.payload_len, CRC_32, q->rx_header.fec0, q->rx_header.fec1);
 
     // create frame generator
-    q->fgprops.rampup_len = 64;
-    q->fgprops.phasing_len = 64;
-    q->fgprops.payload_len = packetizer_get_enc_msg_len(q->p_enc);  // NOTE : payload_len for frame is packet_len
-    q->fgprops.mod_scheme = MOD_QPSK;
-    q->fgprops.mod_bps = 2;
-    q->fgprops.rampdn_len = 64;
+    q->fgprops.rampup_len   = 64;
+    q->fgprops.phasing_len  = 64;
+    q->fgprops.payload_len  = packetizer_get_enc_msg_len(q->p_enc);  // NOTE : payload_len for frame is packet_len
+    q->fgprops.check        = CRC_NONE;
+    q->fgprops.fec0         = FEC_NONE;
+    q->fgprops.fec1         = FEC_NONE;
+    q->fgprops.mod_scheme   = MOD_QPSK;
+    q->fgprops.mod_bps      = 2;
+    q->fgprops.rampdn_len   = 64;
     q->fg = flexframegen_create(&q->fgprops);
     flexframegen_print(q->fg);
 
@@ -196,6 +199,7 @@ void iqpr_txpacket(iqpr _q,
     // recreate packetizer
     _q->p_enc = packetizer_recreate(_q->p_enc,
                                     _q->tx_header.payload_len,
+                                    CRC_32,
                                     _q->tx_header.fec0,
                                     _q->tx_header.fec1);
 
@@ -410,6 +414,7 @@ int iqpr_callback(unsigned char * _rx_header,
                   int _rx_header_valid,
                   unsigned char * _rx_payload,
                   unsigned int _rx_payload_len,
+                  int _rx_payload_valid,
                   framesyncstats_s _stats,
                   void * _userdata)
 {
@@ -468,6 +473,7 @@ int iqpr_callback(unsigned char * _rx_header,
     // recreate packetizer if necessary
     q->p_dec = packetizer_recreate(q->p_dec,
                                    q->rx_header.payload_len,
+                                   CRC_32,
                                    q->rx_header.fec0,
                                    q->rx_header.fec1);
 
