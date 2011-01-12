@@ -135,19 +135,16 @@ int main (int argc, char **argv)
     // retrieve tx port
     gport port_tx = uio->get_tx_port(USRP_CHANNEL);
 
-    // packetizer
-    packetizer p = packetizer_create(payload_len,fec0,fec1);
-    unsigned int packet_len = packetizer_get_packet_length(payload_len,fec0,fec1);
-    packetizer_print(p);
-
     // create flexframegen object
     flexframegenprops_s fgprops;
-    fgprops.rampup_len = ramp_len;
+    flexframegenprops_init_default(&fgprops);
+    fgprops.rampup_len  = ramp_len;
     fgprops.phasing_len = 64;
-    fgprops.payload_len = packet_len;
-    fgprops.mod_scheme = mod_scheme;
-    fgprops.mod_bps = mod_depth;
-    fgprops.rampdn_len = ramp_len;
+    fgprops.payload_len = payload_len;
+    fgprops.mod_scheme  = mod_scheme;
+    fgprops.mod_bps     = mod_depth;
+    fgprops.rampdn_len  = ramp_len;
+
     flexframegen fg = flexframegen_create(&fgprops);
     flexframegen_print(fg);
 
@@ -169,7 +166,6 @@ int main (int argc, char **argv)
     // data buffers
     unsigned char header[9];
     unsigned char payload[payload_len];
-    unsigned char packet[packet_len];
 
     // start usrp data transfer
     uio->start_tx(USRP_CHANNEL);
@@ -186,29 +182,17 @@ int main (int argc, char **argv)
             // TODO : encode using forward error-correction codec
             for (j=0; j<payload_len; j++)
                 payload[j] = rand() % 256;
-            // assemble packet
-            packetizer_encode(p,payload,packet);
             // write header
             header[0] = (pid >> 8) & 0xff;
             header[1] = (pid     ) & 0xff;
             header[2] = (payload_len >> 8) & 0xff;
             header[3] = (payload_len     ) & 0xff;
-            header[4] = (unsigned char)(fec0);
-            header[5] = (unsigned char)(fec1);
             if (verbose)
                 printf("packet id: %6u\n", pid);
                 //printf("packet id: %6u, packet len : %6u\n", pid, packet_len);
-            /*
-            for (j=0; j<payload_len; j++)
-                printf("%.2x ",payload[j]);
-            printf("\n");
-            for (j=0; j<packet_len; j++)
-                printf("%.2x ",packet[j]);
-            printf("\n");
-            */
             pid = (pid+1) & 0xffff;
 
-            flexframegen_execute(fg, header, packet, frame);
+            flexframegen_execute(fg, header, payload, frame);
 
             // interpolate using matched filter
             for (j=0; j<frame_len; j++) {
@@ -232,7 +216,6 @@ int main (int argc, char **argv)
     uio->stop_tx(USRP_CHANNEL);  // Stop data transfer
 
     // clean it up
-    packetizer_destroy(p);
     flexframegen_destroy(fg);
     interp_crcf_destroy(mfinterp);
     delete uio;

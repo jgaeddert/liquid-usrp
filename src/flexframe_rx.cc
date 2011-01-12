@@ -43,16 +43,11 @@ static unsigned int num_bytes_received;
 
 static float SNRdB_av;
 
-typedef struct {
-    unsigned char * header;
-    unsigned char * payload;
-    packetizer p;
-} framedata;
-
 static int callback(unsigned char * _rx_header,
                     int _rx_header_valid,
                     unsigned char * _rx_payload,
                     unsigned int _rx_payload_len,
+                    int _rx_payload_valid,
                     framesyncstats_s _stats,
                     void * _userdata)
 {
@@ -75,42 +70,14 @@ static int callback(unsigned char * _rx_header,
     num_valid_headers_received++;
     unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
     if (verbose) printf("packet id: %6u\n", packet_id);
-    unsigned int payload_len = (_rx_header[2] << 8 | _rx_header[3]);
-    fec_scheme fec0 = (fec_scheme)(_rx_header[4]);
-    fec_scheme fec1 = (fec_scheme)(_rx_header[5]);
 
-    /*
-    // TODO: validate fec0,fec1 before indexing fec_scheme_str
-    printf("    payload len : %u\n", payload_len);
-    printf("    fec0        : %s\n", fec_scheme_str[fec0]);
-    printf("    fec1        : %s\n", fec_scheme_str[fec1]);
-    */
-
-    framedata * fd = (framedata*) _userdata;
-    fd->p = packetizer_recreate(fd->p, payload_len, fec0, fec1);
-
-    // decode packet
-    unsigned char msg_dec[payload_len];
-    bool crc_pass = packetizer_decode(fd->p, _rx_payload, msg_dec);
-    if (crc_pass) {
-        num_valid_packets_received++;
-        num_bytes_received += payload_len;
-    } else {
-        if (verbose) printf("  <<< payload crc fail >>>\n");
+    if ( !_rx_payload_valid ) {
+        if (verbose) printf("payload crc : FAIL\n");
+        return 0;
     }
 
-    /*
-    packetizer_print(fd->p);
-    printf("payload len: %u\n", _rx_payload_len);
-    unsigned int i;
-    for (i=0; i<_rx_payload_len; i++)
-        printf("%.2x ", _rx_payload[i]);
-    printf("\n");
-
-    for (i=0; i<payload_len; i++)
-        printf("%.2x ", msg_dec[i]);
-    printf("\n");
-    */
+    num_valid_packets_received++;
+    num_bytes_received += _rx_payload_len;
 
     return 0;
 }
@@ -126,7 +93,7 @@ double calculate_execution_time(struct rusage _start, struct rusage _finish)
 }
 
 void usage() {
-    printf("packet_tx:\n");
+    printf("flexframe_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
     printf("  t     :   run time [seconds]\n");
@@ -193,12 +160,6 @@ int main (int argc, char **argv)
     num_bytes_received = 0;
     SNRdB_av = 0.0f;
 
-    // framing
-    packetizer p = packetizer_create(0,FEC_NONE,FEC_NONE);
-    framedata fd;
-    fd.header = NULL;
-    fd.payload = NULL;
-    fd.p = p;
     // set properties to default
     framesyncprops_s props;
     framesyncprops_init_default(&props);
@@ -212,7 +173,7 @@ int main (int argc, char **argv)
     props.pll_bw0 = 1e-3f;
     props.pll_bw1 = 3e-5f;
 #endif
-    flexframesync fs = flexframesync_create(&props,callback,(void*)&fd);
+    flexframesync fs = flexframesync_create(&props,callback,NULL);
 
     std::complex<float> data_rx[512];
 
@@ -307,7 +268,6 @@ int main (int argc, char **argv)
 
     // clean it up
     flexframesync_destroy(fs);
-    packetizer_destroy(p);
 
     delete uio;
     return 0;
