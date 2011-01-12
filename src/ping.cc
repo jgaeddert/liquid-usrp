@@ -217,6 +217,15 @@ int main (int argc, char **argv) {
                     payload[1],
                     payload[2],
                     payload[3]);
+#if 0
+            printf("    SNR                 : %12.8f dB\n", stats.SNR);
+            printf("    rssi                : %12.8f dB\n", stats.rssi);
+            printf("    mod. scheme         : %s\n", modulation_scheme_str[stats.mod_scheme][1]);
+            printf("    mod. depth          : %u\n", stats.mod_bps);
+            printf("    payload CRC         : %s\n", crc_scheme_str[stats.check][1]);
+            printf("    payload fec (inner) : %s\n", fec_scheme_str[stats.fec0][1]);
+            printf("    payload fec (outer) : %s\n", fec_scheme_str[stats.fec1][1]);
+#endif
 
             // transmit acknowledgement
             iqpr_txack(q, header.pid);
