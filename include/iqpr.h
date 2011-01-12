@@ -47,9 +47,6 @@ extern "C" {
 // iqpr packet header descriptor
 struct iqprheader_s {
     unsigned int pid;           // [0,1] packet identifier
-    unsigned int payload_len;   // [2,3] payload length
-    fec_scheme fec0;            // [4]   inner fec scheme
-    fec_scheme fec1;            // [5]   outer fec scheme
     unsigned int packet_type;   // [6]   packet type (data, ack, etc.)
 
     unsigned int node_src;      // [7/0:3] source node id

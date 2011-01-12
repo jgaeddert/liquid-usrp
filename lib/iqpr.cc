@@ -43,7 +43,6 @@ struct iqpr_s {
     unsigned int node_id;           // node identifier
 
     // receiver
-    packetizer p_dec;               // packet decoder
     unsigned char * rx_data;        // received payload data
     unsigned int rx_data_len;       // received payload data length
     iqprheader_s rx_header;         // received header
@@ -56,7 +55,6 @@ struct iqpr_s {
     framesyncstats_s rx_stats;      // frame synchronizer stats
 
     // transmitter
-    packetizer p_enc;               // packet encoder
     unsigned char * tx_data;        // transmitted payload data
     unsigned int tx_data_len;       // transmitted payload data length
     iqprheader_s tx_header;         // transmitted header
@@ -81,31 +79,16 @@ iqpr iqpr_create(unsigned int _node_id,
     q->port_tx = _port_tx;  // transmit port
     q->port_rx = _port_rx;  // receive port
 
-
-    // initialize tx header
-    q->tx_header.payload_len = 1024;
-    q->tx_header.fec0 = FEC_NONE;
-    q->tx_header.fec1 = FEC_NONE;
-
-    // initialize rx header
-    q->rx_header.payload_len = 1024;
-    q->rx_header.fec0 = FEC_NONE;
-    q->rx_header.fec1 = FEC_NONE;
-
-    // create packetizers
-    q->p_enc = packetizer_create(q->tx_header.payload_len, CRC_32, q->tx_header.fec0, q->tx_header.fec1);
-    q->p_dec = packetizer_create(q->rx_header.payload_len, CRC_32, q->rx_header.fec0, q->rx_header.fec1);
-
     // create frame generator
-    q->fgprops.rampup_len   = 64;
+    q->fgprops.rampup_len   = 16;
     q->fgprops.phasing_len  = 64;
-    q->fgprops.payload_len  = packetizer_get_enc_msg_len(q->p_enc);  // NOTE : payload_len for frame is packet_len
+    q->fgprops.payload_len  = 0;
     q->fgprops.check        = CRC_NONE;
     q->fgprops.fec0         = FEC_NONE;
     q->fgprops.fec1         = FEC_NONE;
     q->fgprops.mod_scheme   = MOD_QPSK;
     q->fgprops.mod_bps      = 2;
-    q->fgprops.rampdn_len   = 64;
+    q->fgprops.rampdn_len   = 16;
     q->fg = flexframegen_create(&q->fgprops);
     flexframegen_print(q->fg);
 
@@ -135,10 +118,6 @@ iqpr iqpr_create(unsigned int _node_id,
 
 void iqpr_destroy(iqpr _q)
 {
-    // destroy packetizers
-    packetizer_destroy(_q->p_enc);
-    packetizer_destroy(_q->p_dec);
-
     // destroy frame generator
     flexframegen_destroy(_q->fg);
 
@@ -185,9 +164,6 @@ void iqpr_txpacket(iqpr _q,
 
     // prepare header
     _q->tx_header.pid = _pid;
-    _q->tx_header.payload_len = _payload_len;
-    _q->tx_header.fec0 = _fec0;
-    _q->tx_header.fec1 = _fec1;
     _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
     _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
@@ -196,23 +172,14 @@ void iqpr_txpacket(iqpr _q,
     unsigned char header[8];
     iqprheader_encode(&_q->tx_header, header);
 
-    // recreate packetizer
-    _q->p_enc = packetizer_recreate(_q->p_enc,
-                                    _q->tx_header.payload_len,
-                                    CRC_32,
-                                    _q->tx_header.fec0,
-                                    _q->tx_header.fec1);
-
-
     // configure frame generator
-    unsigned int packet_len = packetizer_get_enc_msg_len(_q->p_enc);
-    _q->fgprops.mod_scheme = _ms;
-    _q->fgprops.mod_bps    = _bps;
-    _q->fgprops.payload_len = packet_len;   // NOTE : payload_len for frame is packet_len
+    _q->fgprops.payload_len = _payload_len;
+    _q->fgprops.mod_scheme  = _ms;
+    _q->fgprops.mod_bps     = _bps;
+    _q->fgprops.check       = CRC_32;
+    _q->fgprops.fec0        = _fec0;
+    _q->fgprops.fec1        = _fec1;
     flexframegen_setprops(_q->fg, &_q->fgprops);
-
-    // allocate memory for buffers
-    unsigned char packet[packet_len];    // encoded message
 
     unsigned int frame_len = flexframegen_getframelen(_q->fg);
     std::complex<float> frame[frame_len];       // frame
@@ -220,11 +187,8 @@ void iqpr_txpacket(iqpr _q,
 
     //printf("[tx] sending packet %u...\n", _pid);
 
-    // encode packet
-    packetizer_encode(_q->p_enc, _payload, packet);
-
     // generate frame
-    flexframegen_execute(_q->fg, header, packet, frame);
+    flexframegen_execute(_q->fg, header, _payload, frame);
 
     // run interpolator
     for (i=0; i<frame_len; i++) {
@@ -260,15 +224,21 @@ void iqpr_txack(iqpr _q,
 
     // prepare header
     _q->tx_header.pid = _pid;
-    _q->tx_header.payload_len = 0;
-    _q->tx_header.fec0 = FEC_NONE;
-    _q->tx_header.fec1 = FEC_NONE;
     _q->tx_header.packet_type = IQPR_PACKET_TYPE_ACK;
     _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
 
     unsigned char header[8];
     iqprheader_encode(&_q->tx_header, header);
+
+    // configure frame generator
+    _q->fgprops.payload_len = 0;
+    _q->fgprops.mod_scheme  = MOD_BPSK;
+    _q->fgprops.mod_bps     = 1;
+    _q->fgprops.check       = CRC_NONE;
+    _q->fgprops.fec0        = FEC_NONE;
+    _q->fgprops.fec1        = FEC_NONE;
+    flexframegen_setprops(_q->fg, &_q->fgprops);
 
     // generate frame
     flexframegen_execute(_q->fg, header, NULL, frame);
@@ -424,6 +394,7 @@ int iqpr_callback(unsigned char * _rx_header,
         printf("********* callback invoked, ");
         printf("SNR=%5.1fdB, ", _stats.SNR);
         printf("rssi=%5.1fdB, ", _stats.rssi);
+        // ...
     }
 
     if ( !_rx_header_valid ) {
@@ -463,29 +434,16 @@ int iqpr_callback(unsigned char * _rx_header,
         return 0;
     }
 
-    /*
-    // TODO: validate fec0,fec1 before indexing fec_scheme_str
-    printf("    payload len : %u\n", payload_len);
-    printf("    fec0        : %s\n", fec_scheme_str[fec0]);
-    printf("    fec1        : %s\n", fec_scheme_str[fec1]);
-    */
-
-    // recreate packetizer if necessary
-    q->p_dec = packetizer_recreate(q->p_dec,
-                                   q->rx_header.payload_len,
-                                   CRC_32,
-                                   q->rx_header.fec0,
-                                   q->rx_header.fec1);
-
     // re-allocate memory arrays if necessary
-    if (q->rx_data_len != q->rx_header.payload_len) {
-        q->rx_data_len = q->rx_header.payload_len;
+    if (q->rx_data_len != _rx_payload_len) {
+        q->rx_data_len = _rx_payload_len;
         q->rx_data = (unsigned char*) realloc(q->rx_data, q->rx_data_len*sizeof(unsigned char));
     }
 
-    // decode packet
-    bool crc_pass = packetizer_decode(q->p_dec, _rx_payload, q->rx_data);
-    if (!crc_pass) {
+    // copy data (regardless of validity)
+    memmove(q->rx_data, _rx_payload, _rx_payload_len*sizeof(unsigned char));
+
+    if (!_rx_payload_valid) {
         if (q->verbose) printf("  <<< payload crc fail >>>\n");
 
         // payload failed check
@@ -506,10 +464,6 @@ void iqprheader_encode(iqprheader_s * _q,
     // prepare header
     _header[0] = (_q->pid >> 8) & 0xff;
     _header[1] = (_q->pid     ) & 0xff;
-    _header[2] = (_q->payload_len >> 8) & 0xff;
-    _header[3] = (_q->payload_len     ) & 0xff;
-    _header[4] = (unsigned char)(_q->fec0);
-    _header[5] = (unsigned char)(_q->fec1);
 
     _header[6] = _q->packet_type & 0xff;
     _header[7] = (_q->node_src & 0x0f);
@@ -523,13 +477,6 @@ void iqprheader_decode(iqprheader_s * _q,
 {
     // decode packet identifier
     _q->pid = (_header[0] << 8) | _header[1];
-
-    // decode payload length
-    _q->payload_len = (_header[2] << 8) | _header[3];
-
-    // decode fec schemes
-    _q->fec0 = (fec_scheme)(_header[4]);
-    _q->fec1 = (fec_scheme)(_header[5]);
 
     // decode packet type
     _q->packet_type = _header[6];
