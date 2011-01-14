@@ -21,6 +21,7 @@ makefile
 octave-core
 
 # ignore all programs
+src/crdemo
 src/firpfbch_tx
 src/flexframe_rx
 src/flexframe_tx

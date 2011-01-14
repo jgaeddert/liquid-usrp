@@ -71,6 +71,7 @@ library_src	:=			\
 
 # example programs
 example_src	:=			\
+	src/crdemo.cc			\
 	src/usrp_init_test.cc		\
 	src/usrp_io_test.cc		\
 	src/fmtx.cc 			\
