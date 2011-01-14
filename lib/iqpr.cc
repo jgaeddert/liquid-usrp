@@ -183,28 +183,38 @@ void iqpr_txpacket(iqpr _q,
     flexframegen_setprops(_q->fg, &_q->fgprops);
 
     unsigned int frame_len = flexframegen_getframelen(_q->fg);
+    unsigned int buffer_len = 64;
     std::complex<float> frame[frame_len];       // frame
-    std::complex<float> mfbuffer[2*frame_len];  // frame (interpolated)
+    std::complex<float> mfbuffer[2*buffer_len]; // frame (interpolated)
 
     //printf("[tx] sending packet %u...\n", _pid);
 
     // generate frame
     flexframegen_execute(_q->fg, header, _payload, frame);
 
-    // run interpolator
-    for (i=0; i<frame_len; i++) {
-        interp_crcf_execute(_q->interp, frame[i]*_q->tx_gain, &mfbuffer[2*i]);
+    // run interpolator in blocks
+    unsigned int n=frame_len;   // total number of frame samples remaining
+    unsigned int k=0;     // block counter
+    while (n > 0) {
+        // size of this block (default 64, otherwise remaining symbols)
+        unsigned int t = (n < buffer_len) ? n : buffer_len;
+        for (i=0; i<t; i++)
+            interp_crcf_execute(_q->interp, frame[buffer_len*k + i]*_q->tx_gain, &mfbuffer[2*i]);
+        
+        // update counters
+        n -= t;     // reduce number of samples remaining
+        k++;        // increment block counter
+
+        // push samples to port
+        gport_produce(_q->port_tx, (void*)mfbuffer, 2*t);
     }
 
-    // produce data in buffer
-    gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
-
-    // flush interpolator with zeros
-    for (i=0; i<64; i++) {
+    // flush interpolator with zeros, min(64,buffer_len)
+    n = buffer_len < 64 ? buffer_len : 64;
+    for (i=0; i<n; i++)
         interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
-    }
 
-    gport_produce(_q->port_tx, (void*)mfbuffer, 128);
+    gport_produce(_q->port_tx, (void*)mfbuffer, 2*n);
 }
 
 
