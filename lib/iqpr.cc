@@ -153,7 +153,7 @@ void iqpr_settxgain(iqpr _q, float _txgain)
 }
 
 void iqpr_txpacket(iqpr _q,
-                   unsigned int _pid,
+                   iqprheader_s * _tx_header,
                    unsigned char * _payload,
                    unsigned int _payload_len,
                    modulation_scheme _ms,
@@ -163,11 +163,14 @@ void iqpr_txpacket(iqpr _q,
 {
     unsigned int i;
 
-    // prepare header
+    // copy header
+    memmove(&_q->tx_header, _tx_header, sizeof(struct iqprheader_s));
+#if 0
     _q->tx_header.pid = _pid;
     _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
     _q->tx_header.node_src = _q->node_id;
     _q->tx_header.node_dst = 0;
+#endif
 
     // encode header
     unsigned char header[8];
@@ -317,7 +320,7 @@ int iqpr_wait_for_packet(iqpr _q,
         }
     }
 
-    // ack was never received
+    // packet was never received
     return 0;
 }
 
@@ -484,10 +487,10 @@ void iqprheader_encode(iqprheader_s * _q,
     _header[3] = _q->node_src & 0xff;
     _header[4] = _q->node_dst & 0xff;
 
-    // add dummy data for remaining space
-    _header[5] = 0xbf;
-    _header[6] = 0xc2;
-    _header[7] = 0x49;
+    // copy remaining user data
+    _header[5] = _q->userdata[0];
+    _header[6] = _q->userdata[1];
+    _header[7] = _q->userdata[2];
 }
 
 
@@ -506,5 +509,10 @@ void iqprheader_decode(iqprheader_s * _q,
     // decode source and destination nodes
     _q->node_src = _header[3];
     _q->node_dst = _header[4];
+
+    // copy remaining user data
+    _q->userdata[0] = _header[5];
+    _q->userdata[1] = _header[6];
+    _q->userdata[2] = _header[7];
 }
 

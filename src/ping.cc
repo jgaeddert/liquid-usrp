@@ -128,8 +128,9 @@ int main (int argc, char **argv) {
     unsigned int n;
     unsigned int num_attempts = 0;
 
-    // received frame header
-    iqprheader_s header;
+    // frame headers
+    iqprheader_s tx_header; // transmitted frame header
+    iqprheader_s rx_header; // received frame header
 
     // received frame statistics (SNR, rssi)
     framesyncstats_s stats;
@@ -172,16 +173,22 @@ int main (int argc, char **argv) {
                     else       j = mac_timeout;
                 }
 
+                // initialize header
+                tx_header.pid           = pid;
+                tx_header.packet_type   = IQPR_PACKET_TYPE_DATA;
+                tx_header.node_src      = node_id;
+                tx_header.node_dst      = 0;
+
                 // transmit packet
                 printf("transmitting packet %6u/%6u (attempt %4u/%4u) %c\n",
                         pid, num_packets, num_attempts, max_num_attempts,
                         num_attempts > 1 ? '*' : ' ');
-                iqpr_txpacket(q,pid,payload,payload_len,ms,bps,fec0,fec1);
+                iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
 
                 // wait for acknowledgement (minimum timeout is about 3)
                 // TODO : increase timeout based on transmitted packet length
                 for (j=0; j<5; j++) {
-                    ack_received = iqpr_wait_for_ack(q, pid, &header, &stats);
+                    ack_received = iqpr_wait_for_ack(q, pid, &rx_header, &stats);
 
                     if (ack_received)
                         break;
@@ -209,21 +216,21 @@ int main (int argc, char **argv) {
                 packet_found = iqpr_wait_for_packet(q,
                                                     &payload,
                                                     &payload_len,
-                                                    &header,
+                                                    &rx_header,
                                                     &stats);
             } while (!packet_found);
 
             printf("  ping received %4u data bytes on packet [%4u]\n",
                     payload_len,
-                    header.pid);
+                    rx_header.pid);
 
             // print received frame statistics
             if (verbose) framesyncstats_print(&stats);
 
             // transmit acknowledgement
-            iqpr_txack(q, header.pid);
+            iqpr_txack(q, rx_header.pid);
 
-            pid = header.pid;
+            pid = rx_header.pid;
 
         } while (pid != num_packets-1);
     }

@@ -36,8 +36,9 @@ extern "C" {
 
 #include <liquid/liquid.h>
 
-#define IQPR_PACKET_TYPE_DATA   (0)
-#define IQPR_PACKET_TYPE_ACK    (1)
+#define IQPR_PACKET_TYPE_DATA       (0)
+#define IQPR_PACKET_TYPE_ACK        (1)
+#define IQPR_PACKET_TYPE_CONTROL    (2)
 
 #define IQPR_RX_NULL            (0) // not waiting for anything
 #define IQPR_RX_WAIT_FOR_DATA   (1) // receiver waiting for data packet
@@ -51,6 +52,8 @@ struct iqprheader_s {
 
     unsigned int node_src;      // [3]   source node id
     unsigned int node_dst;      // [4]   destination node id
+
+    char userdata[3];           // [5,6,7]  remaining user data
 };
 
 // encode header (structure > array)
@@ -99,7 +102,7 @@ void iqpr_settxgain(iqpr _q, float _txgain);
 //  _fec0           :   inner fec scheme
 //  _fec1           :   outer fec scheme
 void iqpr_txpacket(iqpr _q,
-                   unsigned int _pid,
+                   iqprheader_s * _tx_header,
                    unsigned char * _payload,
                    unsigned int _payload_len,
                    modulation_scheme _ms,
