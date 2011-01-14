@@ -33,6 +33,11 @@
 #include <pthread.h>
 #include <sys/time.h>
 #include <complex>
+
+#include "config.h"
+#if HAVE_LIBLIQUIDRM
+#include <liquid/liquidrm.h>
+#endif
 #include <liquid/liquid.h>
 
 #include "usrp_io.h"
@@ -154,6 +159,7 @@ int main (int argc, char **argv) {
         unsigned int rx_payload_len;
         unsigned int packet_found;
         float master_path_loss_dB;  // master path loss [dB]
+        float slave_cpuload;        // slave node cpu load
 
         int ack_received;
 
@@ -221,8 +227,13 @@ int main (int argc, char **argv) {
 
                         // decode path loss
                         master_path_loss_dB = rx_header.userdata[0] / 4.0f;
-                        if (verbose)
-                            printf("ack received on packet [%4u], path loss=%8.2fdB\n", tx_header.pid, master_path_loss_dB);
+                        slave_cpuload = rx_header.userdata[2] / 250.0f;
+                        if (verbose) {
+                            printf("ack received on packet [%4u], path loss=%8.2fdB, cpuload=%8.2f\n",
+                                    tx_header.pid,
+                                    master_path_loss_dB,
+                                    slave_cpuload);
+                        }
                     }
 #endif
 
@@ -243,6 +254,14 @@ int main (int argc, char **argv) {
         unsigned char * payload = NULL;
         unsigned int payload_len;
         unsigned int packet_found;
+#if HAVE_LIBLIQUIDRM
+        // create/initialize resource-monitoring daemon
+        rmdaemon rmd = rmdaemon_create();
+        rmdaemon_start(rmd);
+        double runtime;
+        double cpuload = 0.15f;
+#endif
+
         pid = 0;
 
         do {
@@ -254,6 +273,15 @@ int main (int argc, char **argv) {
                                                     &payload_len,
                                                     &rx_header,
                                                     &stats);
+#if HAVE_LIBLIQUIDRM
+                // compute cpu load
+                runtime = rmdaemon_gettime(rmd);
+                if ( runtime > 0.5f ) {
+                    cpuload = 0.8f*cpuload + 0.2f*rmdaemon_getcpuload(rmd);
+                    rmdaemon_resettimer(rmd);
+                    if (verbose) printf("  cpuload : %f\n", cpuload);
+                }
+#endif
             } while (!packet_found);
 
             printf("  crdemo received %4u data bytes on packet [%4u], {%3u %3u %3u}\n",
@@ -284,7 +312,12 @@ int main (int argc, char **argv) {
             tx_header.node_dst      = rx_header.node_src;
             tx_header.userdata[0]   = (unsigned char)(4*path_loss_dB);
             tx_header.userdata[1]   = IQPR_PACKET_TYPE_ACK;
+#if HAVE_LIBLIQUIDRM
+            if (cpuload > 1.0) cpuload = 1.0;
+            tx_header.userdata[2]   = (unsigned char) (cpuload * 250);
+#else
             tx_header.userdata[2]   = 0;
+#endif
 
             // transmit ACK packet
             iqpr_txpacket(q,&tx_header,NULL,0,MOD_BPSK,1,FEC_NONE,FEC_NONE);
@@ -293,6 +326,12 @@ int main (int argc, char **argv) {
             pid = rx_header.pid;
 
         } while (pid != num_packets-1);
+
+#if HAVE_LIBLIQUIDRM
+        // stop/destroy resource-monitoring daemon
+        rmdaemon_stop(rmd);
+        rmdaemon_destroy(rmd);
+#endif
     }
 
     // TODO : stop timer
