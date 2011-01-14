@@ -47,10 +47,10 @@ extern "C" {
 // iqpr packet header descriptor
 struct iqprheader_s {
     unsigned int pid;           // [0,1] packet identifier
-    unsigned int packet_type;   // [6]   packet type (data, ack, etc.)
+    unsigned int packet_type;   // [2]   packet type (data, ack, etc.)
 
-    unsigned int node_src;      // [7/0:3] source node id
-    unsigned int node_dst;      // [8/4:7] destination node id
+    unsigned int node_src;      // [3]   source node id
+    unsigned int node_dst;      // [4]   destination node id
 };
 
 // encode header (structure > array)

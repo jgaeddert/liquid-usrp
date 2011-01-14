@@ -467,21 +467,33 @@ int iqpr_callback(unsigned char * _rx_header,
     return 0;
 }
 
-// encode header
+// encode header (structure > array)
+//  _q      :   iqpr heade structure
+//  _header :   8-byte header array
 void iqprheader_encode(iqprheader_s * _q,
                        unsigned char * _header)
 {
-    // prepare header
+    // encode packet identifier
     _header[0] = (_q->pid >> 8) & 0xff;
     _header[1] = (_q->pid     ) & 0xff;
 
-    _header[6] = _q->packet_type & 0xff;
-    _header[7] = (_q->node_src & 0x0f);
-    _header[8] = (_q->node_dst & 0x0f) << 4;
+    // encode packet type
+    _header[2] = _q->packet_type & 0xff;
+
+    // encode source and destination nodes
+    _header[3] = _q->node_src & 0xff;
+    _header[4] = _q->node_dst & 0xff;
+
+    // add dummy data for remaining space
+    _header[5] = 0xbf;
+    _header[6] = 0xc2;
+    _header[7] = 0x49;
 }
 
 
-// decode header
+// decode header (array > structure))
+//  _q      :   iqpr heade structure
+//  _header :   8-byte header array
 void iqprheader_decode(iqprheader_s * _q,
                        unsigned char * _header)
 {
@@ -489,10 +501,10 @@ void iqprheader_decode(iqprheader_s * _q,
     _q->pid = (_header[0] << 8) | _header[1];
 
     // decode packet type
-    _q->packet_type = _header[6];
+    _q->packet_type = _header[2];
 
     // decode source and destination nodes
-    _q->node_src = (_header[7]     ) & 0x0f;
-    _q->node_dst = (_header[7] >> 4) & 0x0f;
+    _q->node_src = _header[3];
+    _q->node_dst = _header[4];
 }
 
