@@ -81,6 +81,7 @@ int main (int argc, char **argv) {
     unsigned int num_packets_tx=0;          // total number of packets transmitted
     unsigned int num_packets_rx=0;          // total number of packets received
     float throughput=0;                     // average throughput
+    float spectral_efficiency=0;            // average spectral efficiency
     float average_slave_cpuload=0;          // average slave cpuload
 
     //
@@ -198,11 +199,13 @@ int main (int argc, char **argv) {
 
                     // compute statistics
                     throughput = num_bytes_through * 8.0f / runtime;
+                    spectral_efficiency = throughput / symbolrate;
 
-                    printf("engine: packets [%4u / %4u] %8.4f kbps, cpu: %8.4f%%\n",
+                    printf("engine: packets [%4u / %4u] %8.4f kbps (%4.2f b/s/Hz), cpu: %8.4f%%\n",
                             num_packets_rx,
                             num_packets_tx,
                             throughput * 1e-3f,
+                            spectral_efficiency,
                             average_slave_cpuload*100.0f);
 
                     // TODO : engine adaptation
