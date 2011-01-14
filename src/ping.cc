@@ -108,6 +108,8 @@ int main (int argc, char **argv) {
                          usrp->get_tx_port(USRP_CHANNEL),
                          usrp->get_rx_port(USRP_CHANNEL));
 
+    // iqpr_setverbose(q, verbose);
+
     // set transmit gain
     iqpr_settxgain(q,tx_gain);
 
@@ -177,6 +179,7 @@ int main (int argc, char **argv) {
                 iqpr_txpacket(q,pid,payload,payload_len,ms,bps,fec0,fec1);
 
                 // wait for acknowledgement (minimum timeout is about 3)
+                // TODO : increase timeout based on transmitted packet length
                 for (j=0; j<5; j++) {
                     ack_received = iqpr_wait_for_ack(q, pid, &header, &stats);
 
@@ -210,22 +213,12 @@ int main (int argc, char **argv) {
                                                     &stats);
             } while (!packet_found);
 
-            printf("  ping received %4u data bytes on packet [%4u] : %.2x %.2x %.2x %.2x ...\n",
+            printf("  ping received %4u data bytes on packet [%4u]\n",
                     payload_len,
-                    header.pid,
-                    payload[0],
-                    payload[1],
-                    payload[2],
-                    payload[3]);
-#if 0
-            printf("    SNR                 : %12.8f dB\n", stats.SNR);
-            printf("    rssi                : %12.8f dB\n", stats.rssi);
-            printf("    mod. scheme         : %s\n", modulation_scheme_str[stats.mod_scheme][1]);
-            printf("    mod. depth          : %u\n", stats.mod_bps);
-            printf("    payload CRC         : %s\n", crc_scheme_str[stats.check][1]);
-            printf("    payload fec (inner) : %s\n", fec_scheme_str[stats.fec0][1]);
-            printf("    payload fec (outer) : %s\n", fec_scheme_str[stats.fec1][1]);
-#endif
+                    header.pid);
+
+            // print received frame statistics
+            if (verbose) framesyncstats_print(&stats);
 
             // transmit acknowledgement
             iqpr_txack(q, header.pid);
