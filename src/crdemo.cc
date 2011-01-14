@@ -177,6 +177,9 @@ int main (int argc, char **argv) {
                 tx_header.packet_type   = IQPR_PACKET_TYPE_DATA;
                 tx_header.node_src      = node_id;
                 tx_header.node_dst      = 0;
+                tx_header.userdata[0]   = 0;
+                tx_header.userdata[1]   = 0;
+                tx_header.userdata[2]   = 0;
 
                 // transmit packet
                 printf("transmitting packet %6u/%6u (attempt %4u/%4u) %c\n",
@@ -219,9 +222,12 @@ int main (int argc, char **argv) {
                                                     &stats);
             } while (!packet_found);
 
-            printf("  crdemo received %4u data bytes on packet [%4u]\n",
+            printf("  crdemo received %4u data bytes on packet [%4u], {%3u %3u %3u}\n",
                     payload_len,
-                    rx_header.pid);
+                    rx_header.pid,
+                    rx_header.userdata[0],
+                    rx_header.userdata[1],
+                    rx_header.userdata[2]);
 
             // print received frame statistics
             if (verbose) framesyncstats_print(&stats);
