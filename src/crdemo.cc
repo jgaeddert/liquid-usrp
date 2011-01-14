@@ -111,6 +111,7 @@ int main (int argc, char **argv) {
 
     // set transmit gain
     iqpr_settxgain(q,tx_gain);
+    float tx_gain_dB = 20*logf(tx_gain);
 
     // sleep for a small time before starting tx/rx processes
     usleep(1000000);
@@ -126,6 +127,7 @@ int main (int argc, char **argv) {
     unsigned int j;
     unsigned int n;
     unsigned int num_attempts = 0;
+    unsigned int t=0;   // number of transmitted packets
 
     // frame headers
     iqprheader_s tx_header; // transmitted frame header
@@ -148,6 +150,11 @@ int main (int argc, char **argv) {
         unsigned int payload_len = 1024;
         unsigned char payload[payload_len];
 
+        unsigned char * rx_payload = NULL;
+        unsigned int rx_payload_len;
+        unsigned int packet_found;
+        float master_path_loss_dB;  // master path loss [dB]
+
         int ack_received;
 
         for (pid=0; pid<num_packets; pid++) {
@@ -160,6 +167,7 @@ int main (int argc, char **argv) {
             num_attempts = 0;
             do {
                 num_attempts++;
+                t++;
 
                 // wait for clear signal (five clean reports in a row)
                 j = mac_timeout;
@@ -172,12 +180,18 @@ int main (int argc, char **argv) {
                     else       j = mac_timeout;
                 }
 
+                // set transmit gain
+                tx_gain_dB = -25.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 200.0f));
+                
+                tx_gain = powf(10.0f, tx_gain_dB/10.0f);
+                iqpr_settxgain(q,tx_gain);
+
                 // initialize header
                 tx_header.pid           = pid;
                 tx_header.packet_type   = IQPR_PACKET_TYPE_DATA;
                 tx_header.node_src      = node_id;
                 tx_header.node_dst      = 0;
-                tx_header.userdata[0]   = 0;
+                tx_header.userdata[0]   = (unsigned char)(10.0f*(tx_gain_dB + 25.0f));
                 tx_header.userdata[1]   = 0;
                 tx_header.userdata[2]   = 0;
 
@@ -190,7 +204,27 @@ int main (int argc, char **argv) {
                 // wait for acknowledgement (minimum timeout is about 3)
                 // TODO : increase timeout based on transmitted packet length
                 for (j=0; j<5; j++) {
+#if 0
                     ack_received = iqpr_wait_for_ack(q, pid, &rx_header, &stats);
+#else
+                    packet_found = iqpr_wait_for_packet(q,
+                                                        &rx_payload,
+                                                        &rx_payload_len,
+                                                        &rx_header,
+                                                        &stats);
+                
+                    if (packet_found &&
+                        rx_header.userdata[1] == IQPR_PACKET_TYPE_ACK &&
+                        rx_header.pid         == tx_header.pid)
+                    {
+                        ack_received = 1;
+
+                        // decode path loss
+                        master_path_loss_dB = rx_header.userdata[0] / 4.0f;
+                        if (verbose)
+                            printf("ack received on packet [%4u], path loss=%8.2fdB\n", tx_header.pid, master_path_loss_dB);
+                    }
+#endif
 
                     if (ack_received)
                         break;
@@ -225,15 +259,36 @@ int main (int argc, char **argv) {
             printf("  crdemo received %4u data bytes on packet [%4u], {%3u %3u %3u}\n",
                     payload_len,
                     rx_header.pid,
-                    rx_header.userdata[0],
-                    rx_header.userdata[1],
-                    rx_header.userdata[2]);
+                    (unsigned int) rx_header.userdata[0],
+                    (unsigned int) rx_header.userdata[1],
+                    (unsigned int) rx_header.userdata[2]);
 
             // print received frame statistics
             if (verbose) framesyncstats_print(&stats);
 
+#if 0
             // transmit acknowledgement
             iqpr_txack(q, rx_header.pid);
+#else
+            // send our own, home-brewed acknowledgement
+
+            // compute path loss
+            float master_tx_gain_dB = (float)(rx_header.userdata[0])*0.1f - 25.0f;
+            float path_loss_dB = master_tx_gain_dB - stats.rssi;
+            //printf("  path loss : %12.8f dB\n", path_loss_dB);
+
+            // initialize header
+            tx_header.pid           = rx_header.pid;
+            tx_header.packet_type   = IQPR_PACKET_TYPE_DATA;
+            tx_header.node_src      = node_id;
+            tx_header.node_dst      = rx_header.node_src;
+            tx_header.userdata[0]   = (unsigned char)(4*path_loss_dB);
+            tx_header.userdata[1]   = IQPR_PACKET_TYPE_ACK;
+            tx_header.userdata[2]   = 0;
+
+            // transmit ACK packet
+            iqpr_txpacket(q,&tx_header,NULL,0,MOD_BPSK,1,FEC_NONE,FEC_NONE);
+#endif
 
             pid = rx_header.pid;
 

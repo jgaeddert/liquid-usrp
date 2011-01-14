@@ -53,7 +53,7 @@ struct iqprheader_s {
     unsigned int node_src;      // [3]   source node id
     unsigned int node_dst;      // [4]   destination node id
 
-    char userdata[3];           // [5,6,7]  remaining user data
+    unsigned char userdata[3];  // [5,6,7]  remaining user data
 };
 
 // encode header (structure > array)
