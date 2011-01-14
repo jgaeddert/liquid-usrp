@@ -75,6 +75,14 @@ int main (int argc, char **argv) {
     float channel_gain_dB = 0.0f;           // random time-varying channel gain [dB]
     int verbose = 1;
 
+    // engine (master node only)
+    float ce_timeout = 1.0f;                // timeout before executing cognition cycle
+    unsigned int num_bytes_through=0;       // total number of bytes through channel
+    unsigned int num_packets_tx=0;          // total number of packets transmitted
+    unsigned int num_packets_rx=0;          // total number of packets received
+    float throughput=0;                     // average throughput
+    float average_slave_cpuload=0;          // average slave cpuload
+
     //
     int d;
     while ((d = getopt(argc,argv,"uhf:b:n:a:msvq")) != EOF) {
@@ -147,6 +155,13 @@ int main (int argc, char **argv) {
     fec_scheme fec0 = FEC_NONE;
     fec_scheme fec1 = FEC_NONE;
 
+#if HAVE_LIBLIQUIDRM
+        // create/initialize resource-monitoring daemon
+        rmdaemon rmd = rmdaemon_create();
+        rmdaemon_start(rmd);
+        double runtime;
+        double cpuload = 0.15f;
+#endif
 
     if (node_type == NODE_MASTER) {
         // 
@@ -175,6 +190,30 @@ int main (int argc, char **argv) {
                 num_attempts++;
                 t++;
 
+#if HAVE_LIBLIQUIDRM
+                // check timer, execute cognition cycle
+                runtime = rmdaemon_gettime(rmd);
+                if ( runtime > ce_timeout ) {
+                    rmdaemon_resettimer(rmd);
+
+                    // compute statistics
+                    throughput = num_bytes_through * 8.0f / runtime;
+
+                    printf("engine: packets [%4u / %4u] %8.4f kbps, cpu: %8.4f%%\n",
+                            num_packets_rx,
+                            num_packets_tx,
+                            throughput * 1e-3f,
+                            average_slave_cpuload*100.0f);
+
+                    // TODO : engine adaptation
+
+                    // reset counters
+                    num_bytes_through = 0;
+                    num_packets_tx = 0;
+                    num_packets_rx = 0;
+                }
+#endif
+
                 // wait for clear signal (five clean reports in a row)
                 j = mac_timeout;
                 while (j) {
@@ -188,6 +227,7 @@ int main (int argc, char **argv) {
 
                 // time-varying channel gain
                 channel_gain_dB = -15.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 200.0f));
+                channel_gain_dB = 0.0f;
 
                 tx_gain = powf(10.0f, (tx_gain_dB + channel_gain_dB)/10.0f);
                 iqpr_settxgain(q,tx_gain);
@@ -202,10 +242,13 @@ int main (int argc, char **argv) {
                 tx_header.userdata[2]   = 0;
 
                 // transmit packet
+#if 0
                 printf("transmitting packet %6u/%6u (attempt %4u/%4u) %c\n",
                         pid, num_packets, num_attempts, max_num_attempts,
                         num_attempts > 1 ? '*' : ' ');
+#endif
                 iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
+                num_packets_tx++;
 
                 // wait for acknowledgement (minimum timeout is about 3)
                 // TODO : increase timeout based on transmitted packet length
@@ -224,16 +267,23 @@ int main (int argc, char **argv) {
                         rx_header.pid         == tx_header.pid)
                     {
                         ack_received = 1;
+                        num_packets_rx++;
+                        num_bytes_through += payload_len;
 
                         // decode path loss
                         master_path_loss_dB = rx_header.userdata[0] / 4.0f;
                         slave_cpuload = rx_header.userdata[2] / 250.0f;
-                        if (verbose) {
+                        if (verbose && 0) {
                             printf("ack received on packet [%4u], path loss=%8.2fdB, cpuload=%8.2f %%\n",
                                     tx_header.pid,
                                     master_path_loss_dB,
                                     slave_cpuload * 100.0f);
                         }
+
+                        if (num_packets_rx==1)
+                            average_slave_cpuload = slave_cpuload;
+                        else
+                            average_slave_cpuload = 0.5f*average_slave_cpuload + 0.5f*slave_cpuload;
                     }
 #endif
 
@@ -254,14 +304,6 @@ int main (int argc, char **argv) {
         unsigned char * payload = NULL;
         unsigned int payload_len;
         unsigned int packet_found;
-#if HAVE_LIBLIQUIDRM
-        // create/initialize resource-monitoring daemon
-        rmdaemon rmd = rmdaemon_create();
-        rmdaemon_start(rmd);
-        double runtime;
-        double cpuload = 0.15f;
-#endif
-
         pid = 0;
 
         do {
