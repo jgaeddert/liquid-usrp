@@ -180,14 +180,19 @@ int main (int argc, char **argv) {
                 while (j) {
                     float rssi = iqpr_mac_getrssi(q,rssi_samples);
                     int clear = rssi < rssi_clear_threshold;
-                    if (verbose) printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
+                    //if (verbose) printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
 
                     if (clear) j--;
                     else       j = mac_timeout;
                 }
 
-                // set transmit gain
+#if 0
+                // time-varying gain
                 tx_gain_dB = -25.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 200.0f));
+#else
+                // constant gain
+                tx_gain_dB =  -3.0f;
+#endif
                 
                 tx_gain = powf(10.0f, tx_gain_dB/10.0f);
                 iqpr_settxgain(q,tx_gain);
@@ -229,10 +234,10 @@ int main (int argc, char **argv) {
                         master_path_loss_dB = rx_header.userdata[0] / 4.0f;
                         slave_cpuload = rx_header.userdata[2] / 250.0f;
                         if (verbose) {
-                            printf("ack received on packet [%4u], path loss=%8.2fdB, cpuload=%8.2f\n",
+                            printf("ack received on packet [%4u], path loss=%8.2fdB, cpuload=%8.2f %%\n",
                                     tx_header.pid,
                                     master_path_loss_dB,
-                                    slave_cpuload);
+                                    slave_cpuload * 100.0f);
                         }
                     }
 #endif
