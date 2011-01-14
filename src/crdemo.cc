@@ -72,6 +72,7 @@ int main (int argc, char **argv) {
     unsigned int mac_timeout = 5;           // number of 'clear' flags before transmission
     //unsigned int mac_timeout_backoff = 5;   // random backoff
     float tx_gain = 0.9f;                   // transmit gain
+    float channel_gain_dB = 0.0f;           // random time-varying channel gain [dB]
     int verbose = 1;
 
     //
@@ -104,8 +105,7 @@ int main (int argc, char **argv) {
     usrp->set_rx_samplerate(2*symbolrate);
     usrp->enable_auto_tx(USRP_CHANNEL);
 
-    if (verbose) usrp->enable_verbose();
-    else         usrp->disable_verbose();
+    usrp->disable_verbose();
 
     // initialize iqpr structure
     iqpr q = iqpr_create(node_id,
@@ -186,15 +186,10 @@ int main (int argc, char **argv) {
                     else       j = mac_timeout;
                 }
 
-#if 0
-                // time-varying gain
-                tx_gain_dB = -25.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 200.0f));
-#else
-                // constant gain
-                tx_gain_dB =  -3.0f;
-#endif
-                
-                tx_gain = powf(10.0f, tx_gain_dB/10.0f);
+                // time-varying channel gain
+                channel_gain_dB = -15.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 200.0f));
+
+                tx_gain = powf(10.0f, (tx_gain_dB + channel_gain_dB)/10.0f);
                 iqpr_settxgain(q,tx_gain);
 
                 // initialize header
