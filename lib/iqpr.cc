@@ -393,8 +393,7 @@ int iqpr_callback(unsigned char * _rx_header,
 
     if (q->verbose) {
         printf("********* callback invoked, ");
-        printf("SNR=%5.1fdB, ", _stats.SNR);
-        printf("rssi=%5.1fdB, ", _stats.rssi);
+        framesyncstats_print(&_stats);
         // ...
     }
 
