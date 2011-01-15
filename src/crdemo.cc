@@ -342,8 +342,6 @@ int main (int argc, char **argv) {
                     // engine adaptation
                     ce_search(engine, o, zeta, p);
 
-                    // TODO : prune database...
-
                     // save parameter set
                     parameter_get_mod_scheme(p[PARAM_MOD_SCHEME], &ms, &bps);
                     parameter_get_fec_scheme(p[PARAM_FEC0], &fec0);
@@ -354,10 +352,12 @@ int main (int argc, char **argv) {
                     // randomize/mutate
                     mutate_parameters(&ms, &bps, &fec0, &fec1, &payload_len, &tx_gain_dB);
 
-                    // reset counters
+                    // reset counters, etc.
                     num_bytes_through = 0;
                     num_packets_tx = 0;
                     num_packets_rx = 0;
+                    average_pathloss = 40.0f;
+                    average_slave_cpuload = 100.0f;
 
                     num_adaptations++;
                     if (num_adaptations == max_num_adaptations)
