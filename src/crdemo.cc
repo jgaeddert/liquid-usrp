@@ -38,6 +38,7 @@
 #if HAVE_LIBLIQUIDRM
 #include <liquid/liquidrm.h>
 #endif
+#include <liquid/liquidce.h>
 #include <liquid/liquid.h>
 
 #include "usrp_io.h"
@@ -47,6 +48,21 @@
 
 #define NODE_MASTER         (0)
 #define NODE_SLAVE          (1)
+
+#define PARAM_MOD_SCHEME    (0)
+#define PARAM_FEC0          (1)
+#define PARAM_FEC1          (2)
+#define PARAM_PAYLOAD       (3)
+#define PARAM_TXGAIN        (4)
+
+#define OBSERVABLE_PATHLOSS (0)
+
+#define METRIC_THROUGHPUT   (0)
+#define METRIC_TXPOWER      (1)
+#define METRIC_COMPLEXITY   (2)
+
+//#define NUM_MOD_SCHEMES     (7)
+//#define NUM_FEC_SCHEMES     (11)
 
 void usage() {
     printf("crdemo usage:\n");
@@ -58,6 +74,18 @@ void usage() {
     printf("  m/s   :   designate node as master/slave, default: slave\n");
     printf("  v/q   :   set verbose/quiet mode, default: verbose\n");
 }
+
+void parameter_set_mod_scheme(parameter _p,
+                              modulation_scheme _ms,
+                              unsigned int _bps);
+
+void parameter_get_mod_scheme(parameter _p,
+                              modulation_scheme * _ms,
+                              unsigned int * _bps);
+
+void parameter_set_fec_scheme(parameter _p, fec_scheme _fs);
+
+void parameter_get_mod_scheme(parameter _p, fec_scheme _fs);
 
 int main (int argc, char **argv) {
     // options
@@ -75,7 +103,7 @@ int main (int argc, char **argv) {
     float channel_gain_dB = 0.0f;           // random time-varying channel gain [dB]
     int verbose = 1;
 
-    // engine (master node only)
+    // engine metrics (master node only)
     float ce_timeout = 1.0f;                // timeout before executing cognition cycle
     unsigned int num_bytes_through=0;       // total number of bytes through channel
     unsigned int num_packets_tx=0;          // total number of packets transmitted
@@ -83,6 +111,7 @@ int main (int argc, char **argv) {
     float throughput=0;                     // average throughput
     float spectral_efficiency=0;            // average spectral efficiency
     float average_slave_cpuload=0;          // average slave cpuload
+    float average_pathloss=0;               // average pathloss
 
     //
     int d;
@@ -103,6 +132,32 @@ int main (int argc, char **argv) {
             exit(1);
         }
     }
+
+    // create parameters, observables, metrics
+    unsigned int num_parameters = 5;
+    parameter p[num_parameters];
+    p[PARAM_MOD_SCHEME] = parameter_create_discrete("mod-scheme", 7, PARAMETER_UNORDERED);
+    p[PARAM_FEC0]       = parameter_create_discrete("fec0", LIQUID_NUM_FEC_SCHEMES, PARAMETER_UNORDERED);
+    p[PARAM_FEC1]       = parameter_create_discrete("fec1", LIQUID_NUM_FEC_SCHEMES, PARAMETER_UNORDERED);
+    p[PARAM_PAYLOAD]    = parameter_create_discrete("payload-length", 1024, PARAMETER_ORDERED);
+    p[PARAM_TXGAIN]     = parameter_create_continuous("tx-gain-dB", -25.0f, 0.0f, PARAMETER_ORDERED);
+
+    unsigned int num_observables = 1;
+    observable o[num_observables];
+    o[OBSERVABLE_PATHLOSS] = observable_create("path-loss-dB");
+
+    unsigned int num_metrics = 3;
+    metric m[num_metrics];
+    m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80e3f, 0.1f, 0.5f);
+    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.03, 0.1f, 0.3f);
+    m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 40.0f, 0.5f, 0.2f);
+
+    // create engine
+    ce engine = ce_create(p, num_parameters,
+                          o, num_observables,
+                          m, num_metrics);
+    ce_print(engine);
+    float zeta = 0.5f;
 
     // create usrp object
     usrp_io * usrp = new usrp_io();
@@ -125,7 +180,6 @@ int main (int argc, char **argv) {
 
     // set transmit gain
     iqpr_settxgain(q,tx_gain);
-    float tx_gain_dB = 20*logf(tx_gain);
 
     // sleep for a small time before starting tx/rx processes
     usleep(1000000);
@@ -155,22 +209,29 @@ int main (int argc, char **argv) {
     unsigned int bps = 2;
     fec_scheme fec0 = FEC_NONE;
     fec_scheme fec1 = FEC_NONE;
+    unsigned int payload_len = 512;
+    unsigned char payload[1024];
+    float tx_gain_dB = 20*logf(tx_gain);
+
+    // initialize parameters
+    parameter_set_mod_scheme(p[PARAM_MOD_SCHEME], ms, bps);
+    parameter_set_fec_scheme(p[PARAM_FEC0], fec0);
+    parameter_set_fec_scheme(p[PARAM_FEC1], fec1);
+    parameter_set_discrete_value(p[PARAM_PAYLOAD], payload_len);
+    parameter_set_continuous_value(p[PARAM_TXGAIN], tx_gain_dB);
 
 #if HAVE_LIBLIQUIDRM
-        // create/initialize resource-monitoring daemon
-        rmdaemon rmd = rmdaemon_create();
-        rmdaemon_start(rmd);
-        double runtime;
-        double cpuload = 0.15f;
+    // create/initialize resource-monitoring daemon
+    rmdaemon rmd = rmdaemon_create();
+    rmdaemon_start(rmd);
+    double runtime;
+    double cpuload = 0.15f;
 #endif
 
     if (node_type == NODE_MASTER) {
         // 
         // MASTER NODE
         //
-        unsigned int payload_len = 1024;
-        unsigned char payload[payload_len];
-
         unsigned char * rx_payload = NULL;
         unsigned int rx_payload_len;
         unsigned int packet_found;
@@ -208,7 +269,21 @@ int main (int argc, char **argv) {
                             spectral_efficiency,
                             average_slave_cpuload*100.0f);
 
+                    // save observables, metrics
+                    observable_set_value(o[OBSERVABLE_PATHLOSS], average_pathloss);
+                    metric_set_value(m[METRIC_THROUGHPUT], throughput * 1e-3f);
+                    metric_set_value(m[METRIC_TXPOWER], powf(10.0f, 0.0f/10.0f));
+                    metric_set_value(m[METRIC_COMPLEXITY], average_slave_cpuload*100.0f);
+
+                    // save result
+                    ce_retain(engine, p, o, m);
+                    //ce_casedatabase_print(engine);
+
                     // TODO : engine adaptation
+                    ce_search(engine, o, zeta, p);
+
+                    // save parameter set
+                    //parameter_set_discrete_value(p[PARAM_MOD_SCHEME], 
 
                     // reset counters
                     num_bytes_through = 0;
@@ -283,10 +358,13 @@ int main (int argc, char **argv) {
                                     slave_cpuload * 100.0f);
                         }
 
-                        if (num_packets_rx==1)
+                        if (num_packets_rx==1) {
                             average_slave_cpuload = slave_cpuload;
-                        else
+                            average_pathloss = master_path_loss_dB;
+                        } else {
                             average_slave_cpuload = 0.5f*average_slave_cpuload + 0.5f*slave_cpuload;
+                            average_pathloss = 0.5f*average_pathloss + 0.5f*master_path_loss_dB;
+                        }
                     }
 #endif
 
@@ -396,6 +474,73 @@ int main (int argc, char **argv) {
     // destroy main data object
     iqpr_destroy(q);
 
+    // destroy parameters, observables, metrics
+    unsigned int i;
+    for (i=0; i<num_parameters; i++)    parameter_destroy(p[i]);
+    for (i=0; i<num_observables; i++)   observable_destroy(o[i]);
+    for (i=0; i<num_metrics; i++)       metric_destroy(m[i]);
+
+    // destroy engine
+    ce_destroy(engine);
+
     return 0;
+}
+
+void parameter_set_mod_scheme(parameter _p,
+                              modulation_scheme _ms,
+                              unsigned int _bps)
+{
+    if (_ms == MOD_BPSK)
+        parameter_set_discrete_value(_p, 0);
+    else if (_ms == MOD_QPSK)
+        parameter_set_discrete_value(_p, 1);
+    else if (_ms == MOD_PSK && _bps == 3)
+        parameter_set_discrete_value(_p, 2);
+    else if (_ms == MOD_PSK && _bps == 4)
+        parameter_set_discrete_value(_p, 3);
+    else if (_ms == MOD_QAM && _bps == 4)
+        parameter_set_discrete_value(_p, 4);
+    else if (_ms == MOD_QAM && _bps == 5)
+        parameter_set_discrete_value(_p, 5);
+    else if (_ms == MOD_QAM && _bps == 6)
+        parameter_set_discrete_value(_p, 6);
+    else {
+        fprintf(stderr,"warning: parameter_set_mod_scheme(), invalid configuration (setting to BPSK)\n");
+        parameter_set_mod_scheme(_p, MOD_BPSK, 1);
+    }
+}
+
+void parameter_get_mod_scheme(parameter _p,
+                              modulation_scheme * _ms,
+                              unsigned int * _bps)
+{
+    unsigned int v = parameter_get_discrete_value(_p);
+    switch (v) {
+    case 0: *_ms = MOD_BPSK;    *_bps = 1;  return;
+    case 1: *_ms = MOD_QPSK;    *_bps = 2;  return;
+    case 2: *_ms = MOD_PSK;     *_bps = 3;  return;
+    case 3: *_ms = MOD_PSK;     *_bps = 4;  return;
+    case 4: *_ms = MOD_QAM;     *_bps = 4;  return;
+    case 5: *_ms = MOD_QAM;     *_bps = 5;  return;
+    case 6: *_ms = MOD_QAM;     *_bps = 6;  return;
+    default:
+        fprintf(stderr,"warning: parameter_get_mod_scheme(), invalid configuration (setting to BPSK)\n");
+        *_ms = MOD_BPSK;
+        *_bps = 1;
+    }
+}
+
+void parameter_set_fec_scheme(parameter _p, fec_scheme _fs)
+{
+    if (_fs == FEC_REP5) _fs = FEC_NONE;
+    parameter_set_discrete_value(_p, (unsigned int)_fs);
+}
+
+
+void parameter_get_mod_scheme(parameter _p, fec_scheme _fs)
+{
+    _fs = (fec_scheme) parameter_get_discrete_value(_p);
+    if (_fs == FEC_REP5) _fs = FEC_NONE;
+
 }
 

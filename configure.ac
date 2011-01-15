@@ -111,6 +111,9 @@ AC_CHECK_LIB([liquidfpm], [q32_mul], [],
 AC_CHECK_LIB([liquidrm], [rmdaemon_create], [],
              [AC_MSG_WARN(liquid resource monitoring library useful but not required)],
              [])
+AC_CHECK_LIB([liquidce], [ce_create], [],
+             [AC_MSG_WARN(liquid cognitive engine library useful but not required)],
+             [])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
