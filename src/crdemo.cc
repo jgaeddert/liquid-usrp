@@ -342,6 +342,10 @@ int main (int argc, char **argv) {
                     // engine adaptation
                     ce_search(engine, o, zeta, p);
 
+                    // prune database...
+                    if (ce_casedatabase_get_num_entries(engine) > 50)
+                        ce_casedatabase_prune(engine, 0.01f);
+
                     // save parameter set
                     parameter_get_mod_scheme(p[PARAM_MOD_SCHEME], &ms, &bps);
                     parameter_get_fec_scheme(p[PARAM_FEC0], &fec0);
