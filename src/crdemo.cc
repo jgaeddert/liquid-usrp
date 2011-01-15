@@ -89,7 +89,8 @@ void parameter_set_fec_scheme(parameter _p, fec_scheme _fs);
 
 void parameter_get_fec_scheme(parameter _p, fec_scheme * _fs);
 
-void mutate_parameters(modulation_scheme * _ms,
+void mutate_parameters(float _mutation_rate,
+                       modulation_scheme * _ms,
                        unsigned int * _bps,
                        fec_scheme * _fec0,
                        fec_scheme * _fec1,
@@ -112,6 +113,7 @@ int main (int argc, char **argv) {
     float channel_gain_dB = 0.0f;           // random time-varying channel gain [dB]
     int verbose = 1;
     unsigned int max_num_adaptations = 100; // number of adaptations to run before bailing
+    float mutation_rate = 0.8f;
 
     // engine metrics (master node only)
     float ce_timeout = 1.0f;                // timeout before executing cognition cycle
@@ -161,7 +163,7 @@ int main (int argc, char **argv) {
     metric m[num_metrics];
     m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80.0f, 0.5f, 0.5f);
     m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.05, 0.1f, 0.3f);
-    m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 25.0f, 0.25f, 0.2f);
+    m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 30.0f, 0.25f, 0.2f);
 
     // create engine
     ce engine = ce_create(p, num_parameters,
@@ -305,7 +307,8 @@ int main (int argc, char **argv) {
                                           metric_get_weighted_utility(m[METRIC_TXPOWER]) +
                                           metric_get_weighted_utility(m[METRIC_COMPLEXITY]) );
 
-                    printf("engine: {%-6s(%1u b/s),%6s,%6s,%4u,%6.2f}, PL=%6.2fdB, p[%4u/%4u] %6.2f kbps, cpu: %5.2f%% %6.3f\n",
+                    printf("%4u: {%-6s(%1u b/s),%6s,%6s,%4u,%6.2f}, PL=%6.2fdB, p[%4u/%4u] %6.2f kbps, cpu: %5.2f%% %6.3f\n",
+                            num_adaptations,
                             modulation_scheme_str[ms][0],
                             bps,
                             fec_scheme_str[fec0][0],
@@ -354,14 +357,16 @@ int main (int argc, char **argv) {
                     tx_gain_dB = parameter_get_continuous_value(p[PARAM_TXGAIN]);
                     
                     // randomize/mutate
-                    mutate_parameters(&ms, &bps, &fec0, &fec1, &payload_len, &tx_gain_dB);
+                    mutate_parameters(mutation_rate, &ms, &bps, &fec0, &fec1, &payload_len, &tx_gain_dB);
+                    mutation_rate *= 0.95f;
+                    if (mutation_rate < 0.05f) mutation_rate = 0.05f;
 
                     // reset counters, etc.
                     num_bytes_through = 0;
                     num_packets_tx = 0;
                     num_packets_rx = 0;
-                    average_pathloss = 30.0f;
-                    average_slave_cpuload = 1.0f;
+                    //average_pathloss = 20.0f*randf() + 10.0f;
+                    average_slave_cpuload = 0.7f;
 
                     num_adaptations++;
                     if (num_adaptations == max_num_adaptations)
@@ -382,10 +387,10 @@ int main (int argc, char **argv) {
                 }
 
                 // time-varying channel gain
-                channel_gain_dB = -15.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 800.0f));
+                channel_gain_dB = -12.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 1024.0f));
                 //channel_gain_dB = 0.0f;
 
-                tx_gain = powf(10.0f, (tx_gain_dB + channel_gain_dB)/10.0f);
+                tx_gain = powf(10.0f, (tx_gain_dB + channel_gain_dB)/20.0f);
                 iqpr_settxgain(q,tx_gain);
 
                 // initialize header
@@ -615,7 +620,7 @@ void parameter_get_mod_scheme(parameter _p,
 
 void parameter_set_fec_scheme(parameter _p, fec_scheme _fs)
 {
-    if (_fs == FEC_REP5) _fs = FEC_NONE;
+    if (_fs == FEC_REP5 || _fs==FEC_REP3 || _fs==FEC_CONV_V615) _fs = FEC_NONE;
     parameter_set_discrete_value(_p, (unsigned int)_fs);
 }
 
@@ -623,11 +628,12 @@ void parameter_set_fec_scheme(parameter _p, fec_scheme _fs)
 void parameter_get_fec_scheme(parameter _p, fec_scheme * _fs)
 {
     *_fs = (fec_scheme) parameter_get_discrete_value(_p);
-    if (*_fs == FEC_REP5) *_fs = FEC_NONE;
+    if (*_fs == FEC_REP5 || *_fs==FEC_REP3 || *_fs==FEC_CONV_V615) *_fs = FEC_NONE;
 
 }
 
-void mutate_parameters(modulation_scheme * _ms,
+void mutate_parameters(float _mutation_rate,
+                       modulation_scheme * _ms,
                        unsigned int * _bps,
                        fec_scheme * _fec0,
                        fec_scheme * _fec1,
@@ -635,7 +641,7 @@ void mutate_parameters(modulation_scheme * _ms,
                        float * _tx_gain_dB)
 {
     // modulation scheme
-    if ( (rand()%8)==0 ) {
+    if ( randf() < _mutation_rate ) {
         unsigned int v = rand() % NUM_MOD_SCHEMES;
         switch (v) {
         case 0: *_ms = MOD_BPSK;    *_bps = 1; break;
@@ -652,7 +658,7 @@ void mutate_parameters(modulation_scheme * _ms,
     }
 
     // fec scheme(s)
-    if ( (rand()%8)==0 ) {
+    if ( randf() < _mutation_rate ) {
         do {
             *_fec0 = (fec_scheme) (rand() % LIQUID_NUM_FEC_SCHEMES);
         } while (*_fec0 == FEC_UNKNOWN || *_fec0 == FEC_REP5);
@@ -663,12 +669,15 @@ void mutate_parameters(modulation_scheme * _ms,
     if (n <= 0)         *_payload_len = 1;
     else if (n > 1023)  *_payload_len = 1023;
     else                *_payload_len = (unsigned int)n;
-    if ( (rand()%10)==0 )
+    if ( randf() < _mutation_rate )
         *_payload_len = rand() % 1024;
 
     // transmit gain
     *_tx_gain_dB += randnf() * 0.4f;
     if (*_tx_gain_dB >   0.0f) *_tx_gain_dB =   0.0f;
     if (*_tx_gain_dB < -25.0f) *_tx_gain_dB = -25.0f;
+
+    if (randf() < _mutation_rate)
+        *_tx_gain_dB = -25.0f*randf();
 }
 
