@@ -160,7 +160,7 @@ int main (int argc, char **argv) {
     unsigned int num_metrics = 3;
     metric m[num_metrics];
     m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80.0f, 0.5f, 0.5f);
-    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.03, 0.02f, 0.3f);
+    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.05, 0.1f, 0.3f);
     m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 25.0f, 0.25f, 0.2f);
 
     // create engine
@@ -360,8 +360,8 @@ int main (int argc, char **argv) {
                     num_bytes_through = 0;
                     num_packets_tx = 0;
                     num_packets_rx = 0;
-                    average_pathloss = 40.0f;
-                    average_slave_cpuload = 100.0f;
+                    average_pathloss = 30.0f;
+                    average_slave_cpuload = 1.0f;
 
                     num_adaptations++;
                     if (num_adaptations == max_num_adaptations)
@@ -382,8 +382,8 @@ int main (int argc, char **argv) {
                 }
 
                 // time-varying channel gain
-                channel_gain_dB = -15.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 200.0f));
-                channel_gain_dB = 0.0f;
+                channel_gain_dB = -15.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 800.0f));
+                //channel_gain_dB = 0.0f;
 
                 tx_gain = powf(10.0f, (tx_gain_dB + channel_gain_dB)/10.0f);
                 iqpr_settxgain(q,tx_gain);
