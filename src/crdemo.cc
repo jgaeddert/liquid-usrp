@@ -44,6 +44,8 @@
 #include "usrp_io.h"
 #include "iqpr.h"
 
+#define OUTPUT_FILENAME     "crdemo.dat"
+
 #define USRP_CHANNEL        (0)
 
 #define NODE_MASTER         (0)
@@ -70,6 +72,7 @@ void usage() {
     printf("  b     :   bandwidth [Hz], default: 100 kHz\n");
     printf("  n     :   number of packets, default: 1000\n");
     printf("  a     :   number of tx attempts (master), default: 100\n");
+    printf("  N     :   number of engine adaptations (master), default: 100\n");
     printf("  m/s   :   designate node as master/slave, default: slave\n");
     printf("  v/q   :   set verbose/quiet mode, default: verbose\n");
 }
@@ -108,6 +111,7 @@ int main (int argc, char **argv) {
     float tx_gain = 0.9f;                   // transmit gain
     float channel_gain_dB = 0.0f;           // random time-varying channel gain [dB]
     int verbose = 1;
+    unsigned int max_num_adaptations = 100; // number of adaptations to run before bailing
 
     // engine metrics (master node only)
     float ce_timeout = 1.0f;                // timeout before executing cognition cycle
@@ -121,7 +125,7 @@ int main (int argc, char **argv) {
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhf:b:n:a:msvq")) != EOF) {
+    while ((d = getopt(argc,argv,"uhf:b:n:a:N:msvq")) != EOF) {
         switch (d) {
         case 'u':
         case 'h': usage();                          return 0;
@@ -129,6 +133,7 @@ int main (int argc, char **argv) {
         case 'b': symbolrate = atof(optarg);        break;
         case 'n': num_packets = atoi(optarg);       break;
         case 'a': max_num_attempts = atoi(optarg);  break;
+        case 'N': max_num_adaptations=atoi(optarg); break;
         case 'm': node_type = NODE_MASTER;          break;
         case 's': node_type = NODE_SLAVE;           break;
         case 'v': verbose = 1;                      break;
@@ -154,7 +159,7 @@ int main (int argc, char **argv) {
 
     unsigned int num_metrics = 3;
     metric m[num_metrics];
-    m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80.0f, 0.1f, 0.5f);
+    m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80.0f, 0.5f, 0.5f);
     m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.03, 0.02f, 0.3f);
     m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 25.0f, 0.25f, 0.2f);
 
@@ -201,7 +206,9 @@ int main (int argc, char **argv) {
     unsigned int j;
     unsigned int n;
     unsigned int num_attempts = 0;
-    unsigned int t=0;   // number of transmitted packets
+    unsigned int num_adaptations = 0;
+    unsigned int t=0;   // total number of transmitted packets
+    int continue_running = 1;
 
     // frame headers
     iqprheader_s tx_header; // transmitted frame header
@@ -212,10 +219,10 @@ int main (int argc, char **argv) {
 
     // parameters
     modulation_scheme ms = MOD_QPSK;
-    unsigned int bps = 2;
-    fec_scheme fec0 = FEC_NONE;
+    unsigned int bps = 1;
+    fec_scheme fec0 = FEC_HAMMING74;
     fec_scheme fec1 = FEC_NONE;
-    unsigned int payload_len = 512;
+    unsigned int payload_len = 200;
     unsigned char payload[1024];
     float tx_gain_dB = 20*logf(tx_gain);
 
@@ -243,6 +250,15 @@ int main (int argc, char **argv) {
         unsigned int packet_found;
         float master_path_loss_dB;  // master path loss [dB]
         float slave_cpuload;        // slave node cpu load
+        FILE * fid = fopen(OUTPUT_FILENAME, "w");
+        if (!fid) {
+            fprintf(stderr,"error: could not open '%s' for writing\n", OUTPUT_FILENAME);
+            exit(1);
+        }
+        fprintf(fid,"# %5s %8s %4s %8s %8s %8s %12s %12s %6s %6s %12s %12s %12s\n",
+                "epoch", "mod", "bps", "fec0", "fec1", "payload", "gain [dB]",
+                "pathloss[dB]", "num rx", "num tx", "kbps", "cpuload (%)",
+                "utility");
 
         int ack_received;
 
@@ -270,18 +286,6 @@ int main (int argc, char **argv) {
 
                     ce_casedatabase_print(engine);
                     ce_print(engine);
-                    printf("engine: {%-6s(%1u b/s),%6s,%6s,%4u,%6.2f}, p[%4u/%4u] %6.2f kbps, cpu: %8.4f%%\n",
-                            modulation_scheme_str[ms][0],
-                            bps,
-                            fec_scheme_str[fec0][0],
-                            fec_scheme_str[fec1][0],
-                            payload_len,
-                            tx_gain_dB,
-                            num_packets_rx,
-                            num_packets_tx,
-                            throughput * 1e-3f,
-                            //spectral_efficiency,
-                            average_slave_cpuload*100.0f);
 
                     // save parameters/observables/metrics
                     parameter_set_mod_scheme(p[PARAM_MOD_SCHEME], ms, bps);
@@ -296,6 +300,42 @@ int main (int argc, char **argv) {
                     metric_set_value(m[METRIC_TXPOWER], powf(10.0f, tx_gain_dB/10.0f));
                     metric_set_value(m[METRIC_COMPLEXITY], average_slave_cpuload*100.0f);
 
+                    // compute utility
+                    float u_global = expf(metric_get_weighted_utility(m[METRIC_THROUGHPUT]) +
+                                          metric_get_weighted_utility(m[METRIC_TXPOWER]) +
+                                          metric_get_weighted_utility(m[METRIC_COMPLEXITY]) );
+
+                    printf("engine: {%-6s(%1u b/s),%6s,%6s,%4u,%6.2f}, PL=%6.2fdB, p[%4u/%4u] %6.2f kbps, cpu: %5.2f%% %6.3f\n",
+                            modulation_scheme_str[ms][0],
+                            bps,
+                            fec_scheme_str[fec0][0],
+                            fec_scheme_str[fec1][0],
+                            payload_len,
+                            tx_gain_dB,
+                            average_pathloss,
+                            num_packets_rx,
+                            num_packets_tx,
+                            throughput * 1e-3f,
+                            //spectral_efficiency,
+                            average_slave_cpuload*100.0f,
+                            u_global);
+
+                    // write results to file
+                    fprintf(fid,"  %5u %8u %4u %8u %8u %8u %12.6f %12.6f %6u %6u %12.4f %12.4f %12.8f\n",
+                            num_adaptations,
+                            ms, //modulation_scheme_str[ms][0],
+                            bps,
+                            fec0, //fec_scheme_str[fec0][0],
+                            fec1, //fec_scheme_str[fec1][0],
+                            payload_len,
+                            tx_gain_dB,
+                            average_pathloss,
+                            num_packets_rx,
+                            num_packets_tx,
+                            throughput * 1e-3f,
+                            //spectral_efficiency,
+                            average_slave_cpuload*100.0f,
+                            u_global);
                     // save result
                     ce_retain(engine, p, o, m);
 
@@ -318,12 +358,17 @@ int main (int argc, char **argv) {
                     num_bytes_through = 0;
                     num_packets_tx = 0;
                     num_packets_rx = 0;
+
+                    num_adaptations++;
+                    if (num_adaptations == max_num_adaptations)
+                        continue_running = 0;
+
                 }
 #endif
 
                 // wait for clear signal (five clean reports in a row)
                 j = mac_timeout;
-                while (j) {
+                while (j && continue_running) {
                     float rssi = iqpr_mac_getrssi(q,rssi_samples);
                     int clear = rssi < rssi_clear_threshold;
                     //if (verbose) printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
@@ -400,13 +445,17 @@ int main (int argc, char **argv) {
                     if (ack_received)
                         break;
                 }
-            } while (!ack_received && (num_attempts < max_num_attempts) );
+            } while (!ack_received && (num_attempts < max_num_attempts) && continue_running);
 
             if (num_attempts == max_num_attempts) {
                 printf("transmitter reached maximum number of attemts; bailing\n");
                 break;
             }
+
+            if (!continue_running) break;
         }
+        fclose(fid);
+        printf("results written to '%s'\n", OUTPUT_FILENAME);
     } else {
         // 
         // SLAVE NODE
