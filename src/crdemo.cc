@@ -116,7 +116,7 @@ int main (int argc, char **argv) {
     float mutation_rate = 0.8f;
 
     // engine metrics (master node only)
-    float ce_timeout = 1.0f;                // timeout before executing cognition cycle
+    float ce_timeout = 0.5f;                // timeout before executing cognition cycle
     unsigned int num_bytes_through=0;       // total number of bytes through channel
     unsigned int num_packets_tx=0;          // total number of packets transmitted
     unsigned int num_packets_rx=0;          // total number of packets received
@@ -162,7 +162,7 @@ int main (int argc, char **argv) {
     unsigned int num_metrics = 3;
     metric m[num_metrics];
     m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80.0f, 0.5f, 0.5f);
-    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.05, 0.1f, 0.3f);
+    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.5, 0.1f, 0.3f);
     m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 30.0f, 0.25f, 0.2f);
 
     // create engine
@@ -665,19 +665,30 @@ void mutate_parameters(float _mutation_rate,
     }
 
     // payload length
-    int n = (int)(*_payload_len) + (int)(rand()%51) - 25;
-    if (n <= 0)         *_payload_len = 1;
-    else if (n > 1023)  *_payload_len = 1023;
-    else                *_payload_len = (unsigned int)n;
+    if ( randf() < _mutation_rate ) {
+        int n = (int)(*_payload_len) + (int)(rand()%201) - 100;
+        if (n <= 0)         *_payload_len = 1;
+        else if (n > 1023)  *_payload_len = 1023;
+        else                *_payload_len = (unsigned int)n;
+    }
+
+#if 1
+    // choose entirely new payload length
     if ( randf() < _mutation_rate )
         *_payload_len = rand() % 1024;
+#endif
 
     // transmit gain
-    *_tx_gain_dB += randnf() * 0.4f;
-    if (*_tx_gain_dB >   0.0f) *_tx_gain_dB =   0.0f;
-    if (*_tx_gain_dB < -25.0f) *_tx_gain_dB = -25.0f;
+    if (randf() < _mutation_rate) {
+        *_tx_gain_dB += randnf() * 1.2f;
+        if (*_tx_gain_dB >   0.0f) *_tx_gain_dB =   0.0f;
+        if (*_tx_gain_dB < -25.0f) *_tx_gain_dB = -25.0f;
+    }
 
+#if 0
+    // choose entirely new transmit power
     if (randf() < _mutation_rate)
         *_tx_gain_dB = -25.0f*randf();
+#endif
 }
 
