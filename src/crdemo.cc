@@ -115,7 +115,7 @@ int main (int argc, char **argv) {
     unsigned int num_packets_tx=0;          // total number of packets transmitted
     unsigned int num_packets_rx=0;          // total number of packets received
     float throughput=0;                     // average throughput
-    float spectral_efficiency=0;            // average spectral efficiency
+    //float spectral_efficiency=0;            // average spectral efficiency
     float average_slave_cpuload=0;          // average slave cpuload
     float average_pathloss=0;               // average pathloss
 
@@ -154,9 +154,9 @@ int main (int argc, char **argv) {
 
     unsigned int num_metrics = 3;
     metric m[num_metrics];
-    m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80e3f, 0.1f, 0.5f);
-    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.03, 0.1f, 0.3f);
-    m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 40.0f, 0.5f, 0.2f);
+    m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80.0f, 0.1f, 0.5f);
+    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.03, 0.02f, 0.3f);
+    m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 25.0f, 0.25f, 0.2f);
 
     // create engine
     ce engine = ce_create(p, num_parameters,
@@ -211,7 +211,7 @@ int main (int argc, char **argv) {
     framesyncstats_s stats;
 
     // parameters
-    modulation_scheme ms = MOD_PSK;
+    modulation_scheme ms = MOD_QPSK;
     unsigned int bps = 2;
     fec_scheme fec0 = FEC_NONE;
     fec_scheme fec1 = FEC_NONE;
@@ -266,13 +266,21 @@ int main (int argc, char **argv) {
 
                     // compute statistics
                     throughput = num_bytes_through * 8.0f / runtime;
-                    spectral_efficiency = throughput / symbolrate;
+                    //spectral_efficiency = throughput / symbolrate;
 
-                    printf("engine: packets [%4u / %4u] %8.4f kbps (%4.2f b/s/Hz), cpu: %8.4f%%\n",
+                    ce_casedatabase_print(engine);
+                    ce_print(engine);
+                    printf("engine: {%-6s(%1u b/s),%6s,%6s,%4u,%6.2f}, p[%4u/%4u] %6.2f kbps, cpu: %8.4f%%\n",
+                            modulation_scheme_str[ms][0],
+                            bps,
+                            fec_scheme_str[fec0][0],
+                            fec_scheme_str[fec1][0],
+                            payload_len,
+                            tx_gain_dB,
                             num_packets_rx,
                             num_packets_tx,
                             throughput * 1e-3f,
-                            spectral_efficiency,
+                            //spectral_efficiency,
                             average_slave_cpuload*100.0f);
 
                     // save parameters/observables/metrics
@@ -285,12 +293,11 @@ int main (int argc, char **argv) {
                     observable_set_value(o[OBSERVABLE_PATHLOSS], average_pathloss);
                     //
                     metric_set_value(m[METRIC_THROUGHPUT], throughput * 1e-3f);
-                    metric_set_value(m[METRIC_TXPOWER], powf(10.0f, 0.0f/10.0f));
+                    metric_set_value(m[METRIC_TXPOWER], powf(10.0f, tx_gain_dB/10.0f));
                     metric_set_value(m[METRIC_COMPLEXITY], average_slave_cpuload*100.0f);
 
                     // save result
                     ce_retain(engine, p, o, m);
-                    ce_casedatabase_print(engine);
 
                     // engine adaptation
                     ce_search(engine, o, zeta, p);
@@ -528,6 +535,7 @@ void parameter_set_mod_scheme(parameter _p,
         parameter_set_discrete_value(_p, 6);
     else {
         fprintf(stderr,"warning: parameter_set_mod_scheme(), invalid configuration (setting to BPSK)\n");
+        fprintf(stderr,"         %s, %u\n", modulation_scheme_str[_ms][1], _bps);
         parameter_set_mod_scheme(_p, MOD_BPSK, 1);
     }
 }
@@ -598,13 +606,15 @@ void mutate_parameters(modulation_scheme * _ms,
     }
 
     // payload length
-    int n = (int)(*_payload_len) + (int)(rand()%21) - 10;
+    int n = (int)(*_payload_len) + (int)(rand()%51) - 25;
     if (n <= 0)         *_payload_len = 1;
     else if (n > 1023)  *_payload_len = 1023;
     else                *_payload_len = (unsigned int)n;
+    if ( (rand()%10)==0 )
+        *_payload_len = rand() % 1024;
 
     // transmit gain
-    *_tx_gain_dB += randf() * 0.4f;
+    *_tx_gain_dB += randnf() * 0.4f;
     if (*_tx_gain_dB >   0.0f) *_tx_gain_dB =   0.0f;
     if (*_tx_gain_dB < -25.0f) *_tx_gain_dB = -25.0f;
 }
