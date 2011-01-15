@@ -61,8 +61,7 @@
 #define METRIC_TXPOWER      (1)
 #define METRIC_COMPLEXITY   (2)
 
-//#define NUM_MOD_SCHEMES     (7)
-//#define NUM_FEC_SCHEMES     (11)
+#define NUM_MOD_SCHEMES     (7)
 
 void usage() {
     printf("crdemo usage:\n");
@@ -85,7 +84,14 @@ void parameter_get_mod_scheme(parameter _p,
 
 void parameter_set_fec_scheme(parameter _p, fec_scheme _fs);
 
-void parameter_get_mod_scheme(parameter _p, fec_scheme _fs);
+void parameter_get_fec_scheme(parameter _p, fec_scheme * _fs);
+
+void mutate_parameters(modulation_scheme * _ms,
+                       unsigned int * _bps,
+                       fec_scheme * _fec0,
+                       fec_scheme * _fec1,
+                       unsigned int * _payload_len,
+                       float * _tx_gain_dB);
 
 int main (int argc, char **argv) {
     // options
@@ -269,21 +275,37 @@ int main (int argc, char **argv) {
                             spectral_efficiency,
                             average_slave_cpuload*100.0f);
 
-                    // save observables, metrics
+                    // save parameters/observables/metrics
+                    parameter_set_mod_scheme(p[PARAM_MOD_SCHEME], ms, bps);
+                    parameter_set_fec_scheme(p[PARAM_FEC0], fec0);
+                    parameter_set_fec_scheme(p[PARAM_FEC1], fec1);
+                    parameter_set_discrete_value(p[PARAM_PAYLOAD], payload_len);
+                    parameter_set_continuous_value(p[PARAM_TXGAIN], tx_gain_dB);
+                    // 
                     observable_set_value(o[OBSERVABLE_PATHLOSS], average_pathloss);
+                    //
                     metric_set_value(m[METRIC_THROUGHPUT], throughput * 1e-3f);
                     metric_set_value(m[METRIC_TXPOWER], powf(10.0f, 0.0f/10.0f));
                     metric_set_value(m[METRIC_COMPLEXITY], average_slave_cpuload*100.0f);
 
                     // save result
                     ce_retain(engine, p, o, m);
-                    //ce_casedatabase_print(engine);
+                    ce_casedatabase_print(engine);
 
-                    // TODO : engine adaptation
+                    // engine adaptation
                     ce_search(engine, o, zeta, p);
 
+                    // TODO : prune database...
+
                     // save parameter set
-                    //parameter_set_discrete_value(p[PARAM_MOD_SCHEME], 
+                    parameter_get_mod_scheme(p[PARAM_MOD_SCHEME], &ms, &bps);
+                    parameter_get_fec_scheme(p[PARAM_FEC0], &fec0);
+                    parameter_get_fec_scheme(p[PARAM_FEC1], &fec1);
+                    payload_len = parameter_get_discrete_value(p[PARAM_PAYLOAD]);
+                    tx_gain_dB = parameter_get_continuous_value(p[PARAM_TXGAIN]);
+                    
+                    // randomize/mutate
+                    mutate_parameters(&ms, &bps, &fec0, &fec1, &payload_len, &tx_gain_dB);
 
                     // reset counters
                     num_bytes_through = 0;
@@ -537,10 +559,53 @@ void parameter_set_fec_scheme(parameter _p, fec_scheme _fs)
 }
 
 
-void parameter_get_mod_scheme(parameter _p, fec_scheme _fs)
+void parameter_get_fec_scheme(parameter _p, fec_scheme * _fs)
 {
-    _fs = (fec_scheme) parameter_get_discrete_value(_p);
-    if (_fs == FEC_REP5) _fs = FEC_NONE;
+    *_fs = (fec_scheme) parameter_get_discrete_value(_p);
+    if (*_fs == FEC_REP5) *_fs = FEC_NONE;
 
+}
+
+void mutate_parameters(modulation_scheme * _ms,
+                       unsigned int * _bps,
+                       fec_scheme * _fec0,
+                       fec_scheme * _fec1,
+                       unsigned int * _payload_len,
+                       float * _tx_gain_dB)
+{
+    // modulation scheme
+    if ( (rand()%8)==0 ) {
+        unsigned int v = rand() % NUM_MOD_SCHEMES;
+        switch (v) {
+        case 0: *_ms = MOD_BPSK;    *_bps = 1; break;
+        case 1: *_ms = MOD_QPSK;    *_bps = 2; break;
+        case 2: *_ms = MOD_PSK;     *_bps = 3; break;
+        case 3: *_ms = MOD_PSK;     *_bps = 4; break;
+        case 4: *_ms = MOD_QAM;     *_bps = 4; break;
+        case 5: *_ms = MOD_QAM;     *_bps = 5; break;
+        case 6: *_ms = MOD_QAM;     *_bps = 6; break;
+        default:
+            fprintf(stderr,"error: mutate_parameters(), invalid mod scheme\n");
+            exit(1);
+        }
+    }
+
+    // fec scheme(s)
+    if ( (rand()%8)==0 ) {
+        do {
+            *_fec0 = (fec_scheme) (rand() % LIQUID_NUM_FEC_SCHEMES);
+        } while (*_fec0 == FEC_UNKNOWN || *_fec0 == FEC_REP5);
+    }
+
+    // payload length
+    int n = (int)(*_payload_len) + (int)(rand()%21) - 10;
+    if (n <= 0)         *_payload_len = 1;
+    else if (n > 1023)  *_payload_len = 1023;
+    else                *_payload_len = (unsigned int)n;
+
+    // transmit gain
+    *_tx_gain_dB += randf() * 0.4f;
+    if (*_tx_gain_dB >   0.0f) *_tx_gain_dB =   0.0f;
+    if (*_tx_gain_dB < -25.0f) *_tx_gain_dB = -25.0f;
 }
 
