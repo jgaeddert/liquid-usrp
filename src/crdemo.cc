@@ -63,7 +63,7 @@
 #define METRIC_TXPOWER      (1)
 #define METRIC_COMPLEXITY   (2)
 
-#define NUM_MOD_SCHEMES     (7)
+#define NUM_MOD_SCHEMES     (9)
 
 void usage() {
     printf("crdemo usage:\n");
@@ -117,6 +117,8 @@ int main (int argc, char **argv) {
 
     // engine metrics (master node only)
     float ce_timeout = 0.5f;                // timeout before executing cognition cycle
+    float ce_pruning_factor = 0.003f;       // case database pruning distance
+    float u_global_average = 0.0f;          // average global utility
     unsigned int num_bytes_through=0;       // total number of bytes through channel
     unsigned int num_packets_tx=0;          // total number of packets transmitted
     unsigned int num_packets_rx=0;          // total number of packets received
@@ -161,16 +163,16 @@ int main (int argc, char **argv) {
 
     unsigned int num_metrics = 3;
     metric m[num_metrics];
-    m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 80.0f, 0.5f, 0.5f);
-    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.5, 0.1f, 0.3f);
-    m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 30.0f, 0.25f, 0.2f);
+    m[METRIC_THROUGHPUT]    = metric_create("throughput-kbps", METRIC_MAXIMIZE, 130.0f, 0.1f, 0.5f);
+    m[METRIC_TXPOWER]       = metric_create("tx-power", METRIC_MINIMIZE, 0.3, 0.05f, 0.3f);
+    m[METRIC_COMPLEXITY]    = metric_create("complexity", METRIC_MINIMIZE, 30.0f, 0.5f, 0.2f);
 
     // create engine
     ce engine = ce_create(p, num_parameters,
                           o, num_observables,
                           m, num_metrics);
     ce_print(engine);
-    float zeta = 0.5f;
+    float zeta = 0.2f;
 
     // create usrp object
     usrp_io * usrp = new usrp_io();
@@ -257,10 +259,26 @@ int main (int argc, char **argv) {
             fprintf(stderr,"error: could not open '%s' for writing\n", OUTPUT_FILENAME);
             exit(1);
         }
-        fprintf(fid,"# %5s %8s %4s %8s %8s %8s %12s %12s %6s %6s %12s %12s %12s\n",
+        fprintf(fid,"#  1   :   epoch\n");
+        fprintf(fid,"#  2   :   modulation scheme\n");
+        fprintf(fid,"#  3   :   modulation depth [bits/s]\n");
+        fprintf(fid,"#  4   :   fec (inner)\n");
+        fprintf(fid,"#  5   :   fec (outer)\n");
+        fprintf(fid,"#  6   :   payload length\n");
+        fprintf(fid,"#  7   :   tx gain [dB]\n");
+        fprintf(fid,"#  8   :   path loss [dB]\n");
+        fprintf(fid,"#  9   :   num acknowledgements received\n");
+        fprintf(fid,"#  10  :   num transmitted packets\n");
+        fprintf(fid,"#  11  :   data rate [kbps]\n");
+        fprintf(fid,"#  12  :   receiver cpuload (%%)\n");
+        fprintf(fid,"#  13  :   number of case database entries\n");
+        fprintf(fid,"#  14  :   global utility\n");
+        fprintf(fid,"#  15  :   global utility (averaged)\n");
+
+        fprintf(fid,"# %5s %8s %4s %8s %8s %8s %12s %12s %6s %6s %12s %12s %8s %12s %12s\n",
                 "epoch", "mod", "bps", "fec0", "fec1", "payload", "gain [dB]",
                 "pathloss[dB]", "num rx", "num tx", "kbps", "cpuload (%)",
-                "utility");
+                "entries", "utility", "u-average");
 
         int ack_received;
 
@@ -306,6 +324,7 @@ int main (int argc, char **argv) {
                     float u_global = expf(metric_get_weighted_utility(m[METRIC_THROUGHPUT]) +
                                           metric_get_weighted_utility(m[METRIC_TXPOWER]) +
                                           metric_get_weighted_utility(m[METRIC_COMPLEXITY]) );
+                    u_global_average = 0.9f*u_global_average + 0.1f*u_global;
 
                     printf("%4u: {%-6s(%1u b/s),%6s,%6s,%4u,%6.2f}, PL=%6.2fdB, p[%4u/%4u] %6.2f kbps, cpu: %5.2f%% %6.3f\n",
                             num_adaptations,
@@ -324,7 +343,7 @@ int main (int argc, char **argv) {
                             u_global);
 
                     // write results to file
-                    fprintf(fid,"  %5u %8u %4u %8u %8u %8u %12.6f %12.6f %6u %6u %12.4f %12.4f %12.8f\n",
+                    fprintf(fid,"  %5u %8u %4u %8u %8u %8u %12.6f %12.6f %6u %6u %12.4f %12.4f %8u %12.8f %12.8f\n",
                             num_adaptations,
                             ms, //modulation_scheme_str[ms][0],
                             bps,
@@ -338,16 +357,24 @@ int main (int argc, char **argv) {
                             throughput * 1e-3f,
                             //spectral_efficiency,
                             average_slave_cpuload*100.0f,
-                            u_global);
+                            ce_casedatabase_get_num_entries(engine),
+                            u_global,
+                            u_global_average);
                     // save result
                     ce_retain(engine, p, o, m);
 
                     // engine adaptation
                     ce_search(engine, o, zeta, p);
 
-                    // prune database...
-                    if (ce_casedatabase_get_num_entries(engine) > 50)
-                        ce_casedatabase_prune(engine, 0.01f);
+#if 1
+                    // merge database entries
+                    ce_casedatabase_merge(engine, ce_pruning_factor);
+#else
+                    // prune database
+                    ce_casedatabase_prune(engine, ce_pruning_factor);
+#endif
+                    //if (ce_casedatabase_get_num_entries(engine) > 50)
+                    //    ce_pruning_factor *= 1.01f;
 
                     // save parameter set
                     parameter_get_mod_scheme(p[PARAM_MOD_SCHEME], &ms, &bps);
@@ -356,10 +383,19 @@ int main (int argc, char **argv) {
                     payload_len = parameter_get_discrete_value(p[PARAM_PAYLOAD]);
                     tx_gain_dB = parameter_get_continuous_value(p[PARAM_TXGAIN]);
                     
+                    if (average_pathloss > 27.0f && num_adaptations < 200) {
+                        ms = MOD_BPSK;
+                        bps = 1;
+                        fec0 = FEC_CONV_V27;
+                        fec1 = FEC_CONV_V27P78;
+                        payload_len = 64;
+                        tx_gain_dB = 0.0f;
+                    }
+
                     // randomize/mutate
                     mutate_parameters(mutation_rate, &ms, &bps, &fec0, &fec1, &payload_len, &tx_gain_dB);
-                    mutation_rate *= 0.95f;
-                    if (mutation_rate < 0.05f) mutation_rate = 0.05f;
+                    mutation_rate *= 0.98f;
+                    if (mutation_rate < 0.02f) mutation_rate = 0.02f;
 
                     // reset counters, etc.
                     num_bytes_through = 0;
@@ -387,10 +423,10 @@ int main (int argc, char **argv) {
                 }
 
                 // time-varying channel gain
-                channel_gain_dB = -12.0f*(0.5f - 0.5f*sinf(2*M_PI*(float)t / 1024.0f));
+                channel_gain_dB = -18.0f*(0.5f + 0.5f*sinf(2*M_PI*(float)t / 1024.0f));
                 //channel_gain_dB = 0.0f;
 
-                tx_gain = powf(10.0f, (tx_gain_dB + channel_gain_dB)/20.0f);
+                tx_gain = powf(10.0f, (tx_gain_dB + channel_gain_dB)/10.0f);
                 iqpr_settxgain(q,tx_gain);
 
                 // initialize header
@@ -651,17 +687,37 @@ void mutate_parameters(float _mutation_rate,
         case 4: *_ms = MOD_QAM;     *_bps = 4; break;
         case 5: *_ms = MOD_QAM;     *_bps = 5; break;
         case 6: *_ms = MOD_QAM;     *_bps = 6; break;
+        case 7: *_ms = MOD_QAM;     *_bps = 7; break;
+        case 8: *_ms = MOD_QAM;     *_bps = 8; break;
         default:
             fprintf(stderr,"error: mutate_parameters(), invalid mod scheme\n");
             exit(1);
         }
     }
 
-    // fec scheme(s)
+    // fec scheme (inner)
     if ( randf() < _mutation_rate ) {
-        do {
-            *_fec0 = (fec_scheme) (rand() % LIQUID_NUM_FEC_SCHEMES);
-        } while (*_fec0 == FEC_UNKNOWN || *_fec0 == FEC_REP5);
+        *_fec0 = (fec_scheme) (rand() % LIQUID_NUM_FEC_SCHEMES);
+
+        if (*_fec0 == FEC_UNKNOWN || *_fec0 == FEC_REP5 ||
+            *_fec0 == FEC_REP3    || *_fec0 == FEC_CONV_V615)
+        {
+            *_fec0 = FEC_NONE;
+        }
+    }
+
+    // fec scheme (outer)
+    if ( randf() < _mutation_rate ) {
+        *_fec1 = (fec_scheme) (rand() % LIQUID_NUM_FEC_SCHEMES);
+
+        if (*_fec1 == FEC_UNKNOWN || *_fec1 == FEC_REP5 ||
+            *_fec1 == FEC_REP3    || *_fec1 == FEC_CONV_V615)
+        {
+            *_fec1 = FEC_NONE;
+        }
+
+        // increase chances of disabling outer FEC
+        if ( (rand()%4) == 0) *_fec1 = FEC_NONE;
     }
 
     // payload length
