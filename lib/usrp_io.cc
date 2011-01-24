@@ -83,8 +83,8 @@ usrp_io::usrp_io()
     // arbitrary resampling
     tx_resamp_rate = 1.0f;
     rx_resamp_rate = 1.0f;
-    tx_resamp = resamp_crcf_create(tx_resamp_rate,7,0.8f,60.0f,32);
-    rx_resamp = resamp_crcf_create(rx_resamp_rate,7,0.8f,60.0f,32);
+    tx_resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,32);
+    rx_resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,32);
 
 #if USRPIO_USE_DC_BLOCKER
     m_hat = 0.0f;
