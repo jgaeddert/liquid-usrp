@@ -101,7 +101,7 @@ int main (int argc, char **argv)
     float g = powf(10.0f, txgain_dB/10.0f);
 
     // create GMSK modem
-    gmskmodem mod = gmskmodem_create(k,m,BT);
+    gmskmod mod = gmskmod_create(k,m,BT);
 
     std::complex<float> buffer[frame_len*k];
  
@@ -111,7 +111,7 @@ int main (int argc, char **argv)
     for (i=0; i<num_blocks; i++) {
         // modulate random symbols
         for (j=0; j<frame_len; j++)
-            gmskmodem_modulate(mod, rand()%2, &buffer[k*j]);
+            gmskmod_modulate(mod, rand()%2, &buffer[k*j]);
         
         // apply gain
         for (j=0; j<k*frame_len; j++)
@@ -125,7 +125,7 @@ int main (int argc, char **argv)
     uio->stop_tx(USRP_CHANNEL);  // Stop data transfer
 
     // delete objects
-    gmskmodem_destroy(mod);
+    gmskmod_destroy(mod);
     delete uio;
 
     return 0;
