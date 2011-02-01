@@ -79,6 +79,7 @@ example_src	:=			\
 	src/framestats_tx.cc		\
 	src/gmsk_tx.cc			\
 	src/jammer.cc 			\
+	src/rx_rrc.cc			\
 	src/tx_rrc.cc			\
 	src/flexframe_tx.cc 		\
 	src/flexframe_rx.cc		\
