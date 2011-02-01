@@ -159,10 +159,10 @@ int main (int argc, char **argv)
 
         // generate data symbols
         for (n=0; n<packet_len_enc; n++) {
-            unsigned int s0 = (packet_enc[n]     ) & 0x03;
-            unsigned int s1 = (packet_enc[n] >> 2) & 0x03;
-            unsigned int s2 = (packet_enc[n] >> 4) & 0x03;
-            unsigned int s3 = (packet_enc[n] >> 6) & 0x03;
+            unsigned int s0 = (packet_enc[n] >> 6) & 0x03;
+            unsigned int s1 = (packet_enc[n] >> 4) & 0x03;
+            unsigned int s2 = (packet_enc[n] >> 2) & 0x03;
+            unsigned int s3 = (packet_enc[n]     ) & 0x03;
 
             modem_modulate(mod, s0, &symbols[4*n+0]);
             modem_modulate(mod, s1, &symbols[4*n+1]);
