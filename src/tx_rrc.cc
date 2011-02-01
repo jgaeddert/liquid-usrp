@@ -35,7 +35,7 @@ void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  s     :   symbol rate [Hz] (62.5kHz min, 8MHz max)\n");
-    printf("  t     :   run time [seconds]\n");
+    printf("  n     :   number of packets [1024]\n");
     printf("  m     :   filter delay [symbols]\n");
     printf("  b     :   filter excess bandwidth factor [0.0 min, 1.0 max]\n");
     printf("  q     :   quiet\n");
@@ -53,17 +53,25 @@ int main (int argc, char **argv)
 
     float frequency = 462.0e6;
     float symbol_rate = min_symbol_rate;
-    float num_seconds = 5.0f;
+    //float num_seconds = 5.0f;
+    unsigned int num_packets = 1024;
     unsigned int m = 3;
     float beta = 0.3f;
 
+    // packetizer properties
+    unsigned int packet_len_dec = 64;   // original data message length
+    crc_scheme check = CRC_32;          // data integrity check
+    fec_scheme fec0 = FEC_HAMMING128;   // inner code
+    fec_scheme fec1 = FEC_NONE;         // outer code
+
     //
     int d;
-    while ((d = getopt(argc,argv,"f:s:t:m:b:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:s:n:m:b:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 's':   symbol_rate = atof(optarg);     break;
-        case 't':   num_seconds = atof(optarg);     break;
+        //case 't':   num_seconds = atof(optarg);     break;
+        case 'n':   num_packets = atoi(optarg);     break;
         case 'm':   m = atoi(optarg);               break;
         case 'b':   beta = atof(optarg);            break;
         case 'q':   verbose = false;                break;
@@ -95,7 +103,7 @@ int main (int argc, char **argv)
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     // 
-    unsigned int num_blocks = (unsigned int)((4.0f*symbol_rate*num_seconds)/(512));
+    //unsigned int num_blocks = (unsigned int)((4.0f*symbol_rate*num_seconds)/(512));
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
@@ -106,8 +114,6 @@ int main (int argc, char **argv)
     // retrieve tx port from usrp_io object
     gport port_tx = uio->get_tx_port(0);
 
-    unsigned int num_symbols = 128;
-
     // filter parameters
     unsigned int k=2;   // samples/symbol
     //unsigned int m=3;   // symbol delay
@@ -117,28 +123,51 @@ int main (int argc, char **argv)
     // create matched-filter interpolator
     interp_crcf nyquist_filter = interp_crcf_create_rrc(k,m,beta,dt);
 
-    // 
-    std::complex<float> symbols[num_symbols];
-    std::complex<float> data_tx[2*num_symbols];
-
     // modem
-    modulation_scheme ms = MOD_QPSK;
+    modulation_scheme ms = MOD_DPSK;
     unsigned int bps = 2;
     modem mod = modem_create(ms,bps);
 
     unsigned int n; // sample counter
-    unsigned int s; // data symbol
+
+    // create packet generator
+    bpacketgen pg = bpacketgen_create(0, packet_len_dec, check, fec0, fec1);
+    bpacketgen_print(pg);
+    unsigned int packet_len_enc = bpacketgen_get_packet_len(pg);
+
+    // data arrays
+    unsigned char packet_dec[packet_len_dec];
+    unsigned char packet_enc[packet_len_enc];
     
+    // 
+    unsigned int num_symbols = 4*packet_len_enc;
+    std::complex<float> symbols[num_symbols];
+    std::complex<float> data_tx[2*num_symbols];
+
     unsigned int i;
 
     // start USRP data transfer
     uio->start_tx(0);
-    for (i=0; i<num_blocks; i++) {
+    for (i=0; i<num_packets; i++) {
+
+        // generate random payload
+        for (n=0; n<packet_len_dec; n++)
+            packet_dec[n] = rand() & 0xff;
+
+        // encode packet
+        bpacketgen_encode(pg, packet_dec, packet_enc);
 
         // generate data symbols
-        for (n=0; n<num_symbols; n++) {
-            s = modem_gen_rand_sym(mod);
-            modem_modulate(mod,s,&symbols[n]);
+        for (n=0; n<packet_len_enc; n++) {
+            unsigned int s0 = (packet_enc[n]     ) & 0xff;
+            unsigned int s1 = (packet_enc[n] >> 2) & 0xff;
+            unsigned int s2 = (packet_enc[n] >> 4) & 0xff;
+            unsigned int s3 = (packet_enc[n] >> 6) & 0xff;
+
+            modem_modulate(mod, s0, &symbols[4*n+0]);
+            modem_modulate(mod, s1, &symbols[4*n+1]);
+            modem_modulate(mod, s2, &symbols[4*n+2]);
+            modem_modulate(mod, s3, &symbols[4*n+3]);
         }
 
         // run nyquist filter/interpolator
@@ -152,6 +181,7 @@ int main (int argc, char **argv)
     printf("usrp data transfer complete\n");
 
     // clean it up
+    bpacketgen_destroy(pg);
     interp_crcf_destroy(nyquist_filter);
     modem_destroy(mod);
     delete uio;
