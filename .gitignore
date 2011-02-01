@@ -28,6 +28,7 @@ src/flexframe_tx
 src/framestats_rx
 src/framestats_tx
 src/fmtx
+src/gmsk_rx
 src/gmsk_tx
 src/iqpr_test
 src/jammer
