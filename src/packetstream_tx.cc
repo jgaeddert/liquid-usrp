@@ -32,15 +32,21 @@
 
 void usage() {
     printf("packetstream_tx -- transmit streaming DPSK packets\n");
+    printf("  u,h   :   usage/help\n");
+    printf("  q/v   :   quiet/verbose\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  s     :   symbol rate [Hz] (62.5kHz min, 8MHz max)\n");
-    printf("  n     :   number of packets [1024]\n");
+    printf("  N     :   number of packets [1024]\n");
+    printf("  n     :   payload length (bytes)\n");
     printf("  m     :   filter delay [symbols]\n");
     printf("  b     :   filter excess bandwidth factor [0.0 min, 1.0 max]\n");
     printf("  p     :   modulation depth [bits/symbol], default: 2\n");
-    printf("  q     :   quiet\n");
-    printf("  v     :   verbose\n");
-    printf("  u,h   :   usage/help\n");
+    printf("  c     :   fec coding scheme (inner)\n");
+    printf("  k     :   fec coding scheme (outer)\n");
+    // print all available FEC schemes
+    unsigned int i;
+    for (i=0; i<LIQUID_NUM_FEC_SCHEMES; i++)
+        printf("          [%s] %s\n", fec_scheme_str[i][0], fec_scheme_str[i][1]);
 }
 
 int main (int argc, char **argv)
@@ -68,19 +74,34 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:s:n:m:b:p:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:s:N:n:m:b:p:")) != EOF) {
         switch (d) {
+        case 'u':
+        case 'h':   usage();                        return 0;
+        case 'q':   verbose = false;                break;
+        case 'v':   verbose = true;                 break;
         case 'f':   frequency = atof(optarg);       break;
         case 's':   symbol_rate = atof(optarg);     break;
         //case 't':   num_seconds = atof(optarg);     break;
-        case 'n':   num_packets = atoi(optarg);     break;
+        case 'N':   num_packets = atoi(optarg);     break;
+        case 'n':   packet_len_dec = atoi(optarg);  break;
         case 'm':   m = atoi(optarg);               break;
         case 'b':   beta = atof(optarg);            break;
         case 'p':   bps = atoi(optarg);             break;
-        case 'q':   verbose = false;                break;
-        case 'v':   verbose = true;                 break;
-        case 'u':
-        case 'h':
+        case 'c':
+            fec0 = liquid_getopt_str2fec(optarg);
+            if (fec0 == FEC_UNKNOWN) {
+                fprintf(stderr,"error: %s, unknown/unsupported fec scheme '%s'\n", argv[0], optarg);
+                exit(1);
+            }
+            break;
+        case 'k':
+            fec1 = liquid_getopt_str2fec(optarg);
+            if (fec1 == FEC_UNKNOWN) {
+                fprintf(stderr,"error: %s, unknown/unsupported fec scheme '%s'\n", argv[0], optarg);
+                exit(1);
+            }
+            break;
         default:
             usage();
             return 0;
@@ -164,17 +185,6 @@ int main (int argc, char **argv)
 
         // generate data symbols (unpack array)
         for (n=0; n<num_symbols; n++) {
-#if 0
-            unsigned int s0 = (packet_enc[n] >> 6) & 0x03;
-            unsigned int s1 = (packet_enc[n] >> 4) & 0x03;
-            unsigned int s2 = (packet_enc[n] >> 2) & 0x03;
-            unsigned int s3 = (packet_enc[n]     ) & 0x03;
-
-            modem_modulate(mod, s0, &symbols[4*n+0]);
-            modem_modulate(mod, s1, &symbols[4*n+1]);
-            modem_modulate(mod, s2, &symbols[4*n+2]);
-            modem_modulate(mod, s3, &symbols[4*n+3]);
-#else
             unsigned char sym=0;
             liquid_unpack_array(packet_enc,
                                 packet_len_enc,
@@ -182,7 +192,6 @@ int main (int argc, char **argv)
                                 bps,    // symbol size
                                 &sym);  // output symbol
             modem_modulate(mod, sym, &symbols[n]);
-#endif
         }
 
         // run nyquist filter/interpolator
