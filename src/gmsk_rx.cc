@@ -76,7 +76,7 @@ int main (int argc, char **argv)
     float num_seconds = 5.0f;
 
     // demodulator properties
-    unsigned int k=2;
+    unsigned int k=4;
     unsigned int m=3;
     float BT = 0.3f;
 
@@ -107,16 +107,16 @@ int main (int argc, char **argv)
     }
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("symbol_rate   :   %12.8f [kHz]\n", symbol_rate*1e-3f);
+    printf("symbol rate :   %12.8f [kHz]\n", symbol_rate*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     unsigned int rx_buffer_length = 128*k; // must be multiple of k
-    unsigned int num_blocks = (unsigned int)((2.0f*symbol_rate*num_seconds)/(rx_buffer_length));
+    unsigned int num_blocks = (unsigned int)((k*symbol_rate*num_seconds)/(rx_buffer_length));
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_rx_freq(USRP_CHANNEL, frequency);
-    uio->set_rx_samplerate(2.0f*symbol_rate);
+    uio->set_rx_samplerate(k*symbol_rate);
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve rx port
@@ -131,7 +131,7 @@ int main (int argc, char **argv)
     agc_crcf_set_target(agc_rx, 1.0f);
     agc_crcf_set_bandwidth(agc_rx, 1e-3f);
     agc_crcf_set_gain_limits(agc_rx, 1e-3f, 1e4f);
-    gmskdem_set_bw(demod, 0.1f);
+    gmskdem_set_bw(demod, 0.02f);
  
     std::complex<float> data_rx[rx_buffer_length];
     std::complex<float> sym_rx[k];
@@ -155,6 +155,10 @@ int main (int argc, char **argv)
     for (n=0; n<num_blocks; n++) {
         // grab data from port
         gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
+
+        // periodically reset demodulator (symbol timing issues)
+        if ( ((n+1)%2000)==0 )
+            gmskdem_reset(demod);
 
         // 
         // run through synchronizer
