@@ -206,7 +206,7 @@ int main (int argc, char **argv)
                 nco_crcf_step(nco_rx);
 
                 // push demodulated symbol through packet synchronizer
-                bpacketsync_execute_sym(ps, demod_sym, 2);
+                bpacketsync_execute_sym(ps, demod_sym, bps);
 #if DEBUG
                 if (file_open) {
                     fprintf(fid,"mfdecim_out(%5u) = %12.4e + j*%12.4e;\n", k+1, mfdecim_out[j].real(), mfdecim_out[j].imag());
