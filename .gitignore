@@ -38,8 +38,9 @@ src/ofdmoqamframe64_rx
 src/ofdmoqamframe64_tx
 src/packet_rx
 src/packet_tx
+src/packetstream_rx
+src/packetstream_tx
 src/ping
-src/rx_rrc
 src/tx_rrc
 src/usrp_init_test
 src/usrp_io_test

@@ -28,8 +28,9 @@
 
 #include "usrp_io.h"
  
-#define USRP_CHANNEL        (0)
-#define DEBUG               (0)
+#define USRP_CHANNEL    (0)
+#define DEBUG           (0)
+#define DEBUG_FILENAME  "packetstream_rx_debug.m"
  
 static bool verbose;
 
@@ -54,10 +55,11 @@ int callback(unsigned char * _payload,
 }
 
 void usage() {
-    printf("packet_tx:\n");
+    printf("packetstream_rx -- synchronization of DPSK packets:\n");
     printf("  f     :   center frequency [Hz]\n");
-    printf("  b     :   bandwidth [Hz]\n");
+    printf("  s     :   symbol rate [Hz]\n");
     printf("  t     :   run time [seconds]\n");
+    printf("  p     :   modulation depth [bits/symbol], default: 2\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -68,20 +70,25 @@ int main (int argc, char **argv)
     // command-line options
     verbose = true;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    float min_symbol_rate = (32e6 / 512.0);
+    float max_symbol_rate = (32e6 /   4.0);
 
     float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
+    float symbol_rate = min_symbol_rate;
     float num_seconds = 5.0f;
+
+    // 
+    modulation_scheme ms = MOD_DPSK;    // modulation scheme
+    unsigned int bps = 2;               // modulation depth
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:s:t:p:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
-        case 'b':   bandwidth = atof(optarg);       break;
+        case 's':   symbol_rate = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
+        case 'p':   bps = atoi(optarg);             break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
         case 'u':
@@ -92,25 +99,28 @@ int main (int argc, char **argv)
         }
     }
 
-    if (bandwidth > max_bandwidth) {
-        printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
-        return 0;
-    } else if (bandwidth < min_bandwidth) {
-        printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
-        return 0;
+    if (symbol_rate > max_symbol_rate) {
+        fprintf(stderr,"error: %s, maximum symbol rate exceeded (%8.4f MHz)\n", argv[0], max_symbol_rate*1e-6);
+        exit(1);
+    } else if (symbol_rate < min_symbol_rate) {
+        fprintf(stderr,"error: %s, minimum symbol rate exceeded (%8.4f kHz)\n", argv[0], min_symbol_rate*1e-3);
+        exit(1);
+    } else if (bps == 0 || bps > 8) {
+        fprintf(stderr,"error: %s, modulation depth must be in [1,8]\n", argv[0]);
+        exit(1);
     }
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("symbol rate :   %12.8f [kHz]\n", symbol_rate*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     unsigned int rx_buffer_length = 512;
-    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(rx_buffer_length));
+    unsigned int num_blocks = (unsigned int)((2.0f*symbol_rate*num_seconds)/(rx_buffer_length));
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_rx_freq(USRP_CHANNEL, frequency);
-    uio->set_rx_samplerate(2.0f*bandwidth);
+    uio->set_rx_samplerate(2.0f*symbol_rate);
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve rx port
@@ -128,7 +138,7 @@ int main (int argc, char **argv)
     agc_crcf agc_rx = agc_crcf_create();
     nco_crcf nco_rx = nco_crcf_create(LIQUID_VCO);
     symsync_crcf mfdecim = symsync_crcf_create(2, npfb, H, H_len-1);
-    modem demod = modem_create(MOD_DPSK, 2);
+    modem demod = modem_create(ms, bps);
     bpacketsync ps = bpacketsync_create(0, callback, NULL);
 
     // set object properties
@@ -153,10 +163,8 @@ int main (int argc, char **argv)
 
     unsigned int i;
     unsigned int n;
-    unsigned int num_bits=0;
-    unsigned char byte=0;
 #if DEBUG
-    FILE * fid = fopen("rx_rrc_debug.m","w");
+    FILE * fid = fopen(DEBUG_FILENAME,"w");
     fprintf(fid,"%% : auto-generated file\n");
     fprintf(fid,"clear all\n");
     fprintf(fid,"close all\n");
@@ -197,15 +205,8 @@ int main (int argc, char **argv)
                 nco_crcf_pll_step(nco_rx, phi);
                 nco_crcf_step(nco_rx);
 
-                // append demodulated bits to byte
-                byte <<= 2;
-                byte |= demod_sym & 0x03;
-                num_bits += 2;
-                if (num_bits >=8) {
-                    bpacketsync_execute(ps, byte);
-                    byte = 0;
-                    num_bits = 0;
-                }
+                // push demodulated symbol through packet synchronizer
+                bpacketsync_execute_sym(ps, demod_sym, 2);
 #if DEBUG
                 if (file_open) {
                     fprintf(fid,"mfdecim_out(%5u) = %12.4e + j*%12.4e;\n", k+1, mfdecim_out[j].real(), mfdecim_out[j].imag());
@@ -229,7 +230,7 @@ int main (int argc, char **argv)
         fprintf(fid,"figure; plot(mfdecim_out,'x'); axis square;\n");
         fprintf(fid,"figure; plot(nco_out,'x'); axis square;\n");
         fclose(fid);
-        printf("results written to rx_rrc_debug.m\n");
+        printf("results written to '%s'\n", DEBUG_FILENAME);
         file_open = 0;
     }
 #endif
