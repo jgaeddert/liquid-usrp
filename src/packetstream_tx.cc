@@ -74,7 +74,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:s:N:n:m:b:p:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:s:N:n:m:b:p:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
