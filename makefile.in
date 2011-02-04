@@ -87,8 +87,8 @@ example_src	:=			\
 	src/packet_tx.cc 		\
 	src/packet_rx.cc		\
 	src/ping.cc			\
-	src/ofdmframe64_tx.cc		\
-	src/ofdmframe64_rx.cc		\
+	src/ofdmframe_tx.cc		\
+	src/ofdmframe_rx.cc		\
 	src/ofdmoqamframe64_tx.cc	\
 	src/ofdmoqamframe64_rx.cc	\
 	src/ofdmoqamframe_tx.cc		\

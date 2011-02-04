@@ -32,8 +32,8 @@ src/gmsk_rx
 src/gmsk_tx
 src/iqpr_test
 src/jammer
-src/ofdmframe64_rx
-src/ofdmframe64_tx
+src/ofdmframe_rx
+src/ofdmframe_tx
 src/ofdmoqamframe64_rx
 src/ofdmoqamframe64_tx
 src/packet_rx
