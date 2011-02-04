@@ -151,6 +151,9 @@ int main (int argc, char **argv)
 
         // flush with zeros
         //for (n=0; n<M+cp_len; n++)
+
+        // reset frame generator (resets pilot generator, etc.)
+        ofdmframegen_reset(fg);
     }
  
     uio->stop_tx(0);  // Stop data transfer
