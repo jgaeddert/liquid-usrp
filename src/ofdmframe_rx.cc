@@ -106,11 +106,14 @@ int main (int argc, char **argv)
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_rx_freq(USRP_CHANNEL, frequency);
-    uio->set_rx_samplerate(2.0f*bandwidth);
+    uio->set_rx_samplerate(2.0f*2.0f*bandwidth);
     uio->enable_auto_tx(USRP_CHANNEL);
 
     // retrieve rx port
     gport port_rx = uio->get_rx_port(USRP_CHANNEL);
+
+    // half-band decimator
+    resamp2_crcf decim = resamp2_crcf_create(41,0.0f,40.0f);
 
     // initialize subcarrier allocation
     unsigned int p[M];
@@ -129,19 +132,27 @@ int main (int argc, char **argv)
     printf("usrp data transfer started\n");
  
     unsigned int n;
+    unsigned int i;
     for (n=0; n<num_blocks; n++) {
         // grab data from port
         gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
 
-        // run through ofdm frame synchronizer
-        ofdmframesync_execute(fs, data_rx, rx_buffer_length);
+        for (i=0; i<rx_buffer_length; i+=2) {
+            // push through half-band decimator
+            std::complex<float>decim_out;
+            resamp2_crcf_decim_execute(decim, &data_rx[i], &decim_out);
+
+            // run through ofdm frame synchronizer
+            ofdmframesync_execute(fs, &decim_out, 1);
+        }
     }
  
  
     uio->stop_rx(USRP_CHANNEL);  // Stop data transfer
     printf("usrp data transfer complete\n");
 
-    // destroy synchronization objects
+    // destroy objects
+    resamp2_crcf_destroy(decim);
     ofdmframesync_destroy(fs);
 
     delete uio;
