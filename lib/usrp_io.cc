@@ -168,9 +168,9 @@ void usrp_io::start_rx(int _channel)
 }
 
 // gain
-void usrp_io::get_tx_gain(int _channel, float &_gain) {}
+void usrp_io::get_tx_gain(int _channel, float &_gain) { _gain = tx_gain / USRP_IO_TX_GAIN;}
 void usrp_io::get_rx_gain(int _channel, float &_gain) {}
-void usrp_io::set_tx_gain(int _channel, float _gain) {}
+void usrp_io::set_tx_gain(int _channel, float _gain) { tx_gain = _gain * USRP_IO_TX_GAIN;}
 void usrp_io::set_rx_gain(int _channel, float _gain) {}
 
 // frequency

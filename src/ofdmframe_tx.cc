@@ -97,6 +97,7 @@ int main (int argc, char **argv)
     usrp_io * uio = new usrp_io();
     uio->set_tx_freq(0, frequency);
     uio->set_tx_samplerate(2.0f*bandwidth);
+    uio->set_tx_gain(0, 0.1f);
     uio->enable_auto_tx(0);
 
     // retrieve tx port from usrp_io object
