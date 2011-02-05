@@ -34,13 +34,20 @@
  
 static bool verbose;
 
+unsigned int num_symbols;
+
 static int callback(std::complex<float> * _X,
                     unsigned int * _p,
                     unsigned int _M,
                     void * _userdata)
 {
     printf("**** callback invoked\n");
-    return 1;
+    num_symbols++;
+    if (num_symbols == 4) {
+        num_symbols = 0;
+        return 1;
+    }
+    return 0;
 }
 
 void usage() {
@@ -88,6 +95,8 @@ int main (int argc, char **argv)
         }
     }
 
+    unsigned int i;
+
     if (bandwidth > max_bandwidth) {
         fprintf(stderr,"error: %s, maximum symbol rate exceeded (%8.4f MHz)\n", argv[0], max_bandwidth*1e-6);
         exit(1);
@@ -103,6 +112,8 @@ int main (int argc, char **argv)
     unsigned int rx_buffer_length = 512;
     unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(rx_buffer_length));
 
+    num_symbols = 0;
+
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
     uio->set_rx_freq(USRP_CHANNEL, frequency);
@@ -117,7 +128,18 @@ int main (int argc, char **argv)
 
     // initialize subcarrier allocation
     unsigned int p[M];
-    ofdmframe_init_default_sctype(M, p);
+    unsigned int guard = M / 6;
+    unsigned int pilot_spacing = 8;
+    unsigned int i0 = (M/2) - guard;
+    unsigned int i1 = (M/2) + guard;
+    for (i=0; i<M; i++) {
+        if ( i == 0 || (i > i0 && i < i1) )
+            p[i] = OFDMFRAME_SCTYPE_NULL;
+        else if ( (i%pilot_spacing)==0 )
+            p[i] = OFDMFRAME_SCTYPE_PILOT;
+        else
+            p[i] = OFDMFRAME_SCTYPE_DATA;
+    }
 
     // create frame synchronizer
     ofdmframesync fs = ofdmframesync_create(M, cp_len, p, callback, NULL);
@@ -132,7 +154,6 @@ int main (int argc, char **argv)
     printf("usrp data transfer started\n");
  
     unsigned int n;
-    unsigned int i;
     for (n=0; n<num_blocks; n++) {
         // grab data from port
         gport_consume(port_rx,(void*)data_rx,rx_buffer_length);

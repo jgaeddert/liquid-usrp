@@ -76,6 +76,8 @@ int main (int argc, char **argv)
         }
     }
 
+    unsigned int i;
+
     if (bandwidth > max_bandwidth) {
         fprintf(stderr,"error: %s, maximum bandwidth exceeded (%8.4f MHz)\n", argv[0], max_bandwidth*1e-6);
         return 0;
@@ -103,7 +105,18 @@ int main (int argc, char **argv)
 
     // initialize subcarrier allocation
     unsigned int p[M];
-    ofdmframe_init_default_sctype(M, p);
+    unsigned int guard = M / 6;
+    unsigned int pilot_spacing = 8;
+    unsigned int i0 = (M/2) - guard;
+    unsigned int i1 = (M/2) + guard;
+    for (i=0; i<M; i++) {
+        if ( i == 0 || (i > i0 && i < i1) )
+            p[i] = OFDMFRAME_SCTYPE_NULL;
+        else if ( (i%pilot_spacing)==0 )
+            p[i] = OFDMFRAME_SCTYPE_PILOT;
+        else
+            p[i] = OFDMFRAME_SCTYPE_DATA;
+    }
 
     // create frame generator
     ofdmframegen fg = ofdmframegen_create(M, cp_len, p);
@@ -116,7 +129,6 @@ int main (int argc, char **argv)
     // create modem
     modem mod = modem_create(ms,bps);
 
-    unsigned int i;
     unsigned int j;
     unsigned int n;
 
