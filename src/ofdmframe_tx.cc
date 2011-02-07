@@ -125,7 +125,13 @@ int main (int argc, char **argv)
 
     // arrays
     std::complex<float> X[M];           // channelized symbols
+    std::complex<float> S0[M];          // PLCP sequence (short)
+    std::complex<float> S1[M];          // PLCP sequence (long)
     std::complex<float> y[M+cp_len];    // output time series
+
+    // initialize sequence arrays
+    ofdmframegen_write_S0(fg, S0);
+    ofdmframegen_write_S1(fg, S1);
 
     // create modem
     modem mod = modem_create(ms,bps);
@@ -139,16 +145,15 @@ int main (int argc, char **argv)
     for (i=0; i<num_frames; i++) {
 
         // write short sequence(s)
-        for (n=0; n<num_symbols_S0; n++) {
-            ofdmframegen_write_S0(fg, y);
-            gport_produce(port_tx, (void*)y, M);
-        }
+        for (n=0; n<num_symbols_S0; n++)
+            gport_produce(port_tx, (void*)S0, M);
+
+        // write long sequence extension
+        gport_produce(port_tx, (void*)( &S1[M-cp_len] ), cp_len);
 
         // write long sequence(s)
-        for (n=0; n<num_symbols_S1; n++) {
-            ofdmframegen_write_S1(fg, y);
-            gport_produce(port_tx, (void*)y, M);
-        }
+        for (n=0; n<num_symbols_S1; n++)
+            gport_produce(port_tx, (void*)S1, M);
 
         // generate random symbols
         for (n=0; n<num_symbols_data; n++) {
