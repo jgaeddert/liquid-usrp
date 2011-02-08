@@ -55,6 +55,9 @@ static int packet_callback(unsigned char * _payload,
     // type cast userdata
     struct commondata_s * q = (struct commondata_s *) _userdata;
 
+    if (verbose)
+        printf("  packet received\n");
+
     q->num_packets_received++;
     if ( !_payload_valid ) {
         if (verbose) printf("payload crc : FAIL\n");
@@ -94,7 +97,8 @@ static int ofdm_callback(std::complex<float> * _X,
 
     if (q->num_symbols_received == q->symbols_per_frame) {
         q->num_symbols_received = 0;
-        printf("**** frame received\n");
+        if (verbose)
+            printf("**** frame received\n");
 
         // tell ofdm frame synchronizer to reset
         return 1;
@@ -118,7 +122,7 @@ void usage() {
 int main (int argc, char **argv)
 {
     // command-line options
-    verbose = true;
+    verbose = false;
 
     float min_bandwidth = (32e6 / 512.0);
     float max_bandwidth = (32e6 /   4.0);
@@ -136,7 +140,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:M:c:t:m:p:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:M:C:t:m:p:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -145,7 +149,7 @@ int main (int argc, char **argv)
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 'M':   M = atoi(optarg);               break;
-        case 'c':   cp_len = atoi(optarg);          break;
+        case 'C':   cp_len = atoi(optarg);          break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'm':
             ms = liquid_getopt_str2mod(optarg);
@@ -264,6 +268,15 @@ int main (int argc, char **argv)
  
     uio->stop_rx(USRP_CHANNEL);  // Stop data transfer
     printf("usrp data transfer complete\n");
+
+    // print results
+    float data_rate = userdata.num_valid_bytes_received * 8.0f / num_seconds;
+    float percent_valid = (userdata.num_packets_received == 0) ?
+                          0.0f :
+                          100.0f * (float)userdata.num_valid_packets_received / (float)userdata.num_packets_received;
+    printf("    packets received    : %6u\n", userdata.num_packets_received);
+    printf("    valid packets       : %6u (%6.2f%%)\n", userdata.num_valid_packets_received,percent_valid);
+    printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
     // destroy objects
     resamp2_crcf_destroy(decim);
