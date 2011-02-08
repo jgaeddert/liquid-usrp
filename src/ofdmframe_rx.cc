@@ -29,23 +29,74 @@
 #include "usrp_io.h"
  
 #define USRP_CHANNEL    (0)
-#define DEBUG           (0)
-#define DEBUG_FILENAME  "packetstream_rx_debug.m"
  
 static bool verbose;
 
-unsigned int num_symbols;
+// common data structure
+struct commondata_s {
+    unsigned int symbols_per_frame; // number of ofdm symbols in the frame
+    unsigned int num_symbols_received;
 
-static int callback(std::complex<float> * _X,
-                    unsigned int * _p,
-                    unsigned int _M,
-                    void * _userdata)
+    // objects
+    modem demod;    // demodulator
+    bpacketsync ps; // packet synchronizer
+
+    // data counter
+    unsigned int num_packets_received;
+    unsigned int num_valid_packets_received;
+    unsigned int num_valid_bytes_received;
+};
+
+static int packet_callback(unsigned char * _payload,
+                           int _payload_valid,
+                           unsigned int _payload_len,
+                           void * _userdata)
 {
+    // type cast userdata
+    struct commondata_s * q = (struct commondata_s *) _userdata;
+
+    q->num_packets_received++;
+    if ( !_payload_valid ) {
+        if (verbose) printf("payload crc : FAIL\n");
+    } else {
+        q->num_valid_packets_received++;
+        q->num_valid_bytes_received += _payload_len;
+    }
+    return 0;
+}
+
+static int ofdm_callback(std::complex<float> * _X,
+                         unsigned int * _p,
+                         unsigned int _M,
+                         void * _userdata)
+{
+    // type cast userdata
+    struct commondata_s * q = (struct commondata_s *) _userdata;
+
+    // get demodulator depth
+    unsigned int bps = modem_get_bps(q->demod);
+
+    // run demodulator, pushing resulting bits to packet synchronizer
+    unsigned int i;
+    for (i=0; i<_M; i++) {
+        if (_p[i] == OFDMFRAME_SCTYPE_DATA) {
+            // run demodulator
+            unsigned int demod_sym;
+            modem_demodulate(q->demod, _X[i], &demod_sym);
+
+            // push through packet synchronizer
+            bpacketsync_execute_sym(q->ps, demod_sym, bps);
+        }
+    }
+
     //printf("**** callback invoked\n");
-    num_symbols++;
-    if (num_symbols == 8) {
-        num_symbols = 0;
+    q->num_symbols_received++;
+
+    if (q->num_symbols_received == q->symbols_per_frame) {
+        q->num_symbols_received = 0;
         printf("**** frame received\n");
+
+        // tell ofdm frame synchronizer to reset
         return 1;
     }
     return 0;
@@ -124,13 +175,11 @@ int main (int argc, char **argv)
     }
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("symbol rate :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     unsigned int rx_buffer_length = 512;
     unsigned int num_blocks = (unsigned int)((2.0f*2.0f*bandwidth*num_seconds)/(2*rx_buffer_length));
-
-    num_symbols = 0;
 
     // create usrp_io object and set properties
     usrp_io * uio = new usrp_io();
@@ -159,10 +208,36 @@ int main (int argc, char **argv)
             p[i] = OFDMFRAME_SCTYPE_DATA;
     }
 
+    unsigned int M_null=0;
+    unsigned int M_pilot=0;
+    unsigned int M_data=0;
+    ofdmframe_validate_sctype(p,M, &M_null, &M_pilot, &M_data);
+
+    // number of ofdm data symbols in frame (excluding preamble)
+    unsigned int num_symbols_data = (2800/M_data) + 1;
+
+    // create common data object
+    struct commondata_s userdata;
+
     // create frame synchronizer
-    ofdmframesync fs = ofdmframesync_create(M, cp_len, p, callback, NULL);
+    ofdmframesync fs = ofdmframesync_create(M, cp_len, p, ofdm_callback, (void*)&userdata);
     ofdmframesync_print(fs);
+
+    // create demodulator
+    modem demod = modem_create(ms, bps);
+
+    // create packet synchronizer
+    bpacketsync ps = bpacketsync_create(0, packet_callback, (void*)&userdata);
  
+    // initialize common data object
+    userdata.symbols_per_frame      = num_symbols_data;
+    userdata.num_symbols_received   = 0;
+    userdata.demod                  = demod;
+    userdata.ps                     = ps;
+    userdata.num_packets_received   = 0;
+    userdata.num_valid_packets_received = 0;
+    userdata.num_valid_bytes_received = 0;
+
     std::complex<float> data_rx[2*rx_buffer_length];
 
     // start data transfer
@@ -192,6 +267,8 @@ int main (int argc, char **argv)
 
     // destroy objects
     resamp2_crcf_destroy(decim);
+    bpacketsync_destroy(ps);
+    modem_destroy(demod);
     ofdmframesync_destroy(fs);
 
     delete uio;
