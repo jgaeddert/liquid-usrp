@@ -53,14 +53,15 @@ static int callback(std::complex<float> * _X,
 
 void usage() {
     printf("ofdmframe_rx -- receive OFDM packets\n");
+    printf("  u,h   :   usage/help\n");
+    printf("  q/v   :   quiet/verbose\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
     printf("  M     :   number of subcarriers, default: 64\n");
-    printf("  c     :   cyclic prefix length, default: 16\n");
+    printf("  C     :   cyclic prefix length, default: 16\n");
     printf("  t     :   run time [seconds]\n");
-    printf("  q     :   quiet\n");
-    printf("  v     :   verbose\n");
-    printf("  u,h   :   usage/help\n");
+    printf("  m     :   modulation scheme: psk, dpsk, ask, <qam>, apsk\n");
+    printf("  p     :   modulation depth [bits/symbol], default: 2\n");
 }
 
 int main (int argc, char **argv)
@@ -79,19 +80,30 @@ int main (int argc, char **argv)
     unsigned int M = 64;                // number of subcarriers
     unsigned int cp_len = 16;           // cyclic prefix length
 
+    modulation_scheme ms = MOD_QAM;
+    unsigned int bps = 2;
+
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:M:c:t:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:M:c:t:m:p:")) != EOF) {
         switch (d) {
+        case 'u':
+        case 'h':   usage();                        return 0;
+        case 'q':   verbose = false;                break;
+        case 'v':   verbose = true;                 break;
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 'M':   M = atoi(optarg);               break;
         case 'c':   cp_len = atoi(optarg);          break;
         case 't':   num_seconds = atof(optarg);     break;
-        case 'q':   verbose = false;                break;
-        case 'v':   verbose = true;                 break;
-        case 'u':
-        case 'h':
+        case 'm':
+            ms = liquid_getopt_str2mod(optarg);
+            if (ms == MOD_UNKNOWN) {
+                fprintf(stderr, "error: %s unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
+                ms = MOD_UNKNOWN;
+            }
+            break;
+        case 'p':   bps = atoi(optarg);             break;
         default:
             usage();
             return 0;
@@ -116,7 +128,7 @@ int main (int argc, char **argv)
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     unsigned int rx_buffer_length = 512;
-    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(rx_buffer_length));
+    unsigned int num_blocks = (unsigned int)((2.0f*2.0f*bandwidth*num_seconds)/(2*rx_buffer_length));
 
     num_symbols = 0;
 
@@ -151,7 +163,7 @@ int main (int argc, char **argv)
     ofdmframesync fs = ofdmframesync_create(M, cp_len, p, callback, NULL);
     ofdmframesync_print(fs);
  
-    std::complex<float> data_rx[rx_buffer_length];
+    std::complex<float> data_rx[2*rx_buffer_length];
 
     // start data transfer
     uio->start_rx(USRP_CHANNEL);
@@ -162,12 +174,12 @@ int main (int argc, char **argv)
     unsigned int n;
     for (n=0; n<num_blocks; n++) {
         // grab data from port
-        gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
+        gport_consume(port_rx,(void*)data_rx,2*rx_buffer_length);
 
-        for (i=0; i<rx_buffer_length; i+=2) {
+        for (i=0; i<rx_buffer_length; i++) {
             // push through half-band decimator
             std::complex<float>decim_out;
-            resamp2_crcf_decim_execute(decim, &data_rx[i], &decim_out);
+            resamp2_crcf_decim_execute(decim, &data_rx[2*i], &decim_out);
 
             // run through ofdm frame synchronizer
             ofdmframesync_execute(fs, &decim_out, 1);

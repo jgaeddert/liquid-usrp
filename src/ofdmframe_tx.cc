@@ -37,7 +37,15 @@ void usage() {
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
     printf("  M     :   number of subcarriers, default: 64\n");
-    printf("  c     :   cyclic prefix length, default: 16\n");
+    printf("  C     :   cyclic prefix length, default: 16\n");
+    printf("  m     :   modulation scheme: psk, dpsk, ask, <qam>, apsk\n");
+    printf("  p     :   modulation depth [bits/symbol], default: 2\n");
+    printf("  c     :   fec coding scheme (inner)\n");
+    printf("  k     :   fec coding scheme (outer)\n");
+    // print all available FEC schemes
+    unsigned int i;
+    for (i=0; i<LIQUID_NUM_FEC_SCHEMES; i++)
+        printf("          [%s] %s\n", fec_scheme_str[i][0], fec_scheme_str[i][1]);
 }
 
 int main (int argc, char **argv)
@@ -57,12 +65,15 @@ int main (int argc, char **argv)
     unsigned int num_symbols_S0 = 2;    // number of S0 symbols
     unsigned int num_symbols_S1 = 2;    // number of S0 symbols
     unsigned int num_symbols_data = 8;  // number of data symbols
+
     modulation_scheme ms = MOD_QAM;
-    unsigned int bps = 4;
+    unsigned int bps = 2;
+    fec_scheme fec0 = FEC_NONE;
+    fec_scheme fec1 = FEC_HAMMING128;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:M:c:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:M:C:m:p:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -71,7 +82,17 @@ int main (int argc, char **argv)
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 'M':   M = atoi(optarg);               break;
-        case 'c':   cp_len = atoi(optarg);          break;
+        case 'C':   cp_len = atoi(optarg);          break;
+        case 'm':
+            ms = liquid_getopt_str2mod(optarg);
+            if (ms == MOD_UNKNOWN) {
+                fprintf(stderr, "error: %s unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
+                ms = MOD_UNKNOWN;
+            }
+            break;
+        case 'p':   bps = atoi(optarg);             break;
+        case 'c':   fec0 = liquid_getopt_str2fec(optarg);   break;
+        case 'k':   fec1 = liquid_getopt_str2fec(optarg);   break;
         default:
             usage();
             return 0;
@@ -92,7 +113,7 @@ int main (int argc, char **argv)
     }
 
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     // 
