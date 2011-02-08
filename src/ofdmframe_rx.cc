@@ -56,6 +56,7 @@ void usage() {
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
     printf("  M     :   number of subcarriers, default: 64\n");
+    printf("  c     :   cyclic prefix length, default: 16\n");
     printf("  t     :   run time [seconds]\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
@@ -80,11 +81,12 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:M:t:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:M:c:t:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 'M':   M = atoi(optarg);               break;
+        case 'c':   cp_len = atoi(optarg);          break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
@@ -103,6 +105,9 @@ int main (int argc, char **argv)
         exit(1);
     } else if (bandwidth < min_bandwidth) {
         fprintf(stderr,"error: %s, minimum symbol rate exceeded (%8.4f kHz)\n", argv[0], min_bandwidth*1e-3);
+        exit(1);
+    } else if (cp_len == 0 || cp_len > M) {
+        fprintf(stderr,"error: %s, cyclic prefix must be in (0,M]\n", argv[0]);
         exit(1);
     }
 
