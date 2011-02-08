@@ -41,10 +41,11 @@ static int callback(std::complex<float> * _X,
                     unsigned int _M,
                     void * _userdata)
 {
-    printf("**** callback invoked\n");
+    //printf("**** callback invoked\n");
     num_symbols++;
-    if (num_symbols == 4) {
+    if (num_symbols == 8) {
         num_symbols = 0;
+        printf("**** frame received\n");
         return 1;
     }
     return 0;
