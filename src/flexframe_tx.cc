@@ -161,7 +161,7 @@ int main (int argc, char **argv)
     // create pulse-shaping interpolator
     unsigned int m=3;
     float beta=0.7f;
-    interp_crcf mfinterp = interp_crcf_create_rrc(2,m,beta,0);
+    interp_crcf mfinterp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,2,m,beta,0);
 
     // data buffers
     unsigned char header[9];

@@ -102,7 +102,7 @@ iqpr iqpr_create(unsigned int _node_id,
     // create interpolator
     unsigned int m=3;
     float beta=0.7f;
-    q->interp = interp_crcf_create_rrc(2,m,beta,0);
+    q->interp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,2,m,beta,0);
 
     // set transmit gain
     q->tx_gain = 1.0f;

@@ -118,7 +118,7 @@ iqpr iqpr_create(unsigned int _node_id)
     q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
 
     // filtering objects
-    q->mf_interp = interp_crcf_create_rrc(2,3,0.7f,0.0f);
+    q->mf_interp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,2,3,0.7f,0.0f);
 
     // packetizer objects
     q->p_enc = packetizer_create(0,FEC_NONE,FEC_NONE);

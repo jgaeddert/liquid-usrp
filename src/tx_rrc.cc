@@ -121,7 +121,7 @@ int main (int argc, char **argv)
     //float beta=0.3f;    // excess bandwidth factor
 
     // create matched-filter interpolator
-    interp_crcf nyquist_filter = interp_crcf_create_rrc(k,m,beta,dt);
+    interp_crcf nyquist_filter = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,k,m,beta,dt);
 
     // modem
     modulation_scheme ms = MOD_DPSK;

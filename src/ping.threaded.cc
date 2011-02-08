@@ -205,7 +205,7 @@ void * tx_handler ( void * _userdata )
     // interpolator options
     unsigned int m=3;
     float beta=0.7f;
-    interp_crcf interp = interp_crcf_create_rrc(2,m,beta,0);
+    interp_crcf interp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,2,m,beta,0);
 
     unsigned int i;
     float g = 0.5f; // transmit gain
