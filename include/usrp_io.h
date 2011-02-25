@@ -28,6 +28,7 @@
 
 #include <pthread.h>
 #include <liquid/liquid.h>
+#include <liquid/liquid.experimental.h>
 
 #include "config.h"
 

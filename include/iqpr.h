@@ -35,6 +35,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 #include <liquid/liquid.h>
+#include <liquid/liquid.experimental.h>
 
 #define IQPR_PACKET_TYPE_DATA       (0)
 #define IQPR_PACKET_TYPE_ACK        (1)
