@@ -136,10 +136,10 @@ int main (int argc, char **argv) {
     framesyncstats_s stats;
 
     // parameters
-    modulation_scheme ms = MOD_PSK;
+    modulation_scheme ms = LIQUID_MODEM_PSK;
     unsigned int bps = 2;
-    fec_scheme fec0 = FEC_NONE;
-    fec_scheme fec1 = FEC_NONE;
+    fec_scheme fec0 = LIQUID_FEC_NONE;
+    fec_scheme fec1 = LIQUID_FEC_NONE;
 
 
     if (node_type == NODE_MASTER) {

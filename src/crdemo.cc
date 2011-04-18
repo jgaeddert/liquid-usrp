@@ -152,8 +152,8 @@ int main (int argc, char **argv) {
     unsigned int num_parameters = 5;
     parameter p[num_parameters];
     p[PARAM_MOD_SCHEME] = parameter_create_discrete("mod-scheme", 7, PARAMETER_UNORDERED);
-    p[PARAM_FEC0]       = parameter_create_discrete("fec0", LIQUID_NUM_FEC_SCHEMES, PARAMETER_UNORDERED);
-    p[PARAM_FEC1]       = parameter_create_discrete("fec1", LIQUID_NUM_FEC_SCHEMES, PARAMETER_UNORDERED);
+    p[PARAM_FEC0]       = parameter_create_discrete("fec0", LIQUID_FEC_NUM_SCHEMES, PARAMETER_UNORDERED);
+    p[PARAM_FEC1]       = parameter_create_discrete("fec1", LIQUID_FEC_NUM_SCHEMES, PARAMETER_UNORDERED);
     p[PARAM_PAYLOAD]    = parameter_create_discrete("payload-length", 1024, PARAMETER_ORDERED);
     p[PARAM_TXGAIN]     = parameter_create_continuous("tx-gain-dB", -25.0f, 0.0f, PARAMETER_ORDERED);
 
@@ -222,10 +222,10 @@ int main (int argc, char **argv) {
     framesyncstats_s stats;
 
     // parameters
-    modulation_scheme ms = MOD_QPSK;
+    modulation_scheme ms = LIQUID_MODEM_QPSK;
     unsigned int bps = 1;
-    fec_scheme fec0 = FEC_HAMMING74;
-    fec_scheme fec1 = FEC_NONE;
+    fec_scheme fec0 = LIQUID_FEC_HAMMING74;
+    fec_scheme fec1 = LIQUID_FEC_NONE;
     unsigned int payload_len = 200;
     unsigned char payload[1024];
     float tx_gain_dB = 20*logf(tx_gain);
@@ -384,10 +384,10 @@ int main (int argc, char **argv) {
                     tx_gain_dB = parameter_get_continuous_value(p[PARAM_TXGAIN]);
                     
                     if (average_pathloss > 27.0f && num_adaptations < 200) {
-                        ms = MOD_BPSK;
+                        ms = LIQUID_MODEM_BPSK;
                         bps = 1;
-                        fec0 = FEC_CONV_V27;
-                        fec1 = FEC_CONV_V27P78;
+                        fec0 = LIQUID_FEC_CONV_V27;
+                        fec1 = LIQUID_FEC_CONV_V27P78;
                         payload_len = 64;
                         tx_gain_dB = 0.0f;
                     }
@@ -566,7 +566,7 @@ int main (int argc, char **argv) {
 #endif
 
             // transmit ACK packet
-            iqpr_txpacket(q,&tx_header,NULL,0,MOD_BPSK,1,FEC_NONE,FEC_NONE);
+            iqpr_txpacket(q,&tx_header,NULL,0,LIQUID_MODEM_BPSK,1,LIQUID_FEC_NONE,LIQUID_FEC_NONE);
 #endif
 
             pid = rx_header.pid;
@@ -613,24 +613,24 @@ void parameter_set_mod_scheme(parameter _p,
                               modulation_scheme _ms,
                               unsigned int _bps)
 {
-    if (_ms == MOD_BPSK)
+    if (_ms == LIQUID_MODEM_BPSK)
         parameter_set_discrete_value(_p, 0);
-    else if (_ms == MOD_QPSK)
+    else if (_ms == LIQUID_MODEM_QPSK)
         parameter_set_discrete_value(_p, 1);
-    else if (_ms == MOD_PSK && _bps == 3)
+    else if (_ms == LIQUID_MODEM_PSK && _bps == 3)
         parameter_set_discrete_value(_p, 2);
-    else if (_ms == MOD_PSK && _bps == 4)
+    else if (_ms == LIQUID_MODEM_PSK && _bps == 4)
         parameter_set_discrete_value(_p, 3);
-    else if (_ms == MOD_QAM && _bps == 4)
+    else if (_ms == LIQUID_MODEM_QAM && _bps == 4)
         parameter_set_discrete_value(_p, 4);
-    else if (_ms == MOD_QAM && _bps == 5)
+    else if (_ms == LIQUID_MODEM_QAM && _bps == 5)
         parameter_set_discrete_value(_p, 5);
-    else if (_ms == MOD_QAM && _bps == 6)
+    else if (_ms == LIQUID_MODEM_QAM && _bps == 6)
         parameter_set_discrete_value(_p, 6);
     else {
         fprintf(stderr,"warning: parameter_set_mod_scheme(), invalid configuration (setting to BPSK)\n");
         fprintf(stderr,"         %s, %u\n", modulation_scheme_str[_ms][1], _bps);
-        parameter_set_mod_scheme(_p, MOD_BPSK, 1);
+        parameter_set_mod_scheme(_p, LIQUID_MODEM_BPSK, 1);
     }
 }
 
@@ -640,23 +640,23 @@ void parameter_get_mod_scheme(parameter _p,
 {
     unsigned int v = parameter_get_discrete_value(_p);
     switch (v) {
-    case 0: *_ms = MOD_BPSK;    *_bps = 1;  return;
-    case 1: *_ms = MOD_QPSK;    *_bps = 2;  return;
-    case 2: *_ms = MOD_PSK;     *_bps = 3;  return;
-    case 3: *_ms = MOD_PSK;     *_bps = 4;  return;
-    case 4: *_ms = MOD_QAM;     *_bps = 4;  return;
-    case 5: *_ms = MOD_QAM;     *_bps = 5;  return;
-    case 6: *_ms = MOD_QAM;     *_bps = 6;  return;
+    case 0: *_ms = LIQUID_MODEM_BPSK;    *_bps = 1;  return;
+    case 1: *_ms = LIQUID_MODEM_QPSK;    *_bps = 2;  return;
+    case 2: *_ms = LIQUID_MODEM_PSK;     *_bps = 3;  return;
+    case 3: *_ms = LIQUID_MODEM_PSK;     *_bps = 4;  return;
+    case 4: *_ms = LIQUID_MODEM_QAM;     *_bps = 4;  return;
+    case 5: *_ms = LIQUID_MODEM_QAM;     *_bps = 5;  return;
+    case 6: *_ms = LIQUID_MODEM_QAM;     *_bps = 6;  return;
     default:
         fprintf(stderr,"warning: parameter_get_mod_scheme(), invalid configuration (setting to BPSK)\n");
-        *_ms = MOD_BPSK;
+        *_ms = LIQUID_MODEM_BPSK;
         *_bps = 1;
     }
 }
 
 void parameter_set_fec_scheme(parameter _p, fec_scheme _fs)
 {
-    if (_fs == FEC_REP5 || _fs==FEC_REP3 || _fs==FEC_CONV_V615) _fs = FEC_NONE;
+    if (_fs == LIQUID_FEC_REP5 || _fs==LIQUID_FEC_REP3 || _fs==LIQUID_FEC_CONV_V615) _fs = LIQUID_FEC_NONE;
     parameter_set_discrete_value(_p, (unsigned int)_fs);
 }
 
@@ -664,7 +664,7 @@ void parameter_set_fec_scheme(parameter _p, fec_scheme _fs)
 void parameter_get_fec_scheme(parameter _p, fec_scheme * _fs)
 {
     *_fs = (fec_scheme) parameter_get_discrete_value(_p);
-    if (*_fs == FEC_REP5 || *_fs==FEC_REP3 || *_fs==FEC_CONV_V615) *_fs = FEC_NONE;
+    if (*_fs == LIQUID_FEC_REP5 || *_fs==LIQUID_FEC_REP3 || *_fs==LIQUID_FEC_CONV_V615) *_fs = LIQUID_FEC_NONE;
 
 }
 
@@ -680,15 +680,15 @@ void mutate_parameters(float _mutation_rate,
     if ( randf() < _mutation_rate ) {
         unsigned int v = rand() % NUM_MOD_SCHEMES;
         switch (v) {
-        case 0: *_ms = MOD_BPSK;    *_bps = 1; break;
-        case 1: *_ms = MOD_QPSK;    *_bps = 2; break;
-        case 2: *_ms = MOD_PSK;     *_bps = 3; break;
-        case 3: *_ms = MOD_PSK;     *_bps = 4; break;
-        case 4: *_ms = MOD_QAM;     *_bps = 4; break;
-        case 5: *_ms = MOD_QAM;     *_bps = 5; break;
-        case 6: *_ms = MOD_QAM;     *_bps = 6; break;
-        case 7: *_ms = MOD_QAM;     *_bps = 7; break;
-        case 8: *_ms = MOD_QAM;     *_bps = 8; break;
+        case 0: *_ms = LIQUID_MODEM_BPSK;    *_bps = 1; break;
+        case 1: *_ms = LIQUID_MODEM_QPSK;    *_bps = 2; break;
+        case 2: *_ms = LIQUID_MODEM_PSK;     *_bps = 3; break;
+        case 3: *_ms = LIQUID_MODEM_PSK;     *_bps = 4; break;
+        case 4: *_ms = LIQUID_MODEM_QAM;     *_bps = 4; break;
+        case 5: *_ms = LIQUID_MODEM_QAM;     *_bps = 5; break;
+        case 6: *_ms = LIQUID_MODEM_QAM;     *_bps = 6; break;
+        case 7: *_ms = LIQUID_MODEM_QAM;     *_bps = 7; break;
+        case 8: *_ms = LIQUID_MODEM_QAM;     *_bps = 8; break;
         default:
             fprintf(stderr,"error: mutate_parameters(), invalid mod scheme\n");
             exit(1);
@@ -697,27 +697,27 @@ void mutate_parameters(float _mutation_rate,
 
     // fec scheme (inner)
     if ( randf() < _mutation_rate ) {
-        *_fec0 = (fec_scheme) (rand() % LIQUID_NUM_FEC_SCHEMES);
+        *_fec0 = (fec_scheme) (rand() % LIQUID_FEC_NUM_SCHEMES);
 
-        if (*_fec0 == FEC_UNKNOWN || *_fec0 == FEC_REP5 ||
-            *_fec0 == FEC_REP3    || *_fec0 == FEC_CONV_V615)
+        if (*_fec0 == LIQUID_FEC_UNKNOWN || *_fec0 == LIQUID_FEC_REP5 ||
+            *_fec0 == LIQUID_FEC_REP3    || *_fec0 == LIQUID_FEC_CONV_V615)
         {
-            *_fec0 = FEC_NONE;
+            *_fec0 = LIQUID_FEC_NONE;
         }
     }
 
     // fec scheme (outer)
     if ( randf() < _mutation_rate ) {
-        *_fec1 = (fec_scheme) (rand() % LIQUID_NUM_FEC_SCHEMES);
+        *_fec1 = (fec_scheme) (rand() % LIQUID_FEC_NUM_SCHEMES);
 
-        if (*_fec1 == FEC_UNKNOWN || *_fec1 == FEC_REP5 ||
-            *_fec1 == FEC_REP3    || *_fec1 == FEC_CONV_V615)
+        if (*_fec1 == LIQUID_FEC_UNKNOWN || *_fec1 == LIQUID_FEC_REP5 ||
+            *_fec1 == LIQUID_FEC_REP3    || *_fec1 == LIQUID_FEC_CONV_V615)
         {
-            *_fec1 = FEC_NONE;
+            *_fec1 = LIQUID_FEC_NONE;
         }
 
         // increase chances of disabling outer FEC
-        if ( (rand()%4) == 0) *_fec1 = FEC_NONE;
+        if ( (rand()%4) == 0) *_fec1 = LIQUID_FEC_NONE;
     }
 
     // payload length

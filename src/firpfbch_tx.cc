@@ -137,7 +137,7 @@ int main (int argc, char **argv)
     std::complex<float> synthesizer_out[num_channels];
 
     // modem
-    modulation_scheme ms = MOD_QPSK;
+    modulation_scheme ms = LIQUID_MODEM_QPSK;
     unsigned int bps = 2;
     modem mod = modem_create(ms,bps);
 

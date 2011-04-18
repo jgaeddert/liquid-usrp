@@ -78,7 +78,7 @@ int main (int argc, char **argv)
     float num_seconds = 5.0f;
 
     // 
-    modulation_scheme ms = MOD_DPSK;    // modulation scheme
+    modulation_scheme ms = LIQUID_MODEM_DPSK;    // modulation scheme
     unsigned int bps = 2;               // modulation depth
 
     //
@@ -197,9 +197,8 @@ int main (int argc, char **argv)
 
                 // demodulate and retrieve phase error
                 unsigned int demod_sym;
-                float phi;
                 modem_demodulate(demod, nco_out, &demod_sym);
-                get_demodulator_phase_error(demod, &phi);
+                float phi = modem_get_demodulator_phase_error(demod);
 
                 // step pll, nco objects
                 nco_crcf_pll_step(nco_rx, phi);

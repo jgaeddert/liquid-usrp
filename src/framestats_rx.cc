@@ -57,6 +57,7 @@ static int callback(unsigned char * _rx_header,
                     int _rx_header_valid,
                     unsigned char * _rx_payload,
                     unsigned int _rx_payload_len,
+                    int _rx_payload_valid,
                     framesyncstats_s _stats,
                     void * _userdata)
 {
@@ -80,7 +81,7 @@ static int callback(unsigned char * _rx_header,
     num_packets_received[i]++;
     if (verbose) {
         printf("********* callback invoked, ");
-        printf("SNR=%5.1fdB, ", _stats.SNR);
+        printf("evm=%5.1fdB, ", _stats.evm);
         printf("rssi=%5.1fdB, ", _stats.rssi);
     }
 
@@ -103,7 +104,7 @@ static int callback(unsigned char * _rx_header,
     */
 
     framedata * fd = (framedata*) _userdata;
-    fd->p = packetizer_recreate(fd->p, payload_len, fec0, fec1);
+    fd->p = packetizer_recreate(fd->p, payload_len, LIQUID_CRC_32, fec0, fec1);
 
     // decode packet
     unsigned char msg_dec[payload_len];
@@ -227,7 +228,7 @@ int main (int argc, char **argv)
     gport port_rx = uio->get_rx_port(USRP_CHANNEL);
 
     // framing
-    packetizer p = packetizer_create(0,FEC_NONE,FEC_NONE);
+    packetizer p = packetizer_create(0,LIQUID_CRC_32,LIQUID_FEC_NONE,LIQUID_FEC_NONE);
     framedata fd;
     fd.header = NULL;
     fd.payload = NULL;

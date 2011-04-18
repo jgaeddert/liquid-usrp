@@ -45,7 +45,7 @@ void usage() {
     printf("  k     :   fec coding scheme (outer)\n");
     // print all available FEC schemes
     unsigned int i;
-    for (i=0; i<LIQUID_NUM_FEC_SCHEMES; i++)
+    for (i=0; i<LIQUID_FEC_NUM_SCHEMES; i++)
         printf("          [%s] %s\n", fec_scheme_str[i][0], fec_scheme_str[i][1]);
 }
 
@@ -66,10 +66,10 @@ int main (int argc, char **argv)
 
     // packetizer properties
     unsigned int packet_len_dec = 64;   // original data message length
-    crc_scheme check = CRC_32;          // data integrity check
-    fec_scheme fec0 = FEC_HAMMING128;   // inner code
-    fec_scheme fec1 = FEC_NONE;         // outer code
-    modulation_scheme ms = MOD_DPSK;    // modulation scheme (fixed)
+    crc_scheme check = LIQUID_CRC_32;          // data integrity check
+    fec_scheme fec0 = LIQUID_FEC_HAMMING128;   // inner code
+    fec_scheme fec1 = LIQUID_FEC_NONE;         // outer code
+    modulation_scheme ms = LIQUID_MODEM_DPSK;    // modulation scheme (fixed)
     unsigned int bps = 2;               // modulation depth
 
     //
@@ -90,14 +90,14 @@ int main (int argc, char **argv)
         case 'p':   bps = atoi(optarg);             break;
         case 'c':
             fec0 = liquid_getopt_str2fec(optarg);
-            if (fec0 == FEC_UNKNOWN) {
+            if (fec0 == LIQUID_FEC_UNKNOWN) {
                 fprintf(stderr,"error: %s, unknown/unsupported fec scheme '%s'\n", argv[0], optarg);
                 exit(1);
             }
             break;
         case 'k':
             fec1 = liquid_getopt_str2fec(optarg);
-            if (fec1 == FEC_UNKNOWN) {
+            if (fec1 == LIQUID_FEC_UNKNOWN) {
                 fprintf(stderr,"error: %s, unknown/unsupported fec scheme '%s'\n", argv[0], optarg);
                 exit(1);
             }

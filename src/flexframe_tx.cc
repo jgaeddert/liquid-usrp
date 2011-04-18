@@ -46,7 +46,7 @@ void usage() {
     printf("  k     :   fec coding scheme (outer)\n");
     // print all available FEC schemes
     unsigned int i;
-    for (i=0; i<LIQUID_NUM_FEC_SCHEMES; i++)
+    for (i=0; i<LIQUID_FEC_NUM_SCHEMES; i++)
         printf("          [%s] %s\n", fec_scheme_str[i][0], fec_scheme_str[i][1]);
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
@@ -67,9 +67,9 @@ int main (int argc, char **argv)
 
     unsigned int packet_spacing=0;
     unsigned int payload_len=200;
-    fec_scheme fec0 = FEC_NONE;
-    fec_scheme fec1 = FEC_HAMMING74;
-    modulation_scheme mod_scheme = MOD_QAM;
+    fec_scheme fec0 = LIQUID_FEC_NONE;
+    fec_scheme fec1 = LIQUID_FEC_HAMMING74;
+    modulation_scheme mod_scheme = LIQUID_MODEM_QAM;
     unsigned int mod_depth = 2;
     unsigned int ramp_len = 64;
 
@@ -84,9 +84,9 @@ int main (int argc, char **argv)
         case 'n':   payload_len = atoi(optarg);     break;
         case 'm':
             mod_scheme = liquid_getopt_str2mod(optarg);
-            if (mod_scheme == MOD_UNKNOWN) {
+            if (mod_scheme == LIQUID_MODEM_UNKNOWN) {
                 printf("error: unknown/unsupported mod. scheme: %s\n", optarg);
-                mod_scheme = MOD_UNKNOWN;
+                mod_scheme = LIQUID_MODEM_UNKNOWN;
             }
             break;
         case 'p':   mod_depth = atoi(optarg);       break;
@@ -113,10 +113,10 @@ int main (int argc, char **argv)
     } else if (payload_len > (1<<16)) {
         printf("error: maximum payload length exceeded: %u > %u\n", payload_len, 1<<16);
         return 0;
-    } else if (fec0 == FEC_UNKNOWN || fec1 == FEC_UNKNOWN) {
+    } else if (fec0 == LIQUID_FEC_UNKNOWN || fec1 == LIQUID_FEC_UNKNOWN) {
         usage();
         return 0;
-    } else if (mod_scheme == MOD_UNKNOWN) {
+    } else if (mod_scheme == LIQUID_MODEM_UNKNOWN) {
         usage();
         return 0;
     }

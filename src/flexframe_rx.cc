@@ -54,7 +54,7 @@ static int callback(unsigned char * _rx_header,
     num_packets_received++;
     if (verbose) {
         printf("********* callback invoked, ");
-        printf("SNR=%5.1fdB, ", _stats.SNR);
+        printf("evm=%5.1fdB, ", _stats.evm);
         printf("rssi=%5.1fdB, ", _stats.rssi);
     }
 

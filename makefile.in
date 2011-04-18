@@ -89,19 +89,19 @@ example_src	:=			\
 	src/ping.cc			\
 	src/ofdmframe_tx.cc		\
 	src/ofdmframe_rx.cc		\
-	src/ofdmoqamframe64_tx.cc	\
-	src/ofdmoqamframe64_rx.cc	\
 	src/ofdmoqamframe_tx.cc		\
 	src/ofdmoqamframe_rx.cc		\
 	src/packetstream_rx.cc		\
 	src/packetstream_tx.cc		\
-	src/firpfbch_tx.cc		\
 	src/usrp_rx_gain_correction_test.cc
 #	src/dsa_ofdmoqam.cc
+#	src/firpfbch_tx.cc
 #	src/tx_ofdmoqam.cc
 #	src/cr.cc
 #	src/test_usrp_standard_tx.cc
 #	src/gr_usrp_rx_test.cc
+#	src/ofdmoqamframe64_tx.cc
+#	src/ofdmoqamframe64_rx.cc
 #	src/gr_usrp_tx_test.cc
 
 library_objs	= $(patsubst %.cc,%.o,$(library_src))

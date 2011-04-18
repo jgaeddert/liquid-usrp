@@ -84,10 +84,10 @@ iqpr iqpr_create(unsigned int _node_id,
     q->fgprops.rampup_len   = 16;
     q->fgprops.phasing_len  = 64;
     q->fgprops.payload_len  = 0;
-    q->fgprops.check        = CRC_NONE;
-    q->fgprops.fec0         = FEC_NONE;
-    q->fgprops.fec1         = FEC_NONE;
-    q->fgprops.mod_scheme   = MOD_QPSK;
+    q->fgprops.check        = LIQUID_CRC_NONE;
+    q->fgprops.fec0         = LIQUID_FEC_NONE;
+    q->fgprops.fec1         = LIQUID_FEC_NONE;
+    q->fgprops.mod_scheme   = LIQUID_MODEM_QPSK;
     q->fgprops.mod_bps      = 2;
     q->fgprops.rampdn_len   = 16;
     q->fg = flexframegen_create(&q->fgprops);
@@ -180,7 +180,7 @@ void iqpr_txpacket(iqpr _q,
     _q->fgprops.payload_len = _payload_len;
     _q->fgprops.mod_scheme  = _ms;
     _q->fgprops.mod_bps     = _bps;
-    _q->fgprops.check       = CRC_32;
+    _q->fgprops.check       = LIQUID_CRC_32;
     _q->fgprops.fec0        = _fec0;
     _q->fgprops.fec1        = _fec1;
     flexframegen_setprops(_q->fg, &_q->fgprops);
@@ -247,11 +247,11 @@ void iqpr_txack(iqpr _q,
 
     // configure frame generator
     _q->fgprops.payload_len = 0;
-    _q->fgprops.mod_scheme  = MOD_BPSK;
+    _q->fgprops.mod_scheme  = LIQUID_MODEM_BPSK;
     _q->fgprops.mod_bps     = 1;
-    _q->fgprops.check       = CRC_NONE;
-    _q->fgprops.fec0        = FEC_NONE;
-    _q->fgprops.fec1        = FEC_NONE;
+    _q->fgprops.check       = LIQUID_CRC_NONE;
+    _q->fgprops.fec0        = LIQUID_FEC_NONE;
+    _q->fgprops.fec1        = LIQUID_FEC_NONE;
     flexframegen_setprops(_q->fg, &_q->fgprops);
 
     // generate frame

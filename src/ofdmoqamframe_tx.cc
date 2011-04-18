@@ -51,7 +51,7 @@ int main (int argc, char **argv)
     unsigned int num_symbols_flush=16;  // num symbols to flush
     unsigned int m=3;
     float beta = 0.9f;
-    //modulation_scheme ms = MOD_QAM;
+    //modulation_scheme ms = LIQUID_MODEM_QAM;
     //unsigned int bps = 2;
 
     bool verbose = true;
@@ -145,7 +145,7 @@ int main (int argc, char **argv)
     // framing
     std::complex<float> frame[num_subcarriers];
 
-    modem mod = modem_create(MOD_QPSK,2);
+    modem mod = modem_create(LIQUID_MODEM_QPSK,2);
 
     // data buffers
     std::complex<float> syms[num_subcarriers];  // data symbols

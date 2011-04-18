@@ -135,7 +135,7 @@ int main (int argc, char **argv)
     unsigned int M = 64;                // number of subcarriers
     unsigned int cp_len = 16;           // cyclic prefix length
 
-    modulation_scheme ms = MOD_QAM;
+    modulation_scheme ms = LIQUID_MODEM_QAM;
     unsigned int bps = 2;
 
     //
@@ -153,9 +153,9 @@ int main (int argc, char **argv)
         case 't':   num_seconds = atof(optarg);     break;
         case 'm':
             ms = liquid_getopt_str2mod(optarg);
-            if (ms == MOD_UNKNOWN) {
+            if (ms == LIQUID_MODEM_UNKNOWN) {
                 fprintf(stderr, "error: %s unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
-                ms = MOD_UNKNOWN;
+                ms = LIQUID_MODEM_UNKNOWN;
             }
             break;
         case 'p':   bps = atoi(optarg);             break;

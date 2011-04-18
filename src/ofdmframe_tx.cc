@@ -44,7 +44,7 @@ void usage() {
     printf("  k     :   fec coding scheme (outer)\n");
     // print all available FEC schemes
     unsigned int i;
-    for (i=0; i<LIQUID_NUM_FEC_SCHEMES; i++)
+    for (i=0; i<LIQUID_FEC_NUM_SCHEMES; i++)
         printf("          [%s] %s\n", fec_scheme_str[i][0], fec_scheme_str[i][1]);
 }
 
@@ -65,12 +65,12 @@ int main (int argc, char **argv)
     unsigned int num_symbols_S0 = 2;    // number of S0 symbols
     unsigned int num_symbols_S1 = 2;    // number of S0 symbols
 
-    modulation_scheme ms = MOD_QAM;     // modulation scheme
+    modulation_scheme ms = LIQUID_MODEM_QAM;     // modulation scheme
     unsigned int bps = 2;               // modulation depth
     unsigned int packet_len_dec = 50;   // original data message length
-    crc_scheme check = CRC_32;          // data validity check
-    fec_scheme fec0 = FEC_NONE;         // fec (inner)
-    fec_scheme fec1 = FEC_HAMMING128;   // fec (outer)
+    crc_scheme check = LIQUID_CRC_32;          // data validity check
+    fec_scheme fec0 = LIQUID_FEC_NONE;         // fec (inner)
+    fec_scheme fec1 = LIQUID_FEC_HAMMING128;   // fec (outer)
 
     //
     int d;
@@ -86,9 +86,9 @@ int main (int argc, char **argv)
         case 'C':   cp_len = atoi(optarg);          break;
         case 'm':
             ms = liquid_getopt_str2mod(optarg);
-            if (ms == MOD_UNKNOWN) {
+            if (ms == LIQUID_MODEM_UNKNOWN) {
                 fprintf(stderr, "error: %s unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
-                ms = MOD_UNKNOWN;
+                ms = LIQUID_MODEM_UNKNOWN;
             }
             break;
         case 'p':   bps = atoi(optarg);             break;

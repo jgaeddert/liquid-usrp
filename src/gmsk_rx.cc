@@ -150,8 +150,6 @@ int main (int argc, char **argv)
     unsigned int i;
     unsigned int n;
     unsigned int num_samples=0;
-    unsigned int num_bits=0;
-    unsigned char byte=0;
     for (n=0; n<num_blocks; n++) {
         // grab data from port
         gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
@@ -178,15 +176,7 @@ int main (int argc, char **argv)
                 unsigned int demod_sym;
                 gmskdem_demodulate(demod, sym_rx, &demod_sym);
 
-                // append demodulated bit to byte
-                byte <<= 1;
-                byte |= demod_sym & 0x01;
-                num_bits++;
-                if (num_bits >= 8) {
-                    bpacketsync_execute(ps, byte);
-                    byte = 0;
-                    num_bits = 0;
-                }
+                bpacketsync_execute_bit(ps, demod_sym);
 
             }
         }

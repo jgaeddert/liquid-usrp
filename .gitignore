@@ -34,6 +34,8 @@ src/iqpr_test
 src/jammer
 src/ofdmframe_rx
 src/ofdmframe_tx
+src/ofdmoqamframe_rx
+src/ofdmoqamframe_tx
 src/ofdmoqamframe64_rx
 src/ofdmoqamframe64_tx
 src/packet_rx
