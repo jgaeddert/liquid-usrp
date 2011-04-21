@@ -148,6 +148,8 @@ int main (int argc, char **argv)
     usrp->set_rx_gain(20);
 
     // TODO : add arbitrary resampling component
+    resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,37,0.4f,60.0f,64);
+    resamp_crcf_setrate(resamp, rx_resamp_rate);
 
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
     unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
@@ -204,11 +206,17 @@ int main (int argc, char **argv)
         // for now copy vector "buff" to array of complex float
         // TODO : apply bandwidth-dependent gain
         unsigned int j;
-        for (j=0; j<num_rx_samps; j++)
-            data_rx[j] = buff[j];
+        unsigned int n=0;
+        unsigned int nw=0;
+        for (j=0; j<num_rx_samps; j++) {
+            //data_rx[j] = buff[j];
+            std::complex<float> sample = buff[j];
+            resamp_crcf_execute(resamp, sample, &data_rx[n], &nw);
+            n += nw;
+        }
 
         // run through frame synchronizer
-        framesync64_execute(framesync, data_rx, num_rx_samps);
+        framesync64_execute(framesync, data_rx, n);
     }
  
     // stop data transfer
@@ -227,6 +235,7 @@ int main (int argc, char **argv)
 
     // clean it up
     framesync64_destroy(framesync);
+    resamp_crcf_destroy(resamp);
 
     std::cout << std::endl << std::endl;
     return 0;
