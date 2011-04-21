@@ -59,41 +59,40 @@ ARFLAGS		= r
 # library header files
 library_headers	:=			\
 	iqpr.h				\
-	usrp_io.h			\
-	usrp_rx_gain_correction.h
+	usrp_rx_gain_correction.h	\
 
 # library source files
 library_src	:=			\
-	@LEGACY_LIBS@			\
 	lib/iqpr.cc			\
-	lib/usrp_io.cc			\
-	lib/usrp_rx_gain_correction.cc
+	lib/usrp_rx_gain_correction.cc	\
 
 # example programs
 example_src	:=			\
-	src/crdemo.cc			\
-	src/usrp_init_test.cc		\
-	src/usrp_io_test.cc		\
-	src/fmtx.cc 			\
-	src/framestats_rx.cc		\
-	src/framestats_tx.cc		\
-	src/gmsk_rx.cc			\
-	src/gmsk_tx.cc			\
-	src/jammer.cc 			\
-	src/tx_rrc.cc			\
-	src/flexframe_tx.cc 		\
-	src/flexframe_rx.cc		\
-	src/iqpr_test.cc		\
-	src/packet_tx.cc 		\
 	src/packet_rx.cc		\
-	src/ping.cc			\
-	src/ofdmframe_tx.cc		\
-	src/ofdmframe_rx.cc		\
-	src/ofdmoqamframe_tx.cc		\
-	src/ofdmoqamframe_rx.cc		\
-	src/packetstream_rx.cc		\
-	src/packetstream_tx.cc		\
-	src/usrp_rx_gain_correction_test.cc
+
+#	src/crdemo.cc
+#	src/usrp_init_test.cc
+#	src/usrp_io_test.cc
+#	src/fmtx.cc 
+#	src/framestats_rx.cc
+#	src/framestats_tx.cc
+#	src/gmsk_rx.cc
+#	src/gmsk_tx.cc
+#	src/jammer.cc
+#	src/tx_rrc.cc
+#	src/flexframe_tx.cc
+#	src/flexframe_rx.cc
+#	src/iqpr_test.cc
+#	src/packet_tx.cc
+#	src/packet_rx.cc
+#	src/ping.cc
+#	src/ofdmframe_tx.cc
+#	src/ofdmframe_rx.cc
+#	src/ofdmoqamframe_tx.cc
+#	src/ofdmoqamframe_rx.cc
+#	src/packetstream_rx.cc
+#	src/packetstream_tx.cc
+#	src/usrp_rx_gain_correction_test.cc
 #	src/dsa_ofdmoqam.cc
 #	src/firpfbch_tx.cc
 #	src/tx_ofdmoqam.cc

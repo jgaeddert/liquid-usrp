@@ -27,9 +27,8 @@
 #include <getopt.h>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
- 
-#define USRP_CHANNEL        (0)
+#include <uhd/usrp/single_usrp.hpp>
+
  
 static bool verbose;
 
@@ -116,28 +115,42 @@ int main (int argc, char **argv)
 
     unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(512));
 
-    // create usrp_io object and set properties
-    usrp_io * uio = new usrp_io();
-    uio->set_rx_freq(USRP_CHANNEL, frequency);
-    uio->set_rx_samplerate(2.0f*bandwidth);
-    uio->enable_auto_tx(USRP_CHANNEL);
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
-    // retrieve rx port
-    gport port_rx = uio->get_rx_port(USRP_CHANNEL);
+    stream_cmd.stream_now = true;
+
+    uhd::device_addr_t dev_addr;
+    //dev_addr["addr0"] = "192.168.10.2";
+    //dev_addr["addr1"] = "192.168.10.3";
+    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
+
+    // set properties
+    //usrp->set_rx_rate(2.0f*bandwidth);
+    usrp->set_rx_rate(250e3);
+    usrp->set_rx_freq(frequency);
+    usrp->set_rx_gain(10);
+
+    // TODO : add arbitrary resampling component
+
+    const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
+
+    //allocate recv buffer and metatdata
+    uhd::rx_metadata_t md;
+    std::vector<std::complex<float> > buff(max_samps_per_packet);
 
     // framing
     framesyncprops_s props;
     framesyncprops_init_default(&props);
-    props.squelch_threshold = -30.0f;
-    framesync64 framesync = framesync64_create(NULL,callback,NULL);
+    props.agc_gmin          = 1e-3f;
+    props.agc_gmax          = 1e5f;
+    props.squelch_threshold = -40.0f;
+    framesync64 framesync = framesync64_create(&props,callback,NULL);
 
-    unsigned int rx_buffer_length = 512;
- 
     // start data transfer
-    uio->start_rx(USRP_CHANNEL);
+    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    std::complex<float> data_rx[rx_buffer_length];
+    std::complex<float> data_rx[max_samps_per_packet];
 
     // reset counter
     num_packets_received = 0;
@@ -146,14 +159,42 @@ int main (int argc, char **argv)
     unsigned int i;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
-        gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
+        size_t num_rx_samps = usrp->get_device()->recv(
+            &buff.front(), buff.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::RECV_MODE_ONE_PACKET
+        );
+
+        //handle the error codes
+        switch(md.error_code){
+        case uhd::rx_metadata_t::ERROR_CODE_NONE:
+        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+            break;
+
+        default:
+            std::cerr << "Error code: " << md.error_code << std::endl;
+            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+            return 1;
+        }
+
+        if (not md.has_time_spec){
+            std::cerr << "Metadata missing time spec, exit test..." << std::endl;
+            return 1;
+        }
+
+        // for now copy vector "buff" to array of complex float
+        // TODO : apply bandwidth-dependent gain
+        unsigned int j;
+        for (j=0; j<num_rx_samps; j++)
+            data_rx[j] = buff[j];
 
         // run through frame synchronizer
-        framesync64_execute(framesync, data_rx, rx_buffer_length);
+        framesync64_execute(framesync, data_rx, num_rx_samps);
     }
  
- 
-    uio->stop_rx(USRP_CHANNEL);  // Stop data transfer
+    // stop data transfer
+    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+    printf("\n");
     printf("usrp data transfer complete\n");
 
     // print results
@@ -168,7 +209,7 @@ int main (int argc, char **argv)
     // clean it up
     framesync64_destroy(framesync);
 
-    delete uio;
+    std::cout << std::endl << std::endl;
     return 0;
 }
 

@@ -37,14 +37,6 @@ AH_BOTTOM([
 
 # Configure options
 
-# enable/disable building legacy usrp code (usrp-0.12)
-AC_ARG_ENABLE(legacy,
-    AS_HELP_STRING([--enable-legacy],[enable building of legacy usrp code]),
-    [ AC_DEFINE(USRP_LEGACY,[1],[enable/disable legacy code])
-      LEGACY_LIBS="lib/basic.cc lib/dbsrx.cc lib/flex.cc lib/lf.cc lib/ossie_db_base.cc lib/tvrx.cc"],
-    [ AC_DEFINE(USRP_LEGACY,[0],[enable/disable legacy code]) LEGACY_LIBS=""],
-)
-
 # Check for necessary programs
 AC_PROG_CC
 AC_PROG_CXX
@@ -65,8 +57,8 @@ AC_CHECK_LIB([m], [sinf, cosf, expf, cargf, cexpf, crealf, cimagf, sqrtf], [],
 AC_CHECK_LIB([liquid], [gport_create], [],
              [AC_MSG_ERROR(Need liquid-dsp library!)],
              [])
-AC_CHECK_LIB([usrp], [main], [],
-             [AC_MSG_ERROR(Need usrp library!)],
+AC_CHECK_LIB([uhd], [main], [],
+             [AC_MSG_ERROR(Need uhd library!)],
              [])
 
 # Check for necessary header files
@@ -144,7 +136,6 @@ esac
 # autoconf variable substitutions
 #
 AC_SUBST(LIBS)              # shared libraries (-lc, -lm, etc.)
-AC_SUBST(LEGACY_LIBS)       # usrp legacy library source files
 
 AC_SUBST(SH_LIB)            # output shared library target
 AC_SUBST(REBIND)            # rebinding tool (e.g. ldconfig)
