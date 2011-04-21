@@ -110,7 +110,8 @@ int main (int argc, char **argv)
     float g = powf(10.0f, txgain_dB/10.0f);
  
     // framing
-    std::complex<float> frame[2048];
+    unsigned int frame_len = 1280;
+    std::complex<float> frame[frame_len];
     framegen64 framegen = framegen64_create(m,beta);
 
     // data buffers
@@ -137,14 +138,16 @@ int main (int argc, char **argv)
 
             framegen64_execute(framegen, header, payload, frame);
         } else {
-            framegen64_flush(framegen, 2048, frame);
+            // clear frame buffer
+            for (j=0; j<frame_len; j++)
+                frame[j] = 0.0f;
         }
 
         // apply gain
-        for (j=0; j<2048; j++)
-            frame[i] *= g;
+        for (j=0; j<frame_len; j++)
+            frame[j] *= g;
 
-        gport_produce(port_tx,(void*)frame,2048);
+        gport_produce(port_tx,(void*)frame,frame_len);
 
     }
  
