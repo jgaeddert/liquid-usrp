@@ -77,8 +77,8 @@ int main (int argc, char **argv)
     // command-line options
     verbose = true;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    float min_bandwidth = 0.5f*(64e6 / 256.0);
+    float max_bandwidth = 0.5f*(64e6 /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
@@ -113,8 +113,6 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(512));
-
     uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
     stream_cmd.stream_now = true;
@@ -125,14 +123,32 @@ int main (int argc, char **argv)
     uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
 
     // set properties
-    //usrp->set_rx_rate(2.0f*bandwidth);
-    usrp->set_rx_rate(250e3);
+#if 0
+    usrp->set_rx_rate(2.0f*bandwidth);
+#else
+    float rx_rate = 2.0f*bandwidth;
+    unsigned int decim_rate = (unsigned int)(32e6f / rx_rate);
+    // ensure multiple of 2
+    decim_rate = (decim_rate >> 1) << 1;
+    // compute usrp sampling rate
+    float usrp_rx_rate = 32e6f / (float)decim_rate;
+    // compute arbitrary resampling rate
+    float rx_resamp_rate = rx_rate / usrp_rx_rate;
+    printf("sample rate : %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
+            rx_rate * 1e-3f,
+            usrp_rx_rate * 1e-3f,
+            rx_resamp_rate,
+            decim_rate);
+    usrp->set_rx_rate(usrp_rx_rate);
+#endif
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(10);
 
     // TODO : add arbitrary resampling component
 
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
+    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(max_samps_per_packet));
+
 
     //allocate recv buffer and metatdata
     uhd::rx_metadata_t md;
