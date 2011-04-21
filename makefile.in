@@ -69,6 +69,7 @@ library_src	:=			\
 # example programs
 example_src	:=			\
 	src/packet_rx.cc		\
+	src/packet_tx.cc		\
 
 #	src/crdemo.cc
 #	src/usrp_init_test.cc
@@ -83,8 +84,6 @@ example_src	:=			\
 #	src/flexframe_tx.cc
 #	src/flexframe_rx.cc
 #	src/iqpr_test.cc
-#	src/packet_tx.cc
-#	src/packet_rx.cc
 #	src/ping.cc
 #	src/ofdmframe_tx.cc
 #	src/ofdmframe_rx.cc

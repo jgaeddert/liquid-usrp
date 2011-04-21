@@ -27,10 +27,8 @@
 #include <getopt.h>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
+#include <uhd/usrp/single_usrp.hpp>
  
-#define USRP_CHANNEL        (0)
-
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz] (default: 462 MHz)\n");
@@ -48,8 +46,8 @@ int main (int argc, char **argv)
     // command-line options
     bool verbose = true;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    float min_bandwidth = (64e6 / 512.0);
+    float max_bandwidth = (64e6 /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
@@ -85,21 +83,45 @@ int main (int argc, char **argv)
         return 0;
     }
 
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+
+    stream_cmd.stream_now = true;
+
+    uhd::device_addr_t dev_addr;
+    //dev_addr["addr0"] = "192.168.10.2";
+    //dev_addr["addr1"] = "192.168.10.3";
+    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
+
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("tx gain     :   %12.8f [dB]\n", txgain_dB);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(4096));
-
-    // create usrp_io object and set properties
-    usrp_io * uio = new usrp_io();
-    uio->set_tx_freq(USRP_CHANNEL, frequency);
-    uio->set_tx_samplerate(2.0f*bandwidth);
-    uio->enable_auto_tx(USRP_CHANNEL);
-
-    // retrieve tx port
-    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
+    // set properties
+    float tx_rate = 2.0f*bandwidth;
+#if 1
+    usrp->set_tx_rate(tx_rate);
+#else
+    // NOTE : the sample rate computation MUST be in double precision so
+    //        that the UHD can compute its decimation rate properly
+    unsigned int decim_rate = (unsigned int)(64e6 / tx_rate);
+    // ensure multiple of 2
+    decim_rate = (decim_rate >> 1) << 1;
+    // compute usrp sampling rate
+    double usrp_tx_rate = 64e6 / (float)decim_rate;
+    // compute arbitrary resampling rate
+    double tx_resamp_rate = tx_rate / usrp_tx_rate;
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
+            tx_rate * 1e-3f,
+            usrp_tx_rate * 1e-3f,
+            tx_resamp_rate,
+            decim_rate);
+    usrp->set_tx_rate(usrp_tx_rate);
+#endif
+    usrp->set_tx_freq(frequency);
+    usrp->set_tx_gain(-20);
+    // set the IF filter bandwidth
+    //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
     // framegen parameters
     //unsigned int k=2; // samples per symbol
@@ -120,10 +142,14 @@ int main (int argc, char **argv)
 
     unsigned int j, pid=0;
 
-    // start usrp data transfer
-    uio->start_tx(USRP_CHANNEL);
+    // set up the metadta flags and start usrp data transfer
+    std::vector<std::complex<float> > buff(1280);
+    uhd::tx_metadata_t md;
+    md.start_of_burst = false; //never SOB when continuous
+    md.end_of_burst   = false;
 
     unsigned int i;
+    unsigned int num_blocks = (unsigned int)((tx_rate*num_seconds)/(frame_len));
     for (i=0; i<num_blocks; i++) {
         // generate the frame / transmit silence
         if ((i%(packet_spacing+1))==0) {
@@ -143,19 +169,31 @@ int main (int argc, char **argv)
                 frame[j] = 0.0f;
         }
 
-        // apply gain
+        // apply gain, copy to vector (fill the buffer)
         for (j=0; j<frame_len; j++)
-            frame[j] *= g;
+            buff[j] = g*frame[j];
 
-        gport_produce(port_tx,(void*)frame,frame_len);
-
+        //send the entire contents of the buffer
+        usrp->get_device()->send(
+            &buff.front(), buff.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
     }
  
-    uio->stop_tx(USRP_CHANNEL);  // Stop data transfer
+    //send a mini EOB packet
+    md.start_of_burst = false;
+    md.end_of_burst   = true;
+    usrp->get_device()->send("", 0, md,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+
+    //finished
     printf("usrp data transfer complete\n");
 
     // clean it up
-    delete uio;
+    framegen64_destroy(framegen);
     return 0;
 }
 
