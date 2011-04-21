@@ -109,10 +109,6 @@ int main (int argc, char **argv)
         return 0;
     }
 
-    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-
     uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
     stream_cmd.stream_now = true;
@@ -122,19 +118,26 @@ int main (int argc, char **argv)
     //dev_addr["addr1"] = "192.168.10.3";
     uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
 
+    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("run time    :   %12.8f [s]\n", num_seconds);
+    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
+
     // set properties
-#if 0
-    usrp->set_rx_rate(2.0f*bandwidth);
-#else
     float rx_rate = 2.0f*bandwidth;
-    unsigned int decim_rate = (unsigned int)(32e6f / rx_rate);
+#if 0
+    usrp->set_rx_rate(rx_rate);
+#else
+    // NOTE : the sample rate computation MUST be in double precision so
+    //        that the UHD can compute its decimation rate properly
+    unsigned int decim_rate = (unsigned int)(64e6 / rx_rate);
     // ensure multiple of 2
     decim_rate = (decim_rate >> 1) << 1;
     // compute usrp sampling rate
-    float usrp_rx_rate = 32e6f / (float)decim_rate;
+    double usrp_rx_rate = 64e6 / (float)decim_rate;
     // compute arbitrary resampling rate
-    float rx_resamp_rate = rx_rate / usrp_rx_rate;
-    printf("sample rate : %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
+    double rx_resamp_rate = rx_rate / usrp_rx_rate;
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
             rx_rate * 1e-3f,
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
@@ -142,12 +145,12 @@ int main (int argc, char **argv)
     usrp->set_rx_rate(usrp_rx_rate);
 #endif
     usrp->set_rx_freq(frequency);
-    usrp->set_rx_gain(10);
+    usrp->set_rx_gain(20);
 
     // TODO : add arbitrary resampling component
 
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
-    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(max_samps_per_packet));
+    unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
 
 
     //allocate recv buffer and metatdata
