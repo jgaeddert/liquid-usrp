@@ -142,7 +142,7 @@ int main (int argc, char **argv)
 
         // apply gain
         for (j=0; j<2048; j++)
-            frame[i] *= g;
+            frame[j] *= g;
 
         gport_produce(port_tx,(void*)frame,2048);
 
