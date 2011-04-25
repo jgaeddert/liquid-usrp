@@ -28,7 +28,7 @@
 #include <liquid/liquid.h>
 
 #include <uhd/usrp/single_usrp.hpp>
- 
+
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz] (default: 462 MHz)\n");
@@ -82,10 +82,6 @@ int main (int argc, char **argv)
         printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
         return 0;
     }
-
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-
-    stream_cmd.stream_now = true;
 
     uhd::device_addr_t dev_addr;
     //dev_addr["addr0"] = "192.168.10.2";
@@ -142,11 +138,17 @@ int main (int argc, char **argv)
 
     unsigned int j, pid=0;
 
-    // set up the metadta flags and start usrp data transfer
-    std::vector<std::complex<float> > buff(1280);
+    // set up the metadta flags
+    std::vector<std::complex<float> > buff(frame_len);
     uhd::tx_metadata_t md;
-    md.start_of_burst = false; //never SOB when continuous
-    md.end_of_burst   = false;
+    md.start_of_burst = false;  // never SOB when continuous
+    md.end_of_burst   = false;  // 
+    md.has_time_spec  = false;  // set to false to send immediately
+
+    // compute frame time
+    double frame_time = (double)frame_len / bandwidth;
+    printf("frame time : %12.8f us\n", frame_time * 1e6f);
+    unsigned long int delay = (unsigned long int)(frame_time*1e6f);
 
     unsigned int i;
     unsigned int num_blocks = (unsigned int)((tx_rate*num_seconds)/(frame_len));
@@ -164,9 +166,10 @@ int main (int argc, char **argv)
 
             framegen64_execute(framegen, header, payload, frame);
         } else {
-            // clear frame buffer
+            // fill buffer with zeros
+            // TODO : only transmit with valid frame data
             for (j=0; j<frame_len; j++)
-                frame[j] = 0.0f;
+                buff[j] = 0.0f;
         }
 
         // apply gain, copy to vector (fill the buffer)
@@ -179,9 +182,10 @@ int main (int argc, char **argv)
             uhd::io_type_t::COMPLEX_FLOAT32,
             uhd::device::SEND_MODE_FULL_BUFF
         );
+
     }
  
-    //send a mini EOB packet
+    // send a mini EOB packet
     md.start_of_burst = false;
     md.end_of_burst   = true;
     usrp->get_device()->send("", 0, md,
