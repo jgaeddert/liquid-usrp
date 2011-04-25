@@ -162,8 +162,20 @@ int main (int argc, char **argv)
     // framing
     framesyncprops_s props;
     framesyncprops_init_default(&props);
+#if 0
+    props.agc_bw0           = 1e-3f;
+    props.agc_bw1           = 1e-5f;
+    props.sym_bw0           = 0.08f;
+    props.sym_bw1           = 0.05f;
+    props.pll_bw0           = 0.020f;
+    props.pll_bw1           = 0.005f;
+    props.eq_len            = 0;
+    props.eqrls_lambda      = 0.999f;
+    props.autosquelch_enabled = 0;
+#endif
     props.agc_gmin          = 1e-3f;
     props.agc_gmax          = 1e5f;
+    props.squelch_enabled   = 1;
     props.squelch_threshold = -40.0f;
     framesync64 framesync = framesync64_create(&props,callback,NULL);
 
