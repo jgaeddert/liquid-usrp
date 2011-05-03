@@ -54,7 +54,7 @@ AC_CHECK_LIB([c], [malloc, realloc, free, memset, memmove], [],
 AC_CHECK_LIB([m], [sinf, cosf, expf, cargf, cexpf, crealf, cimagf, sqrtf], [],
              [AC_MSG_ERROR(Need standard math library!)],
              [])
-AC_CHECK_LIB([liquid], [gport_create], [],
+AC_CHECK_LIB([liquid], [modem_create], [],
              [AC_MSG_ERROR(Need liquid-dsp library!)],
              [])
 AC_CHECK_LIB([uhd], [main], [],
@@ -63,21 +63,7 @@ AC_CHECK_LIB([uhd], [main], [],
 
 # Check for necessary header files
 AC_LANG_PUSH([C++])
-AC_CHECK_HEADERS([usrp_standard.h \
-                  usrp_dbid.h \
-                  usrp_prims.h \
-                  stdio.h \
-                  stdlib.h \
-                  stdbool.h \
-                  complex.h \
-                  string.h \
-                  getopt.h \
-                  float.h \
-                  inttypes.h \
-                  limits.h \
-                  stdlib.h \
-                  string.h \
-                  unistd.h],
+AC_CHECK_HEADERS([uhd/usrp/single_usrp.hpp],
                   [],
                   [AC_MSG_ERROR(missing headers)])
 if test -z "$HAVE_stdio.h"
@@ -96,15 +82,6 @@ AC_CHECK_LIB([fftw3f], [fftwf_plan_dft_1d], [],
              [])
 AC_CHECK_LIB([fec], [create_viterbi27], [],
              [AC_MSG_WARN(fec library useful but not required)],
-             [])
-AC_CHECK_LIB([liquidfpm], [q32_mul], [],
-             [AC_MSG_WARN(fixed-point math library useful but not required)],
-             [])
-AC_CHECK_LIB([liquidrm], [rmdaemon_create], [],
-             [AC_MSG_WARN(liquid resource monitoring library useful but not required)],
-             [])
-AC_CHECK_LIB([liquidce], [ce_create], [],
-             [AC_MSG_WARN(liquid cognitive engine library useful but not required)],
              [])
 
 # Checks for typedefs, structures, and compiler characteristics.
