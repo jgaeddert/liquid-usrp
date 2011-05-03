@@ -73,10 +73,7 @@ fi
 AC_LANG_POP
 
 # Check for optional header files, libraries
-AC_CHECK_HEADERS(pthread.h fec.h fftw3.h byteswap.h)
-AC_CHECK_LIB([pthread], [pthread_mutex_init], [],
-             [AC_MSG_WARN(Need POSIX thread library!)],
-             [])
+AC_CHECK_HEADERS(fec.h fftw3.h)
 AC_CHECK_LIB([fftw3f], [fftwf_plan_dft_1d], [],
              [AC_MSG_WARN(fftw3 library useful but not required)],
              [])
@@ -96,27 +93,12 @@ AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(unsigned int)
 
 # Check canonical system
-AC_CANONICAL_TARGET
-case $target_os in
-darwin*)
-    SH_LIB=libliquidusrp.dylib
-    REBIND=""
-    ;;
-*)
-    SH_LIB=libliquidusrp.so
-    REBIND=ldconfig
-    ;;
-esac
+#AC_CANONICAL_TARGET
 
 
 #
 # autoconf variable substitutions
 #
 AC_SUBST(LIBS)              # shared libraries (-lc, -lm, etc.)
-
-AC_SUBST(SH_LIB)            # output shared library target
-AC_SUBST(REBIND)            # rebinding tool (e.g. ldconfig)
-#AC_SUBST(ARCH_OPTION)       # compiler architecture option
-
 AC_CONFIG_FILES([makefile])
 AC_OUTPUT

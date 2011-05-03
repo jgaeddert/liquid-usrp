@@ -1,5 +1,5 @@
-# Copyright (c) 2009, 2010 Joseph Gaeddert
-# Copyright (c) 2009, 2010 Virginia Polytechnic
+# Copyright (c) 2009, 2010, 2011 Joseph Gaeddert
+# Copyright (c) 2009, 2010, 2011 Virginia Polytechnic
 #                          Institute & State University
 #
 # This file is part of liquid.
@@ -21,12 +21,7 @@
 # Makefile for liquid SDR libraries, USRP applications
 #
 # Targets:
-#    all                 :   dynamic shared-library object (e.g. libliquidusrp.so)
-#    install             :   install the dynamic shared library object and
-#                            header file(s)
-#    uninstall           :   uninstall the library and header file(s)
-#    examples            :   build all example programs
-#    clean               :   clean all targets
+#    all  :  build all example programs
 #
 
 # paths
@@ -46,8 +41,11 @@ SED	:= sed
 AR	:= ar
 RANLIB	:= ranlib
 
-# shared library object
-SHARED_LIB	= @SH_LIB@
+##
+## TARGET : all
+##
+all : examples
+
 
 # flags
 INCLUDE_CFLAGS	= $(addprefix -I ,$(include_dirs))
@@ -55,16 +53,6 @@ CFLAGS		+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
 CPPFLAGS	+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
 LDFLAGS		+= @LIBS@
 ARFLAGS		= r
-
-# library header files
-library_headers	:=			\
-	iqpr.h				\
-	usrp_rx_gain_correction.h	\
-
-# library source files
-library_src	:=			\
-	lib/iqpr.cc			\
-	lib/usrp_rx_gain_correction.cc	\
 
 # example programs
 example_src	:=			\
@@ -105,76 +93,6 @@ example_src	:=			\
 library_objs	= $(patsubst %.cc,%.o,$(library_src))
 headers		= $(addprefix include/,$(library_headers))
 
-##
-## TARGET : Shared library
-##
-all: libliquidusrp.a $(SHARED_LIB)
-
-# build library objects from source files
-$(library_objs): %.o : %.cc $(headers)
-	$(CXX) $(CPPFLAGS) -c $< -o $@
-
-.PHONY: libraries
-libraries: $(libraries)
-
-# Liquid library definition
-# TODO: link from module libraries, not object files (for compactness)
-libliquidusrp.a: $(library_objs)
-	$(AR) $(ARFLAGS) $@ $^
-	$(RANLIB) $@
-
-# darwin
-#
-# gcc -dynamiclib -install_name libliquidusrp.dylib -o libliquidusrp.dylib libmodem.a libutility.a 
-libliquidusrp.dylib: $(objects)
-	$(CXX) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
-
-# linux, et al
-libliquidusrp.so: $(libraries)
-	$(CXX) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
-
-## 
-## TARGET : install
-##
-
-# Installs the libraries and header files in the host system
-install:
-	@echo "installing..."
-	mkdir -p $(exec_prefix)/lib
-	install -m 644 -p $(SHARED_LIB) libliquidusrp.a $(exec_prefix)/lib
-	mkdir -p $(prefix)/include
-	mkdir -p $(prefix)/include/liquid
-	install -m 644 -p include/usrp_io.h $(prefix)/include/liquid
-	install -m 644 -p include/iqpr.h $(prefix)/include/liquid
-	@echo ""
-	@echo "---------------------------------------------------------"
-	@echo "  liquid-usrp was successfully installed.     "
-	@echo ""
-	@echo "  On some machines (e.g. Linux) you should rebind your"
-	@echo "  libraries by running 'ldconfig' to make the shared"
-	@echo "  object available.  You might also need to modify your"
-	@echo "  LD_LIBRARY_PATH environment variable to include the"
-	@echo "  directory $(exec_prefix)"
-	@echo "---------------------------------------------------------"
-	@echo ""
-
-## 
-## TARGET : uninstall
-##
-
-# Uninstalls the libraries and header files in the host system
-uninstall:
-	@echo "uninstalling..."
-	@echo "removing header \"$(prefix)/include/liquid/usrp_io.h\" ..."
-	$(RM) $(prefix)/include/liquid/usrp_io.h
-	@echo "removing header \"$(prefix)/include/liquid/iqpr.h\" ..."
-	$(RM) $(prefix)/include/liquid/iqpr.h
-	@echo "removing library \"$(exec_prefix)/lib/libliquidusrp.a\" ..."
-	$(RM) $(exec_prefix)/lib/libliquidusrp.a
-	@echo "removing library \"$(exec_prefix)/lib/$(SHARED_LIB)\" ..."
-	$(RM) $(exec_prefix)/lib/$(SHARED_LIB)
-	@echo "done."
-
 
 ##
 ## TARGET : examples
@@ -186,7 +104,7 @@ example_progs	= $(patsubst %.cc,%,  $(example_src))
 $(example_objs) : %.o : %.cc
 	$(CXX) $(CPPFLAGS) -c $< -o $@
 
-$(example_progs) : % : %.o libliquidusrp.a
+$(example_progs) : % : %.o
 	$(CXX) $(CPPFLAGS) $(LDFLAGS) $^ -o $@
 
 examples: $(example_progs)
@@ -200,5 +118,3 @@ clean-examples:
 ##
 clean: clean-examples
 	$(RM) $(library_objs)
-	$(RM) libliquidusrp.a
-	$(RM) $(SHARED_LIB)
