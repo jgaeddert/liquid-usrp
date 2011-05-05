@@ -143,8 +143,15 @@ int main (int argc, char **argv)
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/10.0f);
  
-    // framing
+    // set up the metadta flags
+    uhd::tx_metadata_t md;
+    md.start_of_burst = false;  // never SOB when continuous
+    md.end_of_burst   = false;  // 
+    md.has_time_spec  = false;  // set to false to send immediately
+
+    // buffers
     unsigned int frame_len = 1280;
+    std::vector<std::complex<float> > buff(2*frame_len);
     std::complex<float> frame[frame_len];
     std::complex<float> buffer_interp[2*frame_len];
     std::complex<float> buffer_resamp[3*frame_len];
@@ -155,13 +162,6 @@ int main (int argc, char **argv)
     unsigned char payload[64];
 
     unsigned int j, pid=0;
-
-    // set up the metadta flags
-    std::vector<std::complex<float> > buff(2*frame_len);
-    uhd::tx_metadata_t md;
-    md.start_of_burst = false;  // never SOB when continuous
-    md.end_of_burst   = false;  // 
-    md.has_time_spec  = false;  // set to false to send immediately
 
     // compute frame time
     double frame_time = (double)frame_len / bandwidth;

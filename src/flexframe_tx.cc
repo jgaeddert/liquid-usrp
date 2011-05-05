@@ -27,9 +27,7 @@
 #include <getopt.h>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
- 
-#define USRP_CHANNEL        (0)
+#include <uhd/usrp/single_usrp.hpp>
 
 void usage() {
     printf("flexframe_tx:\n");
@@ -126,14 +124,47 @@ int main (int argc, char **argv)
     printf("tx gain     :   %12.8f [dB]\n", txgain_dB);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    // create usrp_io object and set properties
-    usrp_io * uio = new usrp_io();
-    uio->set_tx_freq(USRP_CHANNEL, frequency);
-    uio->set_tx_samplerate(2.0f*bandwidth);
-    uio->enable_auto_tx(USRP_CHANNEL);
+    uhd::device_addr_t dev_addr;
+    //dev_addr["addr0"] = "192.168.10.2";
+    //dev_addr["addr1"] = "192.168.10.3";
+    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
 
-    // retrieve tx port
-    gport port_tx = uio->get_tx_port(USRP_CHANNEL);
+    // set properties
+    double tx_rate = 4.0*bandwidth;
+#if 0
+    usrp->set_tx_rate(tx_rate);
+#else
+    // NOTE : the sample rate computation MUST be in double precision so
+    //        that the UHD can compute its interpolation rate properly
+    unsigned int interp_rate = (unsigned int)(64e6 / tx_rate);
+    // ensure multiple of 4
+    interp_rate = (interp_rate >> 2) << 2;
+    // NOTE : there seems to be a bug where if the interp rate is equal to
+    //        240 or 244 we get some weird warning saying that
+    //        "The hardware does not support the requested TX sample rate"
+    while (interp_rate == 240 || interp_rate == 244)
+        interp_rate -= 4;
+    // compute usrp sampling rate
+    double usrp_tx_rate = 64e6 / (double)interp_rate;
+    //usrp_tx_rate = 262295.081967213;
+    // compute arbitrary resampling rate
+    double tx_resamp_rate = usrp_tx_rate / tx_rate;
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
+            tx_rate * 1e-3f,
+            usrp_tx_rate * 1e-3f,
+            1.0 / tx_resamp_rate,
+            interp_rate);
+
+    usrp->set_tx_rate(usrp_tx_rate);
+#endif
+    usrp->set_tx_freq(frequency);
+    usrp->set_tx_gain(-40);
+    // set the IF filter bandwidth
+    //usrp->set_tx_bandwidth(2.0f*tx_rate);
+
+    // add arbitrary resampling component
+    resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,37,0.4f,60.0f,64);
+    resamp_crcf_setrate(resamp, tx_resamp_rate);
 
     // create flexframegen object
     flexframegenprops_s fgprops;
@@ -148,27 +179,37 @@ int main (int argc, char **argv)
     flexframegen fg = flexframegen_create(&fgprops);
     flexframegen_print(fg);
 
+    // set up the metadta flags
+    uhd::tx_metadata_t md;
+    md.start_of_burst = false;  // never SOB when continuous
+    md.end_of_burst   = false;  // 
+    md.has_time_spec  = false;  // set to false to send immediately
 
     // framing buffers
     unsigned int frame_len = flexframegen_getframelen(fg);
     std::complex<float> frame[frame_len];
-    std::complex<float> mfbuffer[2*frame_len];
+#if 0
+    std::complex<float> buffer_interp[64];  // matched-filter interpolator (interp by 4)
+    std::complex<float> buffer_resamp[128]; // resampler
+#else
+    std::complex<float> buffer_interp[4*frame_len];  // matched-filter interpolator (interp by 4)
+    std::complex<float> buffer_resamp[6*frame_len]; // resampler
+    std::vector<std::complex<float> > buff(6*frame_len);
+#endif
 
     printf("frame length        :   %u\n", frame_len);
 
     unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(4*frame_len));
 
     // create pulse-shaping interpolator
+    unsigned int k=4;
     unsigned int m=3;
     float beta=0.7f;
-    interp_crcf mfinterp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,2,m,beta,0);
+    interp_crcf mfinterp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,k,m,beta,0);
 
     // data buffers
     unsigned char header[9];
     unsigned char payload[payload_len];
-
-    // start usrp data transfer
-    uio->start_tx(USRP_CHANNEL);
 
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/10.0f);
@@ -195,30 +236,55 @@ int main (int argc, char **argv)
             flexframegen_execute(fg, header, payload, frame);
 
             // interpolate using matched filter
-            for (j=0; j<frame_len; j++) {
-                frame[j] *= g;
-                std::complex<float> x = j<frame_len ? frame[j] : 0.0f;
-                interp_crcf_execute(mfinterp, x, &mfbuffer[2*j]);
-            }
-
+            for (j=0; j<frame_len; j++)
+                interp_crcf_execute(mfinterp, g*frame[j], &buffer_interp[4*j]);
+            
         } else {
             // flush interpolator with zeros
             for (j=0; j<frame_len; j++)
-                interp_crcf_execute(mfinterp, 0.0f, &mfbuffer[2*j]);
+                interp_crcf_execute(mfinterp, 0.0f, &buffer_interp[4*j]);
         }
 
-        // send data to usrp via port
-        gport_produce(port_tx,(void*)mfbuffer,2*frame_len);
+        // run resampler
+        unsigned int n=0;
+        unsigned int nw;
+        for (j=0; j<4*frame_len; j++) {
+            resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
+            n += nw;
+        }
+
+        //printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
+        buff.resize(n);
+        for (j=0; j<n; j++) {
+            buff[j] = buffer_interp[j];
+        }
+
+        //send the entire contents of the buffer
+        usrp->get_device()->send(
+            &buff.front(), buff.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
+
  
     }
  
- 
-    uio->stop_tx(USRP_CHANNEL);  // Stop data transfer
+    // send a mini EOB packet
+    md.start_of_burst = false;
+    md.end_of_burst   = true;
+    usrp->get_device()->send("", 0, md,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
 
+    //finished
+    printf("usrp data transfer complete\n");
+
+ 
     // clean it up
     flexframegen_destroy(fg);
     interp_crcf_destroy(mfinterp);
-    delete uio;
+    resamp_crcf_destroy(resamp);
     return 0;
 }
 
