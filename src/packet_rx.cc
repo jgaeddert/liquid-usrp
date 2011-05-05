@@ -147,7 +147,7 @@ int main (int argc, char **argv)
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(20);
 
-    // TODO : add arbitrary resampling component
+    // add arbitrary resampling component
     resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,37,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, rx_resamp_rate);
 

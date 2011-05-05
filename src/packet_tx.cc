@@ -46,13 +46,13 @@ int main (int argc, char **argv)
     // command-line options
     bool verbose = true;
 
-    float min_bandwidth = (64e6 / 512.0);
-    float max_bandwidth = (64e6 /   4.0);
+    double min_bandwidth = (64e6 / 512.0);
+    double max_bandwidth = (64e6 /   4.0);
 
-    float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
-    float num_seconds = 5.0f;
-    float txgain_dB = -3.0f;
+    double frequency = 462.0e6;
+    double bandwidth = min_bandwidth;
+    double num_seconds = 5.0f;
+    double txgain_dB = -3.0f;
 
     unsigned int packet_spacing=1;
 
@@ -94,30 +94,46 @@ int main (int argc, char **argv)
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     // set properties
-    float tx_rate = 2.0f*bandwidth;
-#if 1
+    double tx_rate = 4.0*bandwidth;
+#if 0
     usrp->set_tx_rate(tx_rate);
 #else
     // NOTE : the sample rate computation MUST be in double precision so
-    //        that the UHD can compute its decimation rate properly
-    unsigned int decim_rate = (unsigned int)(64e6 / tx_rate);
-    // ensure multiple of 2
-    decim_rate = (decim_rate >> 1) << 1;
+    //        that the UHD can compute its interpolation rate properly
+    unsigned int interp_rate = (unsigned int)(64e6 / tx_rate);
+    // ensure multiple of 4
+    interp_rate = (interp_rate >> 2) << 2;
+    // NOTE : there seems to be a bug where if the interp rate is equal to
+    //        240 or 244 we get some weird warning saying that
+    //        "The hardware does not support the requested TX sample rate"
+    while (interp_rate == 240 || interp_rate == 244)
+        interp_rate -= 4;
     // compute usrp sampling rate
-    double usrp_tx_rate = 64e6 / (float)decim_rate;
+    double usrp_tx_rate = 64e6 / (double)interp_rate;
+    //usrp_tx_rate = 262295.081967213;
     // compute arbitrary resampling rate
-    double tx_resamp_rate = tx_rate / usrp_tx_rate;
-    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
+    double tx_resamp_rate = usrp_tx_rate / tx_rate;
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
             tx_rate * 1e-3f,
             usrp_tx_rate * 1e-3f,
-            tx_resamp_rate,
-            decim_rate);
+            1.0 / tx_resamp_rate,
+            interp_rate);
+
     usrp->set_tx_rate(usrp_tx_rate);
 #endif
     usrp->set_tx_freq(frequency);
-    usrp->set_tx_gain(-20);
+    usrp->set_tx_gain(-40);
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
+
+    //assert(tx_resamp_rate <= 1.0);
+
+    // add arbitrary resampling component
+    resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,37,0.4f,60.0f,64);
+    resamp_crcf_setrate(resamp, tx_resamp_rate);
+
+    // half-band resampler
+    resamp2_crcf interp = resamp2_crcf_create(41,0.0f,40.0f);
 
     // framegen parameters
     //unsigned int k=2; // samples per symbol
@@ -130,6 +146,8 @@ int main (int argc, char **argv)
     // framing
     unsigned int frame_len = 1280;
     std::complex<float> frame[frame_len];
+    std::complex<float> buffer_interp[2*frame_len];
+    std::complex<float> buffer_resamp[3*frame_len];
     framegen64 framegen = framegen64_create(m,beta);
 
     // data buffers
@@ -139,7 +157,7 @@ int main (int argc, char **argv)
     unsigned int j, pid=0;
 
     // set up the metadta flags
-    std::vector<std::complex<float> > buff(frame_len);
+    std::vector<std::complex<float> > buff(2*frame_len);
     uhd::tx_metadata_t md;
     md.start_of_burst = false;  // never SOB when continuous
     md.end_of_burst   = false;  // 
@@ -154,7 +172,8 @@ int main (int argc, char **argv)
     unsigned int num_blocks = (unsigned int)((tx_rate*num_seconds)/(frame_len));
     for (i=0; i<num_blocks; i++) {
         // generate the frame / transmit silence
-        if ((i%(packet_spacing+1))==0) {
+        //if ((i%(packet_spacing+1))==0) {
+        if (1) {
             // generate random data
             for (j=0; j<24; j++)    header[j]  = rand() % 256;
             for (j=0; j<64; j++)    payload[j] = rand() % 256;
@@ -165,16 +184,34 @@ int main (int argc, char **argv)
             pid = (pid+1) & 0xffff;
 
             framegen64_execute(framegen, header, payload, frame);
+
         } else {
             // fill buffer with zeros
             // TODO : only transmit with valid frame data
             for (j=0; j<frame_len; j++)
-                buff[j] = 0.0f;
+                frame[j] = 0.0f;
         }
 
-        // apply gain, copy to vector (fill the buffer)
-        for (j=0; j<frame_len; j++)
-            buff[j] = g*frame[j];
+        // resample, apply gain, copy to vector (fill the buffer)
+        unsigned int nw;
+        unsigned int n = 0;
+        for (j=0; j<frame_len; j++) {
+            //
+            resamp_crcf_execute(resamp, frame[j], &buffer_resamp[n], &nw);
+            n += nw;
+        }
+        
+        // interpolate by 2
+        for (j=0; j<n; j++) {
+            //
+            resamp2_crcf_interp_execute(interp, buffer_resamp[j], &buffer_interp[2*j]);
+        }
+        
+        //printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
+        buff.resize(2*n);
+        for (j=0; j<2*n; j++) {
+            buff[j] = g*buffer_interp[j];
+        }
 
         //send the entire contents of the buffer
         usrp->get_device()->send(
@@ -198,6 +235,8 @@ int main (int argc, char **argv)
 
     // clean it up
     framegen64_destroy(framegen);
+    resamp_crcf_destroy(resamp);
+    resamp2_crcf_destroy(interp);
     return 0;
 }
 
