@@ -58,6 +58,7 @@ ARFLAGS		= r
 example_src	:=			\
 	src/packet_rx.cc		\
 	src/packet_tx.cc		\
+	src/ofdmframe_rx.cc		\
 
 #	src/crdemo.cc
 #	src/usrp_init_test.cc
@@ -74,7 +75,6 @@ example_src	:=			\
 #	src/iqpr_test.cc
 #	src/ping.cc
 #	src/ofdmframe_tx.cc
-#	src/ofdmframe_rx.cc
 #	src/ofdmoqamframe_tx.cc
 #	src/ofdmoqamframe_rx.cc
 #	src/packetstream_rx.cc

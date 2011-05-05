@@ -26,9 +26,7 @@
 #include <getopt.h>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
- 
-#define USRP_CHANNEL    (0)
+#include <uhd/usrp/single_usrp.hpp>
  
 static bool verbose;
 
@@ -124,12 +122,12 @@ int main (int argc, char **argv)
     // command-line options
     verbose = false;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    double min_bandwidth = (32e6 / 256.0);
+    double max_bandwidth = (32e6 /   2.0);
 
-    float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
-    float num_seconds = 5.0f;
+    double frequency = 462.0e6;
+    double bandwidth = min_bandwidth;
+    double num_seconds = 5.0f;
 
     // 
     unsigned int M = 64;                // number of subcarriers
@@ -178,21 +176,51 @@ int main (int argc, char **argv)
         exit(1);
     }
 
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+
+    stream_cmd.stream_now = true;
+
+    uhd::device_addr_t dev_addr;
+    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
+
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    unsigned int rx_buffer_length = 512;
-    unsigned int num_blocks = (unsigned int)((2.0f*2.0f*bandwidth*num_seconds)/(2*rx_buffer_length));
+    // set properties
+    double rx_rate = 4.0f*bandwidth;
+#if 0
+    usrp->set_rx_rate(rx_rate);
+#else
+    // NOTE : the sample rate computation MUST be in double precision so
+    //        that the UHD can compute its decimation rate properly
+    unsigned int decim_rate = (unsigned int)(64e6 / rx_rate);
+    // ensure multiple of 2
+    decim_rate = (decim_rate >> 1) << 1;
+    // compute usrp sampling rate
+    double usrp_rx_rate = 64e6 / (float)decim_rate;
+    // compute arbitrary resampling rate
+    double rx_resamp_rate = rx_rate / usrp_rx_rate;
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
+            rx_rate * 1e-3f,
+            usrp_rx_rate * 1e-3f,
+            rx_resamp_rate,
+            decim_rate);
+    usrp->set_rx_rate(usrp_rx_rate);
+#endif
+    usrp->set_rx_freq(frequency);
+    usrp->set_rx_gain(40);
 
-    // create usrp_io object and set properties
-    usrp_io * uio = new usrp_io();
-    uio->set_rx_freq(USRP_CHANNEL, frequency);
-    uio->set_rx_samplerate(2.0f*2.0f*bandwidth);
-    uio->enable_auto_tx(USRP_CHANNEL);
+    // add arbitrary resampling block
+    resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,37,0.4f,60.0f,64);
+    resamp_crcf_setrate(resamp, rx_resamp_rate);
 
-    // retrieve rx port
-    gport port_rx = uio->get_rx_port(USRP_CHANNEL);
+    const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
+    unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
+
+    //allocate recv buffer and metatdata
+    uhd::rx_metadata_t md;
+    std::vector<std::complex<float> > buff(max_samps_per_packet);
 
     // half-band decimator
     resamp2_crcf decim = resamp2_crcf_create(41,0.0f,40.0f);
@@ -242,19 +270,74 @@ int main (int argc, char **argv)
     userdata.num_valid_packets_received = 0;
     userdata.num_valid_bytes_received = 0;
 
-    std::complex<float> data_rx[2*rx_buffer_length];
-
     // start data transfer
-    uio->start_rx(USRP_CHANNEL);
-    // consume first few blocks to allow hardware to settle
-    gport_consume(port_rx,(void*)data_rx,rx_buffer_length);
+    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    unsigned int n;
-    for (n=0; n<num_blocks; n++) {
+    std::complex<float> data_rx[3*max_samps_per_packet];
+    std::complex<float> data_decim[3*max_samps_per_packet];
+    std::complex<float> data_resamp[3*max_samps_per_packet];
+ 
+    unsigned int n=0;
+    for (i=0; i<num_blocks; i++) {
         // grab data from port
-        gport_consume(port_rx,(void*)data_rx,2*rx_buffer_length);
+        size_t num_rx_samps = usrp->get_device()->recv(
+            &buff.front(), buff.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::RECV_MODE_ONE_PACKET
+        );
 
+        //handle the error codes
+        switch(md.error_code){
+        case uhd::rx_metadata_t::ERROR_CODE_NONE:
+        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+            break;
+
+        default:
+            std::cerr << "Error code: " << md.error_code << std::endl;
+            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+            return 1;
+        }
+
+        // for now copy vector "buff" to array of complex float
+        // TODO : apply bandwidth-dependent gain
+        unsigned int j;
+        unsigned int nw=0;
+        for (j=0; j<num_rx_samps; j++) {
+#if 0
+            //data_rx[j] = buff[j];
+            std::complex<float> sample = buff[j];
+            resamp_crcf_execute(resamp, sample, &data_rx[n], &nw);
+            n += nw;
+#endif
+            // push 512 samples into buffer
+            data_rx[n++] = buff[j];
+
+            if (n==512) {
+                // reset counter
+                n=0;
+
+                // decimate to 256
+                unsigned int k;
+                for (k=0; k<256; k++)
+                    resamp2_crcf_decim_execute(decim, &data_rx[2*k], &data_decim[k]);
+
+                // apply resampler
+                for (k=0; k<256; k++) {
+                    resamp_crcf_execute(resamp, data_decim[k], &data_resamp[n], &nw);
+                    n += nw;
+                }
+
+                // push through synchronizer
+                ofdmframesync_execute(fs, data_resamp, n);
+
+                // reset counter (again)
+                n = 0;
+            }
+
+        }
+
+#if 0
         for (i=0; i<rx_buffer_length; i++) {
             // push through half-band decimator
             std::complex<float>decim_out;
@@ -263,12 +346,15 @@ int main (int argc, char **argv)
             // run through ofdm frame synchronizer
             ofdmframesync_execute(fs, &decim_out, 1);
         }
+#endif
     }
  
- 
-    uio->stop_rx(USRP_CHANNEL);  // Stop data transfer
+    // stop data transfer
+    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+    printf("\n");
     printf("usrp data transfer complete\n");
 
+ 
     // print results
     float data_rate = userdata.num_valid_bytes_received * 8.0f / num_seconds;
     float percent_valid = (userdata.num_packets_received == 0) ?
@@ -279,12 +365,12 @@ int main (int argc, char **argv)
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
     // destroy objects
+    resamp_crcf_destroy(resamp);
     resamp2_crcf_destroy(decim);
     bpacketsync_destroy(ps);
     modem_destroy(demod);
     ofdmframesync_destroy(fs);
 
-    delete uio;
     return 0;
 }
 
