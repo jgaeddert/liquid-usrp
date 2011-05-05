@@ -26,14 +26,7 @@
 #include <sys/resource.h>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
-
-#include "config.h"
-#if HAVE_LIBLIQUIDRM
-#include <liquid/liquidrm.h>
-#endif
- 
-#define USRP_CHANNEL        (0)
+#include <uhd/usrp/single_usrp.hpp>
  
 static bool verbose;
 static unsigned int num_packets_received;
@@ -143,16 +136,50 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    unsigned int num_blocks = (unsigned int)((2.0f*bandwidth*num_seconds)/(512));
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
-    // create usrp_io object and set properties
-    usrp_io * uio = new usrp_io();
-    uio->set_rx_freq(USRP_CHANNEL, frequency);
-    uio->set_rx_samplerate(2.0f*bandwidth);
-    uio->enable_auto_tx(USRP_CHANNEL);
+    stream_cmd.stream_now = true;
 
-    // retrieve rx port
-    gport port_rx = uio->get_rx_port(USRP_CHANNEL);
+    uhd::device_addr_t dev_addr;
+    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
+
+    // set properties
+    float rx_rate = 4.0f*bandwidth;
+#if 0
+    usrp->set_rx_rate(rx_rate);
+#else
+    // NOTE : the sample rate computation MUST be in double precision so
+    //        that the UHD can compute its decimation rate properly
+    unsigned int decim_rate = (unsigned int)(64e6 / rx_rate);
+    // ensure multiple of 2
+    decim_rate = (decim_rate >> 1) << 1;
+    // compute usrp sampling rate
+    double usrp_rx_rate = 64e6 / (float)decim_rate;
+    // compute arbitrary resampling rate
+    double rx_resamp_rate = rx_rate / usrp_rx_rate;
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
+            rx_rate * 1e-3f,
+            usrp_rx_rate * 1e-3f,
+            rx_resamp_rate,
+            decim_rate);
+    usrp->set_rx_rate(usrp_rx_rate);
+#endif
+    usrp->set_rx_freq(frequency);
+    usrp->set_rx_gain(20);
+
+    // add arbitrary resampling component
+    resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,37,0.4f,60.0f,64);
+    resamp_crcf_setrate(resamp, rx_resamp_rate);
+
+    // half-band resampler
+    resamp2_crcf decim = resamp2_crcf_create(41,0.0f,40.0f);
+
+    const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
+    unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
+
+    //allocate recv buffer and metatdata
+    uhd::rx_metadata_t md;
+    std::vector<std::complex<float> > buff(max_samps_per_packet);
 
     num_packets_received = 0;
     num_valid_packets_received = 0;
@@ -175,51 +202,80 @@ int main (int argc, char **argv)
 #endif
     flexframesync fs = flexframesync_create(&props,callback,NULL);
 
-    std::complex<float> data_rx[512];
+    std::complex<float> data_rx[64];
+    std::complex<float> data_decim[32];
+    std::complex<float> data_resamp[64];
 
-#if HAVE_LIBLIQUIDRM
-    // test r/m daemon
-    rmdaemon rmd = rmdaemon_create();
-    rmdaemon_start(rmd);
-#endif
- 
-    // start usrp data transfer
-    uio->start_rx(USRP_CHANNEL);
+
+    // start data transfer
+    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
     unsigned int i;
-    struct rusage start;
-    struct rusage finish;
-    getrusage(RUSAGE_SELF, &start);
-    // read samples from buffer, run through frame synchronizer
+    unsigned int n=0;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
-        gport_consume(port_rx, (void*)data_rx, 512);
+        size_t num_rx_samps = usrp->get_device()->recv(
+            &buff.front(), buff.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::RECV_MODE_ONE_PACKET
+        );
 
-        // run through frame synchronizer
-        flexframesync_execute(fs, data_rx, 512);
+        //handle the error codes
+        switch(md.error_code){
+        case uhd::rx_metadata_t::ERROR_CODE_NONE:
+        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+            break;
 
-#if HAVE_LIBLIQUIDRM
-        // compute cpu load
-        double runtime = rmdaemon_gettime(rmd);
-        if ( runtime > 0.7 ) {
-            double cpuload = rmdaemon_getcpuload(rmd);
-            rmdaemon_resettimer(rmd);
-            printf("  cpuload : %f\n", cpuload);
+        default:
+            std::cerr << "Error code: " << md.error_code << std::endl;
+            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+            return 1;
         }
-#endif
+
+        if (not md.has_time_spec){
+            std::cerr << "Metadata missing time spec, exit test..." << std::endl;
+            return 1;
+        }
+
+        // for now copy vector "buff" to array of complex float
+        // TODO : apply bandwidth-dependent gain
+        unsigned int j;
+        unsigned int nw=0;
+        for (j=0; j<num_rx_samps; j++) {
+            // push 64 samples into buffer
+            data_rx[n++] = buff[j];
+
+            if (n==64) {
+                // reset counter
+                n=0;
+
+                // deimate to 32
+                unsigned int k;
+                for (k=0; k<32; k++)
+                    resamp2_crcf_decim_execute(decim, &data_rx[2*k], &data_decim[k]);
+
+                // apply resampler
+                for (k=0; k<32; k++) {
+                    resamp_crcf_execute(resamp, data_decim[k], &data_resamp[n], &nw);
+                    n += nw;
+                }
+
+                // push through synchronizer
+                flexframesync_execute(fs, data_resamp, n);
+
+                // reset counter (again)
+                n = 0;
+            }
+
+        }
+
     }
-    getrusage(RUSAGE_SELF, &finish);
+ 
 
-#if HAVE_LIBLIQUIDRM
-    rmdaemon_stop(rmd);
-    rmdaemon_destroy(rmd);
-#endif
-
-    double extime = calculate_execution_time(start,finish);
-
-    // stop usrp data transfer
-    uio->stop_rx(USRP_CHANNEL);
+    // stop data transfer
+    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+    printf("\n");
     printf("usrp data transfer complete\n");
 
     // print results
@@ -243,15 +299,6 @@ int main (int argc, char **argv)
     printf("    bytes_received      : %6u\n", num_bytes_received);
     printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
     printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
-    printf("    execution time      : %12.8f s\n", extime);
-    printf("    %% cpu               : %12.8f\n", 100.0f*extime / num_seconds);
-    printf("    clock cycles / bit  : ");
-    if (num_bytes_received == 0)
-        printf("-\n");
-    else
-        printf("%12.4e\n", cpu_speed * extime / (8.0f*num_bytes_received));
-
-    printf("%12.8f %11.4e\n", spectral_efficiency, cpu_speed * extime / (8.0f*num_bytes_received));
 
 #if 0
     printf("    # rx   # ok      %% ok        # data     %% data       PER          SNR      sp. eff.\n");
@@ -268,8 +315,9 @@ int main (int argc, char **argv)
 
     // clean it up
     flexframesync_destroy(fs);
+    resamp_crcf_destroy(resamp);
+    resamp2_crcf_destroy(decim);
 
-    delete uio;
     return 0;
 }
 
