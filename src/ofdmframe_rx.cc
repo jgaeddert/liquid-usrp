@@ -274,9 +274,9 @@ int main (int argc, char **argv)
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    std::complex<float> data_rx[3*max_samps_per_packet];
-    std::complex<float> data_decim[3*max_samps_per_packet];
-    std::complex<float> data_resamp[3*max_samps_per_packet];
+    std::complex<float> data_rx[64];
+    std::complex<float> data_decim[32];
+    std::complex<float> data_resamp[64];
  
     unsigned int n=0;
     for (i=0; i<num_blocks; i++) {
@@ -310,20 +310,20 @@ int main (int argc, char **argv)
             resamp_crcf_execute(resamp, sample, &data_rx[n], &nw);
             n += nw;
 #endif
-            // push 512 samples into buffer
+            // push 64 samples into buffer
             data_rx[n++] = buff[j];
 
-            if (n==512) {
+            if (n==64) {
                 // reset counter
                 n=0;
 
-                // decimate to 256
+                // decimate to 32
                 unsigned int k;
-                for (k=0; k<256; k++)
+                for (k=0; k<32; k++)
                     resamp2_crcf_decim_execute(decim, &data_rx[2*k], &data_decim[k]);
 
                 // apply resampler
-                for (k=0; k<256; k++) {
+                for (k=0; k<32; k++) {
                     resamp_crcf_execute(resamp, data_decim[k], &data_resamp[n], &nw);
                     n += nw;
                 }
