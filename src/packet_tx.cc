@@ -172,8 +172,7 @@ int main (int argc, char **argv)
     unsigned int num_blocks = (unsigned int)((tx_rate*num_seconds)/(frame_len));
     for (i=0; i<num_blocks; i++) {
         // generate the frame / transmit silence
-        //if ((i%(packet_spacing+1))==0) {
-        if (1) {
+        if ((i%(packet_spacing+1))==0) {
             // generate random data
             for (j=0; j<24; j++)    header[j]  = rand() % 256;
             for (j=0; j<64; j++)    payload[j] = rand() % 256;
