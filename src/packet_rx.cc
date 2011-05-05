@@ -124,7 +124,7 @@ int main (int argc, char **argv)
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     // set properties
-    float rx_rate = 2.0f*bandwidth;
+    float rx_rate = 4.0f*bandwidth;
 #if 0
     usrp->set_rx_rate(rx_rate);
 #else
@@ -150,6 +150,9 @@ int main (int argc, char **argv)
     // add arbitrary resampling component
     resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,37,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, rx_resamp_rate);
+
+    // half-band resampler
+    resamp2_crcf decim = resamp2_crcf_create(41,0.0f,40.0f);
 
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
     unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
@@ -183,13 +186,16 @@ int main (int argc, char **argv)
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    std::complex<float> data_rx[max_samps_per_packet];
+    std::complex<float> data_rx[64];
+    std::complex<float> data_decim[32];
+    std::complex<float> data_resamp[64];
 
     // reset counter
     num_packets_received = 0;
     num_valid_packets_received = 0;
 
     unsigned int i;
+    unsigned int n=0;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
         size_t num_rx_samps = usrp->get_device()->recv(
@@ -218,17 +224,35 @@ int main (int argc, char **argv)
         // for now copy vector "buff" to array of complex float
         // TODO : apply bandwidth-dependent gain
         unsigned int j;
-        unsigned int n=0;
         unsigned int nw=0;
         for (j=0; j<num_rx_samps; j++) {
-            //data_rx[j] = buff[j];
-            std::complex<float> sample = buff[j];
-            resamp_crcf_execute(resamp, sample, &data_rx[n], &nw);
-            n += nw;
+            // push 64 samples into buffer
+            data_rx[n++] = buff[j];
+
+            if (n==64) {
+                // reset counter
+                n=0;
+
+                // deimate to 32
+                unsigned int k;
+                for (k=0; k<32; k++)
+                    resamp2_crcf_decim_execute(decim, &data_rx[2*k], &data_decim[k]);
+
+                // apply resampler
+                for (k=0; k<32; k++) {
+                    resamp_crcf_execute(resamp, data_decim[k], &data_resamp[n], &nw);
+                    n += nw;
+                }
+
+                // push through synchronizer
+                framesync64_execute(framesync, data_resamp, n);
+
+                // reset counter (again)
+                n = 0;
+            }
+
         }
 
-        // run through frame synchronizer
-        framesync64_execute(framesync, data_rx, n);
     }
  
     // stop data transfer
@@ -248,6 +272,7 @@ int main (int argc, char **argv)
     // clean it up
     framesync64_destroy(framesync);
     resamp_crcf_destroy(resamp);
+    resamp2_crcf_destroy(decim);
 
     std::cout << std::endl << std::endl;
     return 0;
