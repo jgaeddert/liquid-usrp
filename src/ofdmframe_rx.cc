@@ -122,8 +122,8 @@ int main (int argc, char **argv)
     // command-line options
     verbose = false;
 
-    double min_bandwidth = (32e6 / 256.0);
-    double max_bandwidth = (32e6 /   2.0);
+    double min_bandwidth = 0.25*(64e6 / 512.0);
+    double max_bandwidth = 0.25*(64e6 /   4.0);
 
     double frequency = 462.0e6;
     double bandwidth = min_bandwidth;
