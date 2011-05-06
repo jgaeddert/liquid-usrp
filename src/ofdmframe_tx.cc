@@ -26,9 +26,7 @@
 #include <getopt.h>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
- 
-#define USRP_CHANNEL        (0)
+#include <uhd/usrp/single_usrp.hpp>
 
 void usage() {
     printf("ofdmframe_tx -- transmit OFDM packets\n");
@@ -53,11 +51,11 @@ int main (int argc, char **argv)
     // command-line options
     bool verbose = true;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    double min_bandwidth = 0.25*(64e6 / 512.0);
+    double max_bandwidth = 0.25*(64e6 /   4.0);
 
-    float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
+    double frequency = 462.0e6;
+    double bandwidth = min_bandwidth;
     //float num_seconds = 5.0f;
 
     unsigned int M = 64;                // number of subcarriers
@@ -71,6 +69,8 @@ int main (int argc, char **argv)
     crc_scheme check = LIQUID_CRC_32;          // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;         // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_HAMMING128;   // fec (outer)
+
+    double txgain_dB = -3.0f;
 
     //
     int d;
@@ -117,9 +117,55 @@ int main (int argc, char **argv)
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
-    // 
-    //unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(512));
+    uhd::device_addr_t dev_addr;
+    //dev_addr["addr0"] = "192.168.10.2";
+    //dev_addr["addr1"] = "192.168.10.3";
+    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
 
+    // set properties
+    double tx_rate = 4.0*bandwidth;
+#if 0
+    usrp->set_tx_rate(tx_rate);
+#else
+    // NOTE : the sample rate computation MUST be in double precision so
+    //        that the UHD can compute its interpolation rate properly
+    unsigned int interp_rate = (unsigned int)(64e6 / tx_rate);
+    // ensure multiple of 4
+    interp_rate = (interp_rate >> 2) << 2;
+    // NOTE : there seems to be a bug where if the interp rate is equal to
+    //        240 or 244 we get some weird warning saying that
+    //        "The hardware does not support the requested TX sample rate"
+    while (interp_rate == 240 || interp_rate == 244)
+        interp_rate -= 4;
+    // compute usrp sampling rate
+    double usrp_tx_rate = 64e6 / (double)interp_rate;
+    //usrp_tx_rate = 262295.081967213;
+    // compute arbitrary resampling rate
+    double tx_resamp_rate = usrp_tx_rate / tx_rate;
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
+            tx_rate * 1e-3f,
+            usrp_tx_rate * 1e-3f,
+            1.0 / tx_resamp_rate,
+            interp_rate);
+
+    usrp->set_tx_rate(usrp_tx_rate);
+#endif
+    usrp->set_tx_freq(frequency);
+    usrp->set_tx_gain(-40);
+    // set the IF filter bandwidth
+    //usrp->set_tx_bandwidth(2.0f*tx_rate);
+
+
+    // add arbitrary resampling component
+    resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,64);
+    resamp_crcf_setrate(resamp, tx_resamp_rate);
+
+    // half-band resampler
+    resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
+
+    // transmitter gain (linear)
+    float g = powf(10.0f, txgain_dB/10.0f);
+ 
 
     // initialize subcarrier allocation
     unsigned int p[M];
@@ -183,6 +229,14 @@ int main (int argc, char **argv)
     std::complex<float> S1[M];          // PLCP sequence (long)
     std::complex<float> y[M+cp_len];    // output time series
 
+    // full frame
+    unsigned int frame_len = num_symbols_S0 * M +
+                             num_symbols_S1 * M + cp_len +
+                             num_symbols_data*(M+cp_len);
+    std::complex<float> frame[frame_len];
+    std::complex<float> buffer_interp[2*frame_len];
+    std::complex<float> buffer_resamp[3*frame_len];
+
     // initialize sequence arrays
     ofdmframegen_write_S0(fg, S0);
     ofdmframegen_write_S1(fg, S1);
@@ -190,44 +244,46 @@ int main (int argc, char **argv)
     // create modem
     modem mod = modem_create(ms,bps);
 
-    unsigned int j;
-    unsigned int n;
+    // set up the metadta flags
+    std::vector<std::complex<float> > buff(M+cp_len);
+    uhd::tx_metadata_t md;
+    md.start_of_burst = false;  // never SOB when continuous
+    md.end_of_burst   = false;  // 
+    md.has_time_spec  = false;  // set to false to send immediately
 
-    // create usrp_io object and set properties
-    usrp_io * uio = new usrp_io();
-    uio->set_tx_freq(0, frequency);
-    uio->set_tx_samplerate(2.0f*bandwidth);
-    uio->set_tx_gain(0, 0.1f);
-    uio->enable_auto_tx(0);
-
-    // retrieve tx port from usrp_io object
-    gport port_tx = uio->get_tx_port(0);
-
-    // start USRP data transfer
-    uio->start_tx(0);
     unsigned int num_frames = -1;
 
+    unsigned int j;
+    unsigned int k;
+    unsigned int n=0;
     for (i=0; i<num_frames; i++) {
 
         //
         // preamble
         //
+        n=0;
 
         // write short sequence(s)
-        for (n=0; n<num_symbols_S0; n++)
-            gport_produce(port_tx, (void*)S0, M);
+        for (j=0; j<num_symbols_S0; j++) {
+            memmove(&frame[n], S0, M*sizeof(std::complex<float>));
+            n += M;
+        }
 
         // write long sequence extension
-        gport_produce(port_tx, (void*)( &S1[M-cp_len] ), cp_len);
+        memmove(&frame[n], &S1[M-cp_len], cp_len*sizeof(std::complex<float>));
+        n += cp_len;
 
         // write long sequence(s)
-        for (n=0; n<num_symbols_S1; n++)
-            gport_produce(port_tx, (void*)S1, M);
+        for (j=0; j<num_symbols_S1; j++) {
+            memmove(&frame[n], S1, M*sizeof(std::complex<float>));
+            n += M;
+        }
 
         //
         // payload
         //
-        
+
+#if 0
         // payload modem symbol counter
         unsigned int k=0;           // modem symbol counter
         unsigned int num_packets=0; // packet counter
@@ -285,25 +341,64 @@ int main (int argc, char **argv)
 
             gport_produce(port_tx, (void*)y, M+cp_len);
         }
+#endif
 
-        // flush with zeros
-        //for (n=0; n<M+cp_len; n++)
+        for (j=n; j<frame_len; j++)
+            frame[j] = 0.0f;
+
+        // interpolate by 2
+        for (j=0; j<frame_len; j++) {
+            //
+            resamp2_crcf_interp_execute(interp, frame[j], &buffer_interp[2*j]);
+        }
+        
+        // resample
+        unsigned int nw;
+        n=0;
+        for (j=0; j<2*frame_len; j++) {
+            resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
+            n += nw;
+        }
+
+        printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
+        buff.resize(n);
+        for (j=0; j<n; j++) {
+            buff[j] = g*buffer_resamp[j];
+        }
+
+        //send the entire contents of the buffer
+        usrp->get_device()->send(
+            &buff.front(), buff.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
 
         // reset frame generator (resets pilot generator, etc.)
         ofdmframegen_reset(fg);
 
+#if 0
         if (verbose)
             printf("frame transmitted %2u / %2u packets\n", num_packets, packets_per_frame);
+#endif
     }
  
-    uio->stop_tx(0);  // Stop data transfer
+    // send a mini EOB packet
+    md.start_of_burst = false;
+    md.end_of_burst   = true;
+    usrp->get_device()->send("", 0, md,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+
+    //finished
     printf("usrp data transfer complete\n");
 
     // clean it up
     ofdmframegen_destroy(fg);
     modem_destroy(mod);
     bpacketgen_destroy(pg);
-    delete uio;
+    resamp2_crcf_destroy(interp);
+    resamp_crcf_destroy(resamp);
     return 0;
 }
 
