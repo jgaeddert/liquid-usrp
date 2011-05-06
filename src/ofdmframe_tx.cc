@@ -255,37 +255,37 @@ int main (int argc, char **argv)
 
     unsigned int j;
     unsigned int k;
-    unsigned int n=0;
+    unsigned int num_samples=0;
     for (i=0; i<num_frames; i++) {
 
         //
         // preamble
         //
-        n=0;
+        num_samples=0;
 
         // write short sequence(s)
         for (j=0; j<num_symbols_S0; j++) {
-            memmove(&frame[n], S0, M*sizeof(std::complex<float>));
-            n += M;
+            memmove(&frame[num_samples], S0, M*sizeof(std::complex<float>));
+            num_samples += M;
         }
 
         // write long sequence extension
-        memmove(&frame[n], &S1[M-cp_len], cp_len*sizeof(std::complex<float>));
-        n += cp_len;
+        memmove(&frame[num_samples], &S1[M-cp_len], cp_len*sizeof(std::complex<float>));
+        num_samples += cp_len;
 
         // write long sequence(s)
         for (j=0; j<num_symbols_S1; j++) {
-            memmove(&frame[n], S1, M*sizeof(std::complex<float>));
-            n += M;
+            memmove(&frame[num_samples], S1, M*sizeof(std::complex<float>));
+            num_samples += M;
         }
 
         //
         // payload
         //
 
-#if 0
         // payload modem symbol counter
         unsigned int k=0;           // modem symbol counter
+        unsigned int n;
         unsigned int num_packets=0; // packet counter
 
         // generate ofdm payload symbols
@@ -339,11 +339,13 @@ int main (int argc, char **argv)
             // generate ofdm payload symbol
             ofdmframegen_writesymbol(fg, X, y);
 
-            gport_produce(port_tx, (void*)y, M+cp_len);
+            //gport_produce(port_tx, (void*)y, M+cp_len);
+            memmove(&frame[num_samples], y, (M+cp_len)*sizeof(std::complex<float>));
+            num_samples += M+cp_len;
         }
-#endif
 
-        for (j=n; j<frame_len; j++)
+        // pad remaining samples with zeros
+        for (j=num_samples; j<frame_len; j++)
             frame[j] = 0.0f;
 
         // interpolate by 2
@@ -360,7 +362,6 @@ int main (int argc, char **argv)
             n += nw;
         }
 
-        printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
         buff.resize(n);
         for (j=0; j<n; j++) {
             buff[j] = g*buffer_resamp[j];
@@ -376,10 +377,8 @@ int main (int argc, char **argv)
         // reset frame generator (resets pilot generator, etc.)
         ofdmframegen_reset(fg);
 
-#if 0
         if (verbose)
             printf("frame transmitted %2u / %2u packets\n", num_packets, packets_per_frame);
-#endif
     }
  
     // send a mini EOB packet
