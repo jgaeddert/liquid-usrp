@@ -290,7 +290,6 @@ int main (int argc, char **argv)
         SNRdB_av /= num_packets_received;
     float PER = 1.0f - 0.01f*percent_packets_valid;
     float spectral_efficiency = data_rate / bandwidth;
-    float cpu_speed = 2.4e9;    // cpu clock frequency (estimate)
     printf("    packets received    : %6u\n", num_packets_received);
     printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
     printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);

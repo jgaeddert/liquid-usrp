@@ -61,7 +61,7 @@ int main (int argc, char **argv)
     unsigned int M = 64;                // number of subcarriers
     unsigned int cp_len = 16;           // cyclic prefix length
     unsigned int num_symbols_S0 = 2;    // number of S0 symbols
-    unsigned int num_symbols_S1 = 2;    // number of S0 symbols
+    unsigned int num_symbols_S1 = 1;    // number of S1 symbols
 
     modulation_scheme ms = LIQUID_MODEM_QAM;     // modulation scheme
     unsigned int bps = 2;               // modulation depth
@@ -254,7 +254,6 @@ int main (int argc, char **argv)
     unsigned int num_frames = -1;
 
     unsigned int j;
-    unsigned int k;
     unsigned int num_samples=0;
     for (i=0; i<num_frames; i++) {
 

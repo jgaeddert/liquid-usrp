@@ -137,7 +137,7 @@ int main (int argc, char **argv)
 
     // framegen parameters
     //unsigned int k=2; // samples per symbol
-    unsigned int m=3; // delay
+    unsigned int m=3; // filter delay
     float beta=0.7f;  // excess bandwidth factor
 
     // transmitter gain (linear)
@@ -166,7 +166,7 @@ int main (int argc, char **argv)
     // compute frame time
     double frame_time = (double)frame_len / bandwidth;
     printf("frame time : %12.8f us\n", frame_time * 1e6f);
-    unsigned long int delay = (unsigned long int)(frame_time*1e6f);
+    //unsigned long int delay = (unsigned long int)(frame_time*1e6f);
 
     unsigned int i;
     unsigned int num_blocks = (unsigned int)((tx_rate*num_seconds)/(frame_len));
