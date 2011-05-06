@@ -20,13 +20,32 @@ http://gnuradio.org/.
 
 Build dependencies
 
-    liquid-dsp  :   liquid digital signal processing library, available
+1.  liquid-dsp  :   liquid digital signal processing library, available
                     from github: http://github.com/jgaeddert/liquid-dsp
+    
+    $ git clone https://jgaeddert@github.com/jgaeddert/liquid-dsp.git
+    $ cd liquid-dsp
+    $ git checkout v1.0.0
+    $ ./reconf
+    $ ./configure
+    $ make
+    $ sudo make install
 
-    uhd         :   universal hardware driver from Ettus research,
+2.  uhd         :   universal hardware driver from Ettus research,
                     available from http://www.ettus.com
 
-Build all the example programs
+    $ git clone git://code.ettus.com/ettus/uhd.git
+    $ cd uhd
+    $ git checkout release_003_000_001
+    $ cd host
+    $ mkdir build
+    $ cd build
+    $ cmake ../
+    $ make
+    $ sudo make install
+
+
+Build all the liquid-usrp example programs
     $ ./reconf
     $ ./configure
     $ make
