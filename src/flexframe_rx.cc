@@ -100,8 +100,8 @@ int main (int argc, char **argv)
     // command-line options
     verbose = true;
 
-    float min_bandwidth = (32e6 / 512.0);
-    float max_bandwidth = (32e6 /   4.0);
+    float min_bandwidth = 0.25f*(64e6 / 256.0);
+    float max_bandwidth = 0.25f*(64e6 /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;

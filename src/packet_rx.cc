@@ -77,8 +77,8 @@ int main (int argc, char **argv)
     // command-line options
     verbose = true;
 
-    float min_bandwidth = 0.5f*(64e6 / 256.0);
-    float max_bandwidth = 0.5f*(64e6 /   4.0);
+    float min_bandwidth = 0.25f*(64e6 / 256.0);
+    float max_bandwidth = 0.25f*(64e6 /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
@@ -124,7 +124,7 @@ int main (int argc, char **argv)
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
 
     // set properties
-    float rx_rate = 4.0f*bandwidth;
+    double rx_rate = 4.0f*bandwidth;
 #if 0
     usrp->set_rx_rate(rx_rate);
 #else
@@ -134,7 +134,7 @@ int main (int argc, char **argv)
     // ensure multiple of 2
     decim_rate = (decim_rate >> 1) << 1;
     // compute usrp sampling rate
-    double usrp_rx_rate = 64e6 / (float)decim_rate;
+    double usrp_rx_rate = 64e6 / (double)decim_rate;
     // compute arbitrary resampling rate
     double rx_resamp_rate = rx_rate / usrp_rx_rate;
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
