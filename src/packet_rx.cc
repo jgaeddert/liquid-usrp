@@ -148,11 +148,11 @@ int main (int argc, char **argv)
     usrp->set_rx_gain(20);
 
     // add arbitrary resampling component
-    resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,37,0.4f,60.0f,64);
+    resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, rx_resamp_rate);
 
     // half-band resampler
-    resamp2_crcf decim = resamp2_crcf_create(41,0.0f,40.0f);
+    resamp2_crcf decim = resamp2_crcf_create(7,0.0f,40.0f);
 
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
     unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
@@ -182,10 +182,6 @@ int main (int argc, char **argv)
     props.squelch_threshold = -40.0f;
     framesync64 framesync = framesync64_create(&props,callback,NULL);
 
-    // start data transfer
-    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    printf("usrp data transfer started\n");
- 
     std::complex<float> data_rx[64];
     std::complex<float> data_decim[32];
     std::complex<float> data_resamp[64];
@@ -194,6 +190,10 @@ int main (int argc, char **argv)
     num_packets_received = 0;
     num_valid_packets_received = 0;
 
+    // start data transfer
+    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+    printf("usrp data transfer started\n");
+ 
     unsigned int i;
     unsigned int n=0;
     for (i=0; i<num_blocks; i++) {

@@ -163,7 +163,7 @@ int main (int argc, char **argv)
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
     // add arbitrary resampling component
-    resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,37,0.4f,60.0f,64);
+    resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, tx_resamp_rate);
 
     // create flexframegen object
