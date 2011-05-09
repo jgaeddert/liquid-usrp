@@ -77,8 +77,9 @@ int main (int argc, char **argv)
     // command-line options
     verbose = true;
 
-    float min_bandwidth = 0.25f*(64e6 / 256.0);
-    float max_bandwidth = 0.25f*(64e6 /   4.0);
+    unsigned long int ADC_RATE = 64e6;
+    float min_bandwidth = 0.25f*(ADC_RATE / 256.0);
+    float max_bandwidth = 0.25f*(ADC_RATE /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
@@ -130,11 +131,11 @@ int main (int argc, char **argv)
 #else
     // NOTE : the sample rate computation MUST be in double precision so
     //        that the UHD can compute its decimation rate properly
-    unsigned int decim_rate = (unsigned int)(64e6 / rx_rate);
+    unsigned int decim_rate = (unsigned int)(ADC_RATE / rx_rate);
     // ensure multiple of 2
     decim_rate = (decim_rate >> 1) << 1;
     // compute usrp sampling rate
-    double usrp_rx_rate = 64e6 / (double)decim_rate;
+    double usrp_rx_rate = ADC_RATE / (double)decim_rate;
     // compute arbitrary resampling rate
     double rx_resamp_rate = rx_rate / usrp_rx_rate;
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
@@ -142,7 +143,7 @@ int main (int argc, char **argv)
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-    usrp->set_rx_rate(usrp_rx_rate);
+    usrp->set_rx_rate(ADC_RATE / decim_rate);
 #endif
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(20);
