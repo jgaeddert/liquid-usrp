@@ -63,13 +63,14 @@ int main (int argc, char **argv)
     float num_seconds = 5.0f;
     float txgain_dB = -3.0f;
 
-    unsigned int packet_spacing=0;
-    unsigned int payload_len=200;
-    fec_scheme fec0 = LIQUID_FEC_NONE;
-    fec_scheme fec1 = LIQUID_FEC_HAMMING74;
-    modulation_scheme mod_scheme = LIQUID_MODEM_QAM;
-    unsigned int mod_depth = 2;
-    unsigned int ramp_len = 64;
+    unsigned int packet_spacing=0;                      // spacing b/w frames
+    unsigned int payload_len=200;                       // payload length (bytes)
+    crc_scheme check    = LIQUID_CRC_16;                // data validity check
+    fec_scheme fec0     = LIQUID_FEC_NONE;              // inner FEC scheme
+    fec_scheme fec1     = LIQUID_FEC_HAMMING74;         // outer FEC scheme
+    modulation_scheme mod_scheme = LIQUID_MODEM_QAM;    // modulation scheme
+    unsigned int mod_depth = 2;                         // modulation depth
+    unsigned int ramp_len = 64;                         // phasing ramp up/down length
 
     //
     int d;
@@ -82,10 +83,6 @@ int main (int argc, char **argv)
         case 'n':   payload_len = atoi(optarg);     break;
         case 'm':
             mod_scheme = liquid_getopt_str2mod(optarg);
-            if (mod_scheme == LIQUID_MODEM_UNKNOWN) {
-                printf("error: unknown/unsupported mod. scheme: %s\n", optarg);
-                mod_scheme = LIQUID_MODEM_UNKNOWN;
-            }
             break;
         case 'p':   mod_depth = atoi(optarg);       break;
         case 's':   packet_spacing = atoi(optarg);  break;
@@ -103,19 +100,19 @@ int main (int argc, char **argv)
     }
 
     if (bandwidth > max_bandwidth) {
-        printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
-        return 0;
+        fprintf(stderr,"error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
+        return 1;
     } else if (bandwidth < min_bandwidth) {
-        printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
-        return 0;
+        fprintf(stderr,"error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
+        return 1;
     } else if (payload_len > (1<<16)) {
-        printf("error: maximum payload length exceeded: %u > %u\n", payload_len, 1<<16);
-        return 0;
+        fprintf(stderr,"error: maximum payload length exceeded: %u > %u\n", payload_len, 1<<16);
+        return 1;
     } else if (fec0 == LIQUID_FEC_UNKNOWN || fec1 == LIQUID_FEC_UNKNOWN) {
-        usage();
-        return 0;
+        fprintf(stderr,"error: unsupported FEC scheme\n");
+        return 1;
     } else if (mod_scheme == LIQUID_MODEM_UNKNOWN) {
-        usage();
+        fprintf(stderr,"error: unsupported modulation scheme\n");
         return 0;
     }
 
@@ -171,6 +168,9 @@ int main (int argc, char **argv)
     flexframegenprops_init_default(&fgprops);
     fgprops.rampup_len  = ramp_len;
     fgprops.phasing_len = 64;
+    fgprops.check       = check;    // cyclic redundancy check
+    fgprops.fec0        = fec0;     // inner FEC scheme
+    fgprops.fec1        = fec1;     // outer FEC scheme
     fgprops.payload_len = payload_len;
     fgprops.mod_scheme  = mod_scheme;
     fgprops.mod_bps     = mod_depth;
