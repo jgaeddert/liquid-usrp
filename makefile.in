@@ -105,6 +105,8 @@ example_src :=				\
 
 library_objs	= $(patsubst %.cc,%.o,$(library_src))
 
+$(library_objs) : %.o : %.cc $(library_headers)
+
 # Shared library
 SHARED_LIB	= @SH_LIB@
 

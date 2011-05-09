@@ -27,15 +27,8 @@
 #ifndef __IQPR_H__
 #define __IQPR_H__
 
-#ifdef __cplusplus
-extern "C" {
-#   define LIQUID_USE_COMPLEX_H 0
-#else
-#   define LIQUID_USE_COMPLEX_H 1
-#endif /* __cplusplus */
-
 #include <liquid/liquid.h>
-#include <liquid/liquid.experimental.h>
+#include <uhd/usrp/single_usrp.hpp>
 
 #define IQPR_PACKET_TYPE_DATA       (0)
 #define IQPR_PACKET_TYPE_ACK        (1)
@@ -79,8 +72,7 @@ typedef struct iqpr_s * iqpr;
 //  _tx_port    :   transmitter port
 //  _rx_port    :   receiver port
 iqpr iqpr_create(unsigned int _node_id,
-                 gport _port_tx,
-                 gport _port_rx);
+                 uhd::usrp::single_usrp::sptr _usrp);
 
 // destroy iqpr object
 void iqpr_destroy(iqpr _q);
@@ -154,10 +146,6 @@ int iqpr_callback(unsigned char * _rx_header,
                   framesyncstats_s _stats,
                   void * _userdata);
 
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif /* __cplusplus */
 
 #endif // __IQPR_H__
 

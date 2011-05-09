@@ -36,8 +36,7 @@
 
 // iqpr data structure
 struct iqpr_s {
-    gport port_tx;                  // transmit port
-    gport port_rx;                  // receive port
+    uhd::usrp::single_usrp::sptr usrp;
 
     // common
     unsigned int node_id;           // node identifier
@@ -70,14 +69,15 @@ struct iqpr_s {
 
 // create iqpr object
 iqpr iqpr_create(unsigned int _node_id,
-                 gport _port_tx,
-                 gport _port_rx)
+                 uhd::usrp::single_usrp::sptr _usrp)
 {
     // allocate memory for main object
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
     q->node_id = _node_id;  // node id
+#if 0
     q->port_tx = _port_tx;  // transmit port
     q->port_rx = _port_rx;  // receive port
+#endif
 
     // create frame generator
     flexframegenprops_init_default(&q->fgprops);
@@ -209,7 +209,9 @@ void iqpr_txpacket(iqpr _q,
         k++;        // increment block counter
 
         // push samples to port
+#if 0
         gport_produce(_q->port_tx, (void*)mfbuffer, 2*t);
+#endif
     }
 
     // flush interpolator with zeros, min(64,buffer_len)
@@ -217,7 +219,9 @@ void iqpr_txpacket(iqpr _q,
     for (i=0; i<n; i++)
         interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
 
+#if 0
     gport_produce(_q->port_tx, (void*)mfbuffer, 2*n);
+#endif
 }
 
 
@@ -263,14 +267,18 @@ void iqpr_txack(iqpr _q,
     }
 
     // produce data in buffer
+#if 0
     gport_produce(_q->port_tx, (void*)mfbuffer, 2*frame_len);
+#endif
 
     // flush interpolator with zeros
     for (i=0; i<64; i++) {
         interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
     }
 
+#if 0
     gport_produce(_q->port_tx, (void*)mfbuffer, 128);
+#endif
 }
 
 #if 0
@@ -302,7 +310,9 @@ int iqpr_wait_for_packet(iqpr _q,
     unsigned int i;
     for (i=0; i<10; i++) {
         // grab data from port
+#if 0
         gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+#endif
 
         // run through frame synchronizer
         flexframesync_execute(_q->fs, _q->rx_buffer, 512);
@@ -339,7 +349,9 @@ int iqpr_wait_for_ack(iqpr _q,
     unsigned int i;
     for (i=0; i<10; i++) {
         // grab data from port
+#if 0
         gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+#endif
 
         // run through frame synchronizer
         flexframesync_execute(_q->fs, _q->rx_buffer, 512);
@@ -370,7 +382,9 @@ float iqpr_mac_getrssi(iqpr _q,
     }
 
     // grab data from port
+#if 0
     gport_consume(_q->port_rx, (void*)_q->rx_buffer, _num_samples);
+#endif
 
     // estimate signal level
     unsigned int i;
