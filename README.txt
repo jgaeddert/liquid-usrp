@@ -23,7 +23,7 @@ Build dependencies
 1.  liquid-dsp  :   liquid digital signal processing library, available
                     from github: http://github.com/jgaeddert/liquid-dsp
     
-    $ git clone https://jgaeddert@github.com/jgaeddert/liquid-dsp.git
+    $ git clone git://github.com/jgaeddert/liquid-dsp.git
     $ cd liquid-dsp
     $ git checkout v1.0.0
     $ ./reconf
@@ -33,6 +33,10 @@ Build dependencies
 
 2.  uhd         :   universal hardware driver from Ettus research,
                     available from http://www.ettus.com
+    
+    install dependencies using apt-get: cmake python-cheetah libusb-1.0-0-dev
+                                        libboost-1.37-dev
+                                        libboost-math1.37-dev
 
     $ git clone git://code.ettus.com/ettus/uhd.git
     $ cd uhd
