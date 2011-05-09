@@ -93,12 +93,26 @@ AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(unsigned int)
 
 # Check canonical system
-#AC_CANONICAL_TARGET
+AC_CANONICAL_TARGET
+
+case $target_os in
+darwin*)
+    SH_LIB=libliquidusrp.dylib
+    REBIND=""
+    ;;
+*)
+    SH_LIB=libliquidusrp.so
+    REBIND=ldconfig
+    ;;
+esac
+
 
 
 #
 # autoconf variable substitutions
 #
 AC_SUBST(LIBS)              # shared libraries (-lc, -lm, etc.)
+AC_SUBST(SH_LIB)            # output shared library target
+AC_SUBST(REBIND)            # rebinding tool (e.g. ldconfig)
 AC_CONFIG_FILES([makefile])
 AC_OUTPUT
