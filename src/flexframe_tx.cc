@@ -256,7 +256,7 @@ int main (int argc, char **argv)
         //printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
         buff.resize(n);
         for (j=0; j<n; j++) {
-            buff[j] = buffer_interp[j];
+            buff[j] = buffer_resamp[j];
         }
 
         //send the entire contents of the buffer
