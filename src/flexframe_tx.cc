@@ -208,7 +208,7 @@ int main (int argc, char **argv)
     interp_crcf mfinterp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,k,m,beta,0);
 
     // data buffers
-    unsigned char header[9];
+    unsigned char header[14];
     unsigned char payload[payload_len];
 
     // transmitter gain (linear)
@@ -219,20 +219,24 @@ int main (int argc, char **argv)
     for (i=0; i<num_blocks; i++) {
         // generate the frame / transmit silence
         if ((i%(packet_spacing+1))==0) {
+
             // generate random data
-            // TODO : encode using forward error-correction codec
             for (j=0; j<payload_len; j++)
-                payload[j] = rand() % 256;
-            // write header
+                payload[j] = rand() & 0xff;
+
+            // write header (first two bytes packet ID, remaining are random)
             header[0] = (pid >> 8) & 0xff;
             header[1] = (pid     ) & 0xff;
-            header[2] = (payload_len >> 8) & 0xff;
-            header[3] = (payload_len     ) & 0xff;
+            for (j=2; j<14; j++)
+                header[j] = rand() & 0xff;
+
             if (verbose)
                 printf("packet id: %6u\n", pid);
-                //printf("packet id: %6u, packet len : %6u\n", pid, packet_len);
+            
+            // increment packet id (modulo 2^16)
             pid = (pid+1) & 0xffff;
 
+            // generate frame
             flexframegen_execute(fg, header, payload, frame);
 
             // interpolate using matched filter

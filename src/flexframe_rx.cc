@@ -299,19 +299,6 @@ int main (int argc, char **argv)
     printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
     printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
 
-#if 0
-    printf("    # rx   # ok      %% ok        # data     %% data       PER          SNR      sp. eff.\n");
-    printf("    %-6u %-6u  %12.4e  %-6u   %12.4e %12.4e  %8.4f  %6.4f\n",
-            num_packets_received,
-            num_valid_headers_received,
-            percent_headers_valid * 0.01f,
-            num_valid_packets_received,
-            percent_packets_valid * 0.01f,
-            PER,
-            SNRdB_av,
-            spectral_efficiency);
-#endif
-
     // clean it up
     flexframesync_destroy(fs);
     resamp_crcf_destroy(resamp);
