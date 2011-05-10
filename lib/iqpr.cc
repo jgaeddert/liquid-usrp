@@ -416,21 +416,68 @@ int iqpr_rxpacket(iqpr _q,
                   int           *  _payload_valid,
                   framesyncstats_s * _stats)
 {
-#if 0
-    _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
-    _q->rx_packet_found = 0;
+    uhd::rx_metadata_t md;
 
     // read samples from buffer, run through frame synchronizer
     unsigned int i;
+    unsigned int n=0;
+    // TODO : start 'timer'
     for (i=0; i<10; i++) {
         // grab data from port
+        size_t num_rx_samps = _q->usrp->get_device()->recv(
+            &_q->rx_buffer.front(),
+            _q->rx_buffer.size(),
+            md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::RECV_MODE_ONE_PACKET
+        );
+
+        //handle the error codes
+        switch(md.error_code){
+        case uhd::rx_metadata_t::ERROR_CODE_NONE:
+        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+            break;
+        default:
+            std::cerr << "Error code: " << md.error_code << std::endl;
+            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+            return 1;
+        }
+
+        // for now copy vector "buff" to array of complex float
+        // TODO : apply bandwidth-dependent gain
+        unsigned int j;
+        unsigned int nw=0;
+        for (j=0; j<num_rx_samps; j++) {
+            // push 64 samples into buffer
+            _q->data_rx[n++] = _q->rx_buffer[j];
+
+            if (n==64) {
+                // reset counter
+                n=0;
+
+                // deimate to 32
+                unsigned int k;
+                for (k=0; k<32; k++)
+                    resamp2_crcf_decim_execute(_q->rx_decim, &_q->data_rx[2*k], &_q->data_rx_decim[k]);
+
+                // apply resampler
+                for (k=0; k<32; k++) {
+                    resamp_crcf_execute(_q->rx_resamp, _q->data_rx_decim[k], &_q->data_rx_resamp[n], &nw);
+                    n += nw;
+
+                    assert(n <= 32);
+                }
+
+                // push through synchronizer
+                flexframesync_execute(_q->fs, _q->data_rx_resamp, n);
+
+                // reset counter (again)
+                n = 0;
+            }
+
+        }
+
 #if 0
-        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
-#endif
-
-        // run through frame synchronizer
-        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
-
         // check status flag
         if (_q->rx_packet_found) {
             if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
@@ -442,8 +489,8 @@ int iqpr_rxpacket(iqpr _q,
             memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
             return 1;
         }
-    }
 #endif
+    }
 
     // packet was never received
     return 0;
@@ -588,6 +635,7 @@ int iqpr_callback(unsigned char * _rx_header,
                   framesyncstats_s _stats,
                   void * _userdata)
 {
+    printf("********* callback invoked\n");
 #if 0
     iqpr q = (iqpr) _userdata;
 
