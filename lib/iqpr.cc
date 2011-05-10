@@ -59,10 +59,10 @@ struct iqpr_s {
     unsigned int tx_data_len;       // transmitted payload data length
     flexframegenprops_s fgprops;    // frame generator properties
     flexframegen fg;                // frame generator
-    interp_crcf interp;             // matched filter
     float tx_gain;                  // transmit gain
     interp_crcf tx_interp;          // matched-filter interpolator
     resamp_crcf tx_resamp;          // arbitrary resampler
+    //std::complex<float> * frame;    // frame buffer
     std::complex<float> data_tx[32];                // tx data buffer (array)
     std::complex<float> data_tx_interp[128];        // tx interpolated
     std::complex<float> data_tx_resamp[256];        // tx resampled
@@ -291,69 +291,111 @@ void iqpr_txpacket(iqpr _q,
                    unsigned int _payload_len,
                    flexframegenprops_s * _fgprops)
 {
-#if 0
     unsigned int i;
 
-    // copy header
-    memmove(&_q->tx_header, _tx_header, sizeof(struct iqprheader_s));
-#if 0
-    _q->tx_header.pid = _pid;
-    _q->tx_header.packet_type = IQPR_PACKET_TYPE_DATA;
-    _q->tx_header.node_src = _q->node_id;
-    _q->tx_header.node_dst = 0;
-#endif
-
-    // encode header
-    unsigned char header[8];
-    iqprheader_encode(&_q->tx_header, header);
-
     // configure frame generator
+    memmove(&_q->fgprops, _fgprops, sizeof(flexframegenprops_s));
     _q->fgprops.payload_len = _payload_len;
-    _q->fgprops.mod_scheme  = _ms;
-    _q->fgprops.mod_bps     = _bps;
-    _q->fgprops.check       = LIQUID_CRC_32;
-    _q->fgprops.fec0        = _fec0;
-    _q->fgprops.fec1        = _fec1;
     flexframegen_setprops(_q->fg, &_q->fgprops);
 
     unsigned int frame_len = flexframegen_getframelen(_q->fg);
+
+    // set up the metadta flags
+    uhd::tx_metadata_t md;
+    md.start_of_burst = false;  // never SOB when continuous
+    md.end_of_burst   = false;  // 
+    md.has_time_spec  = false;  // set to false to send immediately
+
+#if 0
     unsigned int buffer_len = 64;
-    std::complex<float> frame[frame_len];       // frame
     std::complex<float> mfbuffer[2*buffer_len]; // frame (interpolated)
+#else
+    std::complex<float> frame[frame_len];       // frame
+    unsigned int buffer_len = 32;
+#endif
 
     //printf("[tx] sending packet %u...\n", _pid);
 
     // generate frame
-    flexframegen_execute(_q->fg, header, _payload, frame);
+    flexframegen_execute(_q->fg, _header, _payload, frame);
 
     // run interpolator in blocks
     unsigned int n=frame_len;   // total number of frame samples remaining
-    unsigned int k=0;     // block counter
+    unsigned int k=0;           // block counter
+    unsigned int num_out=0;
+    unsigned int nw;
     while (n > 0) {
         // size of this block (default 64, otherwise remaining symbols)
         unsigned int t = (n < buffer_len) ? n : buffer_len;
+
+        // run matched-filter interpolator
         for (i=0; i<t; i++)
-            interp_crcf_execute(_q->interp, frame[buffer_len*k + i]*_q->tx_gain, &mfbuffer[2*i]);
+            interp_crcf_execute(_q->tx_interp, frame[buffer_len*k + i]*_q->tx_gain, &_q->data_tx_interp[4*i]);
+
+        // run resampler
+        num_out=0;
+        for (i=0; i<4*t; i++) {
+            resamp_crcf_execute(_q->tx_resamp, _q->data_tx_interp[i], &_q->data_tx_resamp[num_out], &nw);
+            num_out += nw;
+
+            // 
+            assert(num_out <= 128);
+        }
+
+        // copy array to vector
+        // TODO : find more efficient way to do this
+        _q->tx_buffer.resize(num_out);
+        for (i=0; i<num_out; i++)
+            _q->tx_buffer[i] = _q->data_tx_interp[i];
         
         // update counters
         n -= t;     // reduce number of samples remaining
         k++;        // increment block counter
 
-        // push samples to port
-#if 0
-        gport_produce(_q->port_tx, (void*)mfbuffer, 2*t);
-#endif
+        //send the entire contents of the buffer
+        _q->usrp->get_device()->send(
+            &_q->tx_buffer.front(),
+            _q->tx_buffer.size(),
+            md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
+
     }
 
     // flush interpolator with zeros, min(64,buffer_len)
-    n = buffer_len < 64 ? buffer_len : 64;
-    for (i=0; i<n; i++)
-        interp_crcf_execute(_q->interp, 0, &mfbuffer[2*i]);
+    n = buffer_len;
 
-#if 0
-    gport_produce(_q->port_tx, (void*)mfbuffer, 2*n);
-#endif
-#endif
+    // run matched-filter interpolator
+    for (i=0; i<n; i++)
+        interp_crcf_execute(_q->tx_interp, 0, &_q->data_tx_interp[4*i]);
+
+    // run resampler
+    num_out=0;
+    for (i=0; i<4*n; i++) {
+        resamp_crcf_execute(_q->tx_resamp, _q->data_tx_interp[i], &_q->data_tx_resamp[num_out], &nw);
+        num_out += nw;
+
+        // 
+        assert(num_out < 128);
+    }
+
+    // copy array to vector
+    _q->tx_buffer.resize(num_out);
+    for (i=0; i<num_out; i++)
+        _q->tx_buffer[i] = _q->data_tx_interp[i];
+
+    //send the entire contents of the buffer
+    md.end_of_burst = true;
+    _q->usrp->get_device()->send(
+        &_q->tx_buffer.front(),
+        _q->tx_buffer.size(),
+        md,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+
+
 }
 
 // receive data packet with timeout, returning 1 if found, 0 if not
