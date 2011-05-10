@@ -34,33 +34,6 @@
 #define IQPR_PACKET_TYPE_ACK        (1)
 #define IQPR_PACKET_TYPE_CONTROL    (2)
 
-#define IQPR_RX_NULL            (0) // not waiting for anything
-#define IQPR_RX_WAIT_FOR_DATA   (1) // receiver waiting for data packet
-#define IQPR_RX_WAIT_FOR_ACK    (2) // receiver waiting for ack
-
-
-// iqpr packet header descriptor
-struct iqprheader_s {
-    unsigned int pid;           // [0,1] packet identifier
-    unsigned int packet_type;   // [2]   packet type (data, ack, etc.)
-
-    unsigned int node_src;      // [3]   source node id
-    unsigned int node_dst;      // [4]   destination node id
-
-    unsigned char userdata[3];  // [5,6,7]  remaining user data
-};
-
-// encode header (structure > array)
-//  _q      :   iqpr heade structure
-//  _header :   8-byte header array
-void iqprheader_encode(iqprheader_s * _q, unsigned char * _header);
-
-// decode header (array > structure))
-//  _q      :   iqpr heade structure
-//  _header :   8-byte header array
-void iqprheader_decode(iqprheader_s * _q, unsigned char * _header);
-
-
 // 
 // iqpr object interface declarations
 //
@@ -68,11 +41,7 @@ void iqprheader_decode(iqprheader_s * _q, unsigned char * _header);
 typedef struct iqpr_s * iqpr;
 
 // create iqpr object
-//  _node_id    :   id of this node
-//  _tx_port    :   transmitter port
-//  _rx_port    :   receiver port
-iqpr iqpr_create(unsigned int _node_id,
-                 uhd::usrp::single_usrp::sptr _usrp);
+iqpr iqpr_create();
 
 // destroy iqpr object
 void iqpr_destroy(iqpr _q);
@@ -81,51 +50,96 @@ void iqpr_destroy(iqpr _q);
 void iqpr_print(iqpr _q);
 
 // set verbosity on/off
-void iqpr_setverbose(iqpr _q, int _verbose);
+void iqpr_set_verbose(iqpr _q);
+void iqpr_unset_verbose(iqpr _q);
 
-// set transmit gain (linear)
-void iqpr_settxgain(iqpr _q, float _txgain);
+//
+// PHY properties
+//
 
-// transmit packet
+// set transmit/receive hardware gain
+void iqpr_set_tx_gain(iqpr _q, float _tx_gain);
+void iqpr_set_rx_gain(iqpr _q, float _rx_gain);
+
+#if 0
+// set transmit/receive software gain
+void iqpr_set_tx_power(iqpr _q, float _tx_power);
+void iqpr_set_rx_power(iqpr _q, float _rx_power);
+#endif
+
+// set transmit/receive sample rate
+void iqpr_set_tx_rate(iqpr _q, float _tx_rate);
+void iqpr_set_rx_rate(iqpr _q, float _rx_rate);
+
+// set transmit/receive frequency
+void iqpr_set_tx_freq(iqpr _q, float _tx_freq);
+void iqpr_set_rx_freq(iqpr _q, float _rx_freq);
+
+// set flexframesync properties
+void iqpr_rxconfig(iqpr _q, framesyncprops_s * _fsprops);
+
+// 
+// low-level functionality
+//
+
+// transmit packet (generic)
 //  _q              :   iqpr object
+//  _header         :   header data [14 bytes]
 //  _payload        :   payload data
 //  _payload_len    :   number of bytes in payload
-//  _ms             :   modulation scheme
-//  _bps            :   modulation depth
-//  _fec0           :   inner fec scheme
-//  _fec1           :   outer fec scheme
+//  _fgprops        :   frame generator properties (internal 'payload_len' ignored)
 void iqpr_txpacket(iqpr _q,
-                   iqprheader_s * _tx_header,
+                   unsigned char * _header,
                    unsigned char * _payload,
                    unsigned int _payload_len,
-                   modulation_scheme _ms,
-                   unsigned int _bps,
-                   fec_scheme _fec0,
-                   fec_scheme _fec1);
+                   flexframegenprops_s * _fgprops);
+
+// receive data packet with timeout, returning 1 if found, 0 if not
+//  _q              :   iqpr object
+//  _timespec       :   time specifier
+//  _header         :   received header
+//  _header_valid   :   header valid?
+//  _payload        :   output payload data
+//  _payload_len    :   number of bytes in payload
+//  _payload_valid  :   payload valid?
+//  _stats          :   received frame statistics
+int iqpr_rxpacket(iqpr _q,
+                  unsigned int _timespec,
+                  unsigned char ** _header,
+                  int           *  _header_valid,
+                  unsigned char ** _payload,
+                  unsigned int  *  _payload_len,
+                  int           *  _payload_valid,
+                  framesyncstats_s * _stats);
+
+//
+// higher functionality
+//
+
+// packet types:
+//  code    name            description
+//  0       UDP_PACKET      user datagram packet (no ACK/NACK response)
+//  1       TCP_PACKET      transmission control protocol (request ACK/NACK)
+//  2       ACK_PACKET      acknowledgement
+//  3       NACK_PACKET     negative acknowledgement
+//  4       RTS_PACKET      request to send
+//  5       CTS_PACKET      clear to send
+//  6       CTRL_PACKET     control information
+
+// transmit data packet
+void iqpr_txdatat(iqpr _q,
+                  unsigned int _pid);
+                  // ...
 
 // transmit ACK packet (acknowledgement) on packet [pid]
 void iqpr_txack(iqpr _q, unsigned int _pid);
 
-// wait for data packet, returning 1 if found, 0 if not
-//  _q              :   iqpr object
-//  _payload        :   payload data
-//  _payload_len    :   number of bytes in payload
-//  _header         :   received header structure
-//  _stats          :   received frame statistics
-int iqpr_wait_for_packet(iqpr _q,
-                         unsigned char ** _payload,
-                         unsigned int * _payload_len,
-                         iqprheader_s * _header,
-                         framesyncstats_s * _stats);
-
 // wait for ACK packet (acknowlegement)
 //  _q              :   iqpr object
 //  _pid            :   packet identifier to wait for
-//  _header         :   received header structure
 //  _stats          :   received frame statistics
 int iqpr_wait_for_ack(iqpr _q,
                       unsigned int _pid,
-                      iqprheader_s * _header,
                       framesyncstats_s * _stats);
 
 // get channel rssi, estimated on _num_samples samples
@@ -146,6 +160,35 @@ int iqpr_callback(unsigned char * _rx_header,
                   framesyncstats_s _stats,
                   void * _userdata);
 
+#if 0
+// iqpr packet header descriptor (14 bytes total space)
+//  length  name        description
+//  2       pid         packet identifier number
+//  2       node_src    source node ID
+//  2       node_dst    destination node ID
+//  1       type        packet type (UDP_PACKET, TCP_PACKET, ACK_PACKET, NACK_PACKET...)
+//  xxx     userdata    remaining data reserved for user
+struct iqprheader_s {
+    unsigned int pid;           // [0,1] packet identifier
+    unsigned int packet_type;   // [2]   packet type (data, ack, etc.)
+
+    unsigned int node_src;      // [3]   source node id
+    unsigned int node_dst;      // [4]   destination node id
+
+    unsigned char userdata[3];  // [5,6,7]  remaining user data
+};
+
+// encode header (structure > array)
+//  _q      :   iqpr heade structure
+//  _header :   8-byte header array [XXX TODO : make 14-byte array]
+void iqprheader_encode(iqprheader_s * _q, unsigned char * _header);
+
+// decode header (array > structure))
+//  _q      :   iqpr heade structure
+//  _header :   8-byte header array [XXX TODO : make 14-byte array]
+void iqprheader_decode(iqprheader_s * _q, unsigned char * _header);
+
+#endif
 
 #endif // __IQPR_H__
 

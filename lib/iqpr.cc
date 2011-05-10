@@ -31,54 +31,65 @@
 #include <math.h>
 #include <complex>
 #include <liquid/liquid.h>
+#include <uhd/usrp/single_usrp.hpp>
 
 #include "iqpr.h"
 
 // iqpr data structure
 struct iqpr_s {
+    // UHD interface to hardware
     uhd::usrp::single_usrp::sptr usrp;
 
-    // common
-    unsigned int node_id;           // node identifier
-
     // receiver
-    unsigned char * rx_data;        // received payload data
-    unsigned int rx_data_len;       // received payload data length
-    iqprheader_s rx_header;         // received header
+    //iqprheader_s rx_header;         // received header
+    std::vector<std::complex<float> > rx_buffer;    // rx data buffer
+    std::complex<float> data_rx[64];                // rx data buffer (array)
+    std::complex<float> data_rx_decim[32];          // rx decimated
+    std::complex<float> data_rx_resamp[64];         // rx resampled
+    resamp2_crcf rx_decim;          // half-band decimator
+    resamp_crcf rx_resamp;          // arbitrary resampler
     framesyncprops_s fsprops;       // frame synchronizer properties
     flexframesync fs;               // frame synchronizer
-    std::complex<float> rx_buffer[512];   // rx data buffer
     unsigned int rx_packet_pid;     // receiver packet pid
     int rx_packet_found;            // receiver packet found flag
-    unsigned int rx_state;          // receiver state (waiting on a packet or ack?)
+    unsigned char * rx_data;        // received payload data
+    unsigned int rx_data_len;       // received payload data length
     framesyncstats_s rx_stats;      // frame synchronizer stats
 
     // transmitter
     unsigned char * tx_data;        // transmitted payload data
     unsigned int tx_data_len;       // transmitted payload data length
-    iqprheader_s tx_header;         // transmitted header
+    //iqprheader_s tx_header;         // transmitted header
     flexframegenprops_s fgprops;    // frame generator properties
     flexframegen fg;                // frame generator
     interp_crcf interp;             // matched filter
     float tx_gain;                  // transmit gain
+    resamp2_crcf tx_interp;         // half-band interpolator
+    resamp_crcf tx_resamp;          // arbitrary resampler
+    std::complex<float> data_tx[32];                // tx data buffer (array)
+    std::complex<float> data_tx_interp[128];        // tx interpolated
+    std::complex<float> data_tx_resamp[256];        // tx resampled
+    std::vector<std::complex<float> > tx_buffer;    // tx data buffer
 
     // debugging
     int verbose;
+
+    // 
+    // higher-level functionality
+    //
+    unsigned int node_id;           // node identifier
 };
 
 
 // create iqpr object
-iqpr iqpr_create(unsigned int _node_id,
-                 uhd::usrp::single_usrp::sptr _usrp)
+iqpr iqpr_create()
 {
     // allocate memory for main object
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
-    q->node_id = _node_id;  // node id
-#if 0
-    q->port_tx = _port_tx;  // transmit port
-    q->port_rx = _port_rx;  // receive port
-#endif
 
+    // TODO : create USRP object
+
+#if 0
     // create frame generator
     flexframegenprops_init_default(&q->fgprops);
     q->fgprops.rampup_len   = 16;
@@ -113,12 +124,14 @@ iqpr iqpr_create(unsigned int _node_id,
 
     // debugging
     q->verbose = 0;
+#endif
 
     return q;
 }
 
 void iqpr_destroy(iqpr _q)
 {
+#if 0
     // destroy frame generator
     flexframegen_destroy(_q->fg);
 
@@ -127,6 +140,7 @@ void iqpr_destroy(iqpr _q)
 
     // destroy interpolator
     interp_crcf_destroy(_q->interp);
+#endif
 
     // free memory
     free(_q->rx_data);
@@ -137,30 +151,76 @@ void iqpr_print(iqpr _q)
     printf("iqpr:\n");
 }
 
-void iqpr_setverbose(iqpr _q, int _verbose)
+// set verbosity on
+void iqpr_set_verbose(iqpr _q)
 {
-    _q->verbose = _verbose ? 1 : 0;
+    _q->verbose = 1;
 }
 
-void iqpr_settxgain(iqpr _q, float _txgain)
+// set verbosity off
+void iqpr_unset_verbose(iqpr _q)
 {
-    // validate input
-    if (_txgain <= 0.0f || _txgain > 1.0f) {
-        fprintf(stderr,"error: iqpr_settxgain(), tx gain must be in (0,1]\n");
-        exit(1);
-    }
-    _q->tx_gain = _txgain;
+    _q->verbose = 0;
 }
 
+// set transmit/receive hardware gain
+void iqpr_set_tx_gain(iqpr _q, float _tx_gain)
+{
+    _q->usrp->set_tx_gain(_tx_gain);
+}
+
+// set transmit/receive hardware gain
+void iqpr_set_rx_gain(iqpr _q, float _rx_gain)
+{
+    _q->usrp->set_rx_gain(_rx_gain);
+}
+
+#if 0
+// set transmit/receive software gain
+void iqpr_set_tx_power(iqpr _q, float _tx_power);
+void iqpr_set_rx_power(iqpr _q, float _rx_power);
+#endif
+
+// set transmit/receive sample rate
+void iqpr_set_tx_rate(iqpr _q, float _tx_rate)
+{
+}
+
+// set transmit/receive sample rate
+void iqpr_set_rx_rate(iqpr _q, float _rx_rate)
+{
+}
+
+// set transmit/receive frequency
+void iqpr_set_tx_freq(iqpr _q, float _tx_freq)
+{
+    _q->usrp->set_tx_freq(_tx_freq);
+}
+
+// set transmit/receive frequency
+void iqpr_set_rx_freq(iqpr _q, float _rx_freq)
+{
+    _q->usrp->set_rx_freq(_rx_freq);
+}
+
+
+// 
+// low-level functionality
+//
+
+// transmit packet (generic)
+//  _q              :   iqpr object
+//  _header         :   header data [14 bytes]
+//  _payload        :   payload data
+//  _payload_len    :   number of bytes in payload
+//  _fgprops        :   frame generator properties (internal 'payload_len' ignored)
 void iqpr_txpacket(iqpr _q,
-                   iqprheader_s * _tx_header,
+                   unsigned char * _header,
                    unsigned char * _payload,
                    unsigned int _payload_len,
-                   modulation_scheme _ms,
-                   unsigned int _bps,
-                   fec_scheme _fec0,
-                   fec_scheme _fec1)
+                   flexframegenprops_s * _fgprops)
 {
+#if 0
     unsigned int i;
 
     // copy header
@@ -222,9 +282,61 @@ void iqpr_txpacket(iqpr _q,
 #if 0
     gport_produce(_q->port_tx, (void*)mfbuffer, 2*n);
 #endif
+#endif
 }
 
+// receive data packet with timeout, returning 1 if found, 0 if not
+//  _q              :   iqpr object
+//  _timespec       :   time specifier
+//  _header         :   received header
+//  _header_valid   :   header valid?
+//  _payload        :   output payload data
+//  _payload_len    :   number of bytes in payload
+//  _payload_valid  :   payload valid?
+//  _stats          :   received frame statistics
+int iqpr_rxpacket(iqpr _q,
+                  unsigned int _timespec,
+                  unsigned char ** _header,
+                  int           *  _header_valid,
+                  unsigned char ** _payload,
+                  unsigned int  *  _payload_len,
+                  int           *  _payload_valid,
+                  framesyncstats_s * _stats)
+{
+#if 0
+    _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
+    _q->rx_packet_found = 0;
 
+    // read samples from buffer, run through frame synchronizer
+    unsigned int i;
+    for (i=0; i<10; i++) {
+        // grab data from port
+#if 0
+        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
+#endif
+
+        // run through frame synchronizer
+        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
+
+        // check status flag
+        if (_q->rx_packet_found) {
+            if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
+
+            // set outputs
+            *_payload = _q->rx_data;
+            *_payload_len = _q->rx_data_len;
+            memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
+            memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
+            return 1;
+        }
+    }
+#endif
+
+    // packet was never received
+    return 0;
+}
+
+#if 0
 void iqpr_txack(iqpr _q,
                 unsigned int _pid)
 {
@@ -280,60 +392,6 @@ void iqpr_txack(iqpr _q,
     gport_produce(_q->port_tx, (void*)mfbuffer, 128);
 #endif
 }
-
-#if 0
-void iqpr_rxpacket(iqpr _q)
-{
-    // read samples from buffer, run through frame synchronizer
-    unsigned int i;
-    for (i=0; i<10; i++) {
-        // grab data from port
-        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
-
-        // run through frame synchronizer
-        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
-    }
-
-}
-#endif
-
-int iqpr_wait_for_packet(iqpr _q,
-                         unsigned char ** _payload,
-                         unsigned int * _payload_len,
-                         iqprheader_s * _header,
-                         framesyncstats_s * _stats)
-{
-    _q->rx_state = IQPR_RX_WAIT_FOR_DATA;
-    _q->rx_packet_found = 0;
-
-    // read samples from buffer, run through frame synchronizer
-    unsigned int i;
-    for (i=0; i<10; i++) {
-        // grab data from port
-#if 0
-        gport_consume(_q->port_rx, (void*)_q->rx_buffer, 512);
-#endif
-
-        // run through frame synchronizer
-        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
-
-        // check status flag
-        if (_q->rx_packet_found) {
-            if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
-
-            // set outputs
-            *_payload = _q->rx_data;
-            *_payload_len = _q->rx_data_len;
-            memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
-            memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
-            return 1;
-        }
-    }
-
-    // packet was never received
-    return 0;
-}
-
 
 int iqpr_wait_for_ack(iqpr _q,
                       unsigned int _pid,
@@ -402,6 +460,7 @@ float iqpr_mac_getrssi(iqpr _q,
 
     return rssi;
 }
+#endif
 
 
 // 
@@ -416,6 +475,7 @@ int iqpr_callback(unsigned char * _rx_header,
                   framesyncstats_s _stats,
                   void * _userdata)
 {
+#if 0
     iqpr q = (iqpr) _userdata;
 
     if (q->verbose) {
@@ -481,9 +541,11 @@ int iqpr_callback(unsigned char * _rx_header,
     if (q->rx_state == IQPR_RX_WAIT_FOR_DATA)
         q->rx_packet_found = 1;
 
+#endif
     return 0;
 }
 
+#if 0
 // encode header (structure > array)
 //  _q      :   iqpr heade structure
 //  _header :   8-byte header array
@@ -529,4 +591,5 @@ void iqprheader_decode(iqprheader_s * _q,
     _q->userdata[1] = _header[6];
     _q->userdata[2] = _header[7];
 }
+#endif
 
