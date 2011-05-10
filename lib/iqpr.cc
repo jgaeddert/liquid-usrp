@@ -41,7 +41,6 @@ struct iqpr_s {
     uhd::usrp::single_usrp::sptr usrp;
 
     // receiver
-    //iqprheader_s rx_header;         // received header
     std::vector<std::complex<float> > rx_buffer;    // rx data buffer
     std::complex<float> data_rx[64];                // rx data buffer (array)
     std::complex<float> data_rx_decim[32];          // rx decimated
@@ -50,7 +49,6 @@ struct iqpr_s {
     resamp_crcf rx_resamp;          // arbitrary resampler
     framesyncprops_s fsprops;       // frame synchronizer properties
     flexframesync fs;               // frame synchronizer
-    unsigned int rx_packet_pid;     // receiver packet pid
     int rx_packet_found;            // receiver packet found flag
     unsigned char * rx_data;        // received payload data
     unsigned int rx_data_len;       // received payload data length
@@ -59,12 +57,11 @@ struct iqpr_s {
     // transmitter
     unsigned char * tx_data;        // transmitted payload data
     unsigned int tx_data_len;       // transmitted payload data length
-    //iqprheader_s tx_header;         // transmitted header
     flexframegenprops_s fgprops;    // frame generator properties
     flexframegen fg;                // frame generator
     interp_crcf interp;             // matched filter
     float tx_gain;                  // transmit gain
-    resamp2_crcf tx_interp;         // half-band interpolator
+    interp_crcf tx_interp;          // matched-filter interpolator
     resamp_crcf tx_resamp;          // arbitrary resampler
     std::complex<float> data_tx[32];                // tx data buffer (array)
     std::complex<float> data_tx_interp[128];        // tx interpolated
@@ -88,8 +85,33 @@ iqpr iqpr_create()
     iqpr q = (iqpr) malloc(sizeof(struct iqpr_s));
 
     // TODO : create USRP object
+    uhd::device_addr_t dev_addr;
+    // TODO : set up address as necessary
+    q->usrp = uhd::usrp::single_usrp::make(dev_addr);
 
-#if 0
+    // 
+    // receiver objects
+    //
+    const size_t max_samps_per_packet = q->usrp->get_device()->get_max_recv_samps_per_packet();
+    q->rx_buffer.resize(max_samps_per_packet);
+    q->rx_resamp = resamp_crcf_create(1.0, 7, 0.4, 60.0, 64);
+    q->rx_decim = resamp2_crcf_create(7, 0.0, 40.0);
+
+    // create frame synchronizer
+    framesyncprops_init_default(&q->fsprops);
+    q->fsprops.squelch_threshold = -37.0f;
+    q->fsprops.squelch_enabled = 1;
+    q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
+
+    // allocate memory for received data
+    q->rx_data_len = 1024;
+    q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
+
+
+    // 
+    // transmitter objects
+    //
+
     // create frame generator
     flexframegenprops_init_default(&q->fgprops);
     q->fgprops.rampup_len   = 16;
@@ -104,46 +126,44 @@ iqpr iqpr_create()
     q->fg = flexframegen_create(&q->fgprops);
     flexframegen_print(q->fg);
 
-    // create frame synchronizer
-    framesyncprops_init_default(&q->fsprops);
-    q->fsprops.squelch_threshold = -37.0f;
-    q->fsprops.squelch_enabled = 1;
-    q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
-
     // create interpolator
+    unsigned int k=4;
     unsigned int m=3;
     float beta=0.7f;
-    q->interp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,2,m,beta,0);
+    q->tx_interp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,k,m,beta,0);
+
+    q->tx_resamp = resamp_crcf_create(1.0, 7, 0.4, 60.0, 64);
+
+    //q->tx_buffer.resize(1);
 
     // set transmit gain
     q->tx_gain = 1.0f;
 
-    // allocate memory for received data
-    q->rx_data_len = 1024;
-    q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
-
     // debugging
     q->verbose = 0;
-#endif
 
     return q;
 }
 
 void iqpr_destroy(iqpr _q)
 {
-#if 0
-    // destroy frame generator
-    flexframegen_destroy(_q->fg);
-
-    // destroy frame synchronizer
+    // 
+    // receiver objects
+    //
+    resamp_crcf_destroy(_q->rx_resamp);
+    resamp2_crcf_destroy(_q->rx_decim);
     flexframesync_destroy(_q->fs);
-
-    // destroy interpolator
-    interp_crcf_destroy(_q->interp);
-#endif
-
-    // free memory
     free(_q->rx_data);
+
+    // 
+    // transmitter objects
+    //
+    flexframegen_destroy(_q->fg);
+    interp_crcf_destroy(_q->tx_interp);
+    resamp_crcf_destroy(_q->tx_resamp);
+
+    // free main object memory
+    free(_q);
 }
 
 void iqpr_print(iqpr _q)
