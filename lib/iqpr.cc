@@ -30,7 +30,9 @@
 #include <string.h>
 #include <math.h>
 #include <complex>
+
 #include <liquid/liquid.h>
+#include <uhd/types/stream_cmd.hpp>
 #include <uhd/usrp/single_usrp.hpp>
 
 #include "iqpr.h"
@@ -294,11 +296,13 @@ void iqpr_txpacket(iqpr _q,
     unsigned int i;
 
     // configure frame generator
-    memmove(&_q->fgprops, _fgprops, sizeof(flexframegenprops_s));
+    if (_fgprops != NULL)
+        memmove(&_q->fgprops, _fgprops, sizeof(flexframegenprops_s));
     _q->fgprops.payload_len = _payload_len;
     flexframegen_setprops(_q->fg, &_q->fgprops);
 
     unsigned int frame_len = flexframegen_getframelen(_q->fg);
+    //printf("frame length : %u\n", frame_len);
 
     // set up the metadta flags
     uhd::tx_metadata_t md;
@@ -306,96 +310,53 @@ void iqpr_txpacket(iqpr _q,
     md.end_of_burst   = false;  // 
     md.has_time_spec  = false;  // set to false to send immediately
 
-#if 0
-    unsigned int buffer_len = 64;
-    std::complex<float> mfbuffer[2*buffer_len]; // frame (interpolated)
-#else
     std::complex<float> frame[frame_len];       // frame
-    unsigned int buffer_len = 32;
-#endif
 
     //printf("[tx] sending packet %u...\n", _pid);
 
     // generate frame
     flexframegen_execute(_q->fg, _header, _payload, frame);
 
-    // run interpolator in blocks
-    unsigned int n=frame_len;   // total number of frame samples remaining
-    unsigned int k=0;           // block counter
-    unsigned int num_out=0;
-    unsigned int nw;
-    while (n > 0) {
-        // size of this block (default 64, otherwise remaining symbols)
-        unsigned int t = (n < buffer_len) ? n : buffer_len;
+    std::complex<float> buffer_interp[4*frame_len];  // matched-filter interpolator (interp by 4)
+    std::complex<float> buffer_resamp[6*frame_len]; // resampler
+    std::vector<std::complex<float> > buff(6*frame_len);
 
-        // run matched-filter interpolator
-        for (i=0; i<t; i++)
-            interp_crcf_execute(_q->tx_interp, frame[buffer_len*k + i]*_q->tx_gain, &_q->data_tx_interp[4*i]);
-
-        // run resampler
-        num_out=0;
-        for (i=0; i<4*t; i++) {
-            resamp_crcf_execute(_q->tx_resamp, _q->data_tx_interp[i], &_q->data_tx_resamp[num_out], &nw);
-            num_out += nw;
-
-            // 
-            assert(num_out <= 128);
-        }
-
-        // copy array to vector
-        // TODO : find more efficient way to do this
-        _q->tx_buffer.resize(num_out);
-        for (i=0; i<num_out; i++)
-            _q->tx_buffer[i] = _q->data_tx_interp[i];
+    unsigned int j;
+    float g = 0.3f;
+    // interpolate using matched filter
+    for (j=0; j<frame_len; j++)
+        interp_crcf_execute(_q->tx_interp, g*frame[j], &buffer_interp[4*j]);
         
-        // update counters
-        n -= t;     // reduce number of samples remaining
-        k++;        // increment block counter
-
-        //send the entire contents of the buffer
-        _q->usrp->get_device()->send(
-            &_q->tx_buffer.front(),
-            _q->tx_buffer.size(),
-            md,
-            uhd::io_type_t::COMPLEX_FLOAT32,
-            uhd::device::SEND_MODE_FULL_BUFF
-        );
-
-    }
-
-    // flush interpolator with zeros, min(64,buffer_len)
-    n = buffer_len;
-
-    // run matched-filter interpolator
-    for (i=0; i<n; i++)
-        interp_crcf_execute(_q->tx_interp, 0, &_q->data_tx_interp[4*i]);
-
     // run resampler
-    num_out=0;
-    for (i=0; i<4*n; i++) {
-        resamp_crcf_execute(_q->tx_resamp, _q->data_tx_interp[i], &_q->data_tx_resamp[num_out], &nw);
-        num_out += nw;
-
-        // 
-        assert(num_out < 128);
+    unsigned int n=0;
+    unsigned int nw;
+    for (j=0; j<4*frame_len; j++) {
+        resamp_crcf_execute(_q->tx_resamp, buffer_interp[j], &buffer_resamp[n], &nw);
+        n += nw;
     }
 
-    // copy array to vector
-    _q->tx_buffer.resize(num_out);
-    for (i=0; i<num_out; i++)
-        _q->tx_buffer[i] = _q->data_tx_interp[i];
+    //printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
+    buff.resize(n);
+    for (j=0; j<n; j++) {
+        buff[j] = buffer_resamp[j];
+    }
 
     //send the entire contents of the buffer
-    md.end_of_burst = true;
     _q->usrp->get_device()->send(
-        &_q->tx_buffer.front(),
-        _q->tx_buffer.size(),
-        md,
+        &buff.front(), buff.size(), md,
         uhd::io_type_t::COMPLEX_FLOAT32,
         uhd::device::SEND_MODE_FULL_BUFF
     );
 
-
+#if 0
+    // send a mini EOB packet
+    md.start_of_burst = false;
+    md.end_of_burst   = true;
+    _q->usrp->get_device()->send("", 0, md,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+#endif
 }
 
 // receive data packet with timeout, returning 1 if found, 0 if not
@@ -416,13 +377,27 @@ int iqpr_rxpacket(iqpr _q,
                   int           *  _payload_valid,
                   framesyncstats_s * _stats)
 {
+    size_t total_samples = 100000;
+
+    // start data transfer
+#if 0
+    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE);
+    stream_cmd.num_samps = total_samples;
+    stream_cmd.stream_now = true;
+    _q->usrp->issue_stream_cmd(stream_cmd);
+#else
+    _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+#endif
+ 
     uhd::rx_metadata_t md;
 
     // read samples from buffer, run through frame synchronizer
-    unsigned int i;
+    //unsigned int i;
     unsigned int n=0;
     // TODO : start 'timer'
-    for (i=0; i<10; i++) {
+    size_t num_accumulated_samples = 0;
+    while ( num_accumulated_samples < total_samples) {
+
         // grab data from port
         size_t num_rx_samps = _q->usrp->get_device()->recv(
             &_q->rx_buffer.front(),
@@ -431,6 +406,8 @@ int iqpr_rxpacket(iqpr _q,
             uhd::io_type_t::COMPLEX_FLOAT32,
             uhd::device::RECV_MODE_ONE_PACKET
         );
+        num_accumulated_samples += num_rx_samps;
+        //printf("  num_accumulated_samples : %u\n", num_accumulated_samples);
 
         //handle the error codes
         switch(md.error_code){
@@ -440,7 +417,7 @@ int iqpr_rxpacket(iqpr _q,
         default:
             std::cerr << "Error code: " << md.error_code << std::endl;
             std::cerr << "Unexpected error on recv, exit test..." << std::endl;
-            return 1;
+            exit(1);
         }
 
         // for now copy vector "buff" to array of complex float
@@ -491,6 +468,8 @@ int iqpr_rxpacket(iqpr _q,
         }
 #endif
     }
+    _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+    //printf("usrp data transfer complete\n");
 
     // packet was never received
     return 0;

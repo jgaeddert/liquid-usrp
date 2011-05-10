@@ -28,40 +28,116 @@
 #include <time.h>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
 #include "iqpr.h"
  
 void usage() {
     printf("iqpr_test:\n");
     printf("  u,h   :   usage/help\n");
-    printf("  i<id> :   node id, 0:255, default: random\n");
 }
 
 int main (int argc, char **argv)
 {
-    srand(time(NULL));
-
-    // options
-    unsigned int node_id = rand() % 256;
+    //srand(time(NULL));
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhi:")) != EOF) {
+    while ((d = getopt(argc,argv,"uh:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                return 0;
-        case 'i':   node_id = atoi(optarg); break;
         default:
             fprintf(stderr,"error: %s, unsupported option\n", argv[0]);
             exit(1);
         }
     }
 
-#if 0
-    iqpr q = iqpr_create(node_id);
+    iqpr q = iqpr_create();
 
-    iqpr_destroy(q);
+    // set rx parameters
+    iqpr_set_rx_gain(q, 20);
+    iqpr_set_rx_rate(q, 127e3);
+    iqpr_set_rx_freq(q, 462e6f);
+
+    // set tx parameters
+    iqpr_set_tx_gain(q, -20);
+    iqpr_set_tx_rate(q, 127e3);
+    iqpr_set_tx_freq(q, 462e6f);
+
+    unsigned int i;
+
+#if 1
+    //
+    unsigned int timespec = 0;
+    unsigned char * rx_header = NULL;
+    int             rx_header_valid;
+    unsigned char * rx_payload = NULL;
+    unsigned int    rx_payload_len;
+    int             rx_payload_valid;
+    framesyncstats_s stats;
+
+    //
+    // receiver
+    //
+
+    printf("starting receiver...\n");
+    for (i=0; i<20; i++) {
+        int packet_received =
+        iqpr_rxpacket(q, timespec,
+                      &rx_header,
+                      &rx_header_valid,
+                      &rx_payload,
+                      &rx_payload_len,
+                      &rx_payload_valid,
+                      &stats);
+
+        if (packet_received)
+            printf("received packet!\n");
+    }
 #endif
+
+#if 1
+
+    //
+    // transmitter
+    //
+
+    flexframegenprops_s fgprops;
+    flexframegenprops_init_default(&fgprops);
+    fgprops.rampup_len   = 40;
+    fgprops.phasing_len  = 40;
+    fgprops.check        = LIQUID_CRC_32;
+    fgprops.fec0         = LIQUID_FEC_NONE;
+    fgprops.fec1         = LIQUID_FEC_NONE;
+    fgprops.mod_scheme   = LIQUID_MODEM_QAM;
+    fgprops.mod_bps      = 4;
+    fgprops.rampdn_len   = 40;
+
+    unsigned int num_packets = 1000;
+    unsigned int payload_len = 200;
+    unsigned char header[14];
+    unsigned char payload[payload_len];
+
+    printf("starting transmitter...\n");
+    for (i=0; i<num_packets; i++) {
+        //printf("  transmitting packet %6u / %6u\n", i, num_packets);
+
+        header[0] = (i >> 8) & 0xff;
+        header[1] = (i    ) & 0xff;
+
+        unsigned int j;
+        for (j=2; j<14; j++) header[j] = rand() & 0xff;
+        for (j=0; j<payload_len; j++) payload[j] = rand() & 0xff;
+
+        iqpr_txpacket(q, header, payload, payload_len, &fgprops);
+
+        //usleep(10000);
+    }
+#endif
+
+    // destroy object
+    iqpr_destroy(q);
+
+    printf("done.\n");
 
     return 0;
 }
