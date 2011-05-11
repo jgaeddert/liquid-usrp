@@ -402,7 +402,7 @@ int iqpr_rxpacket(iqpr _q,
                   int           *  _payload_valid,
                   framesyncstats_s * _stats)
 {
-    unsigned long int total_samples = 380;
+    unsigned long int total_samples = _timespec;
     // TODO : start 'timer'
     unsigned long int num_accumulated_samples = 0;
 

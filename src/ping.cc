@@ -36,10 +36,7 @@
 #include <complex>
 #include <liquid/liquid.h>
 
-#include "usrp_io.h"
 #include "iqpr.h"
-
-#define USRP_CHANNEL        (0)
 
 #define NODE_MASTER         (0)
 #define NODE_SLAVE          (1)
@@ -58,16 +55,10 @@ void usage() {
 int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
-    float symbolrate = 100e3f;
+    float symbolrate = 160e3f;
     unsigned int num_packets = 1000;
     unsigned int max_num_attempts = 100;    // maximum number of tx attempts
     unsigned int node_type = NODE_MASTER;
-    unsigned int node_id = 15;              // node id in [0,15]
-    unsigned int rssi_samples = 128;        // number of samples with which to estimate rssi
-    float rssi_clear_threshold = -35.0f;    // rssi threshold to determine if channel is 'clear'
-    unsigned int mac_timeout = 5;           // number of 'clear' flags before transmission
-    //unsigned int mac_timeout_backoff = 5;   // random backoff
-    float tx_gain = 0.9f;                   // transmit gain
     int verbose = 1;
 
     //
@@ -90,109 +81,104 @@ int main (int argc, char **argv) {
         }
     }
 
-    // create usrp object
-    usrp_io * usrp = new usrp_io();
-
-    // set properties
-    usrp->set_tx_freq(USRP_CHANNEL, frequency);
-    usrp->set_tx_samplerate(2*symbolrate);
-    usrp->set_rx_freq(USRP_CHANNEL, frequency);
-    usrp->set_rx_samplerate(2*symbolrate);
-    usrp->enable_auto_tx(USRP_CHANNEL);
-
-    if (verbose) usrp->enable_verbose();
-    else         usrp->disable_verbose();
-
     // initialize iqpr structure
-    iqpr q = iqpr_create(node_id,
-                         usrp->get_tx_port(USRP_CHANNEL),
-                         usrp->get_rx_port(USRP_CHANNEL));
+    iqpr q = iqpr_create();
 
-    // iqpr_setverbose(q, verbose);
+    // set rx parameters
+    iqpr_set_rx_gain(q, 20);
+    iqpr_set_rx_rate(q, symbolrate);
+    iqpr_set_rx_freq(q, frequency);
 
-    // set transmit gain
-    iqpr_settxgain(q,tx_gain);
+    // set tx parameters
+    iqpr_set_tx_gain(q, -20);
+    iqpr_set_tx_rate(q, symbolrate);
+    iqpr_set_tx_freq(q, frequency);
+
+    // other options
+    iqpr_unset_verbose(q);
 
     // sleep for a small time before starting tx/rx processes
     usleep(1000000);
 
-    // start data transfer
-    usrp->start_tx(USRP_CHANNEL);
-    usrp->start_rx(USRP_CHANNEL);
+    // 
+    // receiver properties
+    //
+    unsigned int    timespec = 10000;
+    unsigned char * rx_header = NULL;
+    int             rx_header_valid;
+    unsigned char * rx_payload = NULL;
+    unsigned int    rx_payload_len;
+    int             rx_payload_valid;
+    framesyncstats_s stats;
+    unsigned char rx_pid = 0;
 
-    // TODO : start timer
+    //
+    // transmitter properties
+    //
+    flexframegenprops_s fgprops;
+    flexframegenprops_init_default(&fgprops);
+    fgprops.rampup_len   = 40;
+    fgprops.phasing_len  = 40;
+    fgprops.check        = LIQUID_CRC_32;
+    fgprops.fec0         = LIQUID_FEC_NONE;
+    fgprops.fec1         = LIQUID_FEC_NONE;
+    fgprops.mod_scheme   = LIQUID_MODEM_QAM;
+    fgprops.mod_bps      = 4;
+    fgprops.rampdn_len   = 40;
+    unsigned char tx_pid;
+    unsigned char tx_header[14];
+    unsigned int  tx_payload_len = 1024;
+    unsigned char tx_payload[tx_payload_len];
 
-    //unsigned int i;
-    unsigned int pid;
-    unsigned int j;
     unsigned int n;
     unsigned int num_attempts = 0;
-
-    // frame headers
-    iqprheader_s tx_header; // transmitted frame header
-    iqprheader_s rx_header; // received frame header
-
-    // received frame statistics (SNR, rssi)
-    framesyncstats_s stats;
-
-    // parameters
-    modulation_scheme ms = LIQUID_MODEM_PSK;
-    unsigned int bps = 2;
-    fec_scheme fec0 = LIQUID_FEC_NONE;
-    fec_scheme fec1 = LIQUID_FEC_NONE;
-
 
     if (node_type == NODE_MASTER) {
         // 
         // MASTER NODE
         //
-        unsigned int payload_len = 1024;
-        unsigned char payload[payload_len];
-
         int ack_received;
 
-        for (pid=0; pid<num_packets; pid++) {
+        for (tx_pid=0; tx_pid<num_packets; tx_pid++) {
+
+            // initialize header
+            tx_header[0] = (tx_pid >> 8) & 0xff;
+            tx_header[1] = (tx_pid     ) & 0xff;
+            tx_header[2] = 59;
+            for (n=3; n<14; n++)
+                tx_header[n] = rand() & 0xff;
 
             // initialize payload to random data
-            for (n=0; n<payload_len; n++)
-                payload[n] = rand() % 256;
+            for (n=0; n<tx_payload_len; n++)
+                tx_payload[n] = rand() % 256;
 
             ack_received = 0;
             num_attempts = 0;
             do {
                 num_attempts++;
 
-                // wait for clear signal (five clean reports in a row)
-                j = mac_timeout;
-                while (j) {
-                    float rssi = iqpr_mac_getrssi(q,rssi_samples);
-                    int clear = rssi < rssi_clear_threshold;
-                    if (verbose) printf("  rssi : %12.8f dB %c\n", rssi, clear ? ' ' : '*');
-
-                    if (clear) j--;
-                    else       j = mac_timeout;
-                }
-
-                // initialize header
-                tx_header.pid           = pid;
-                tx_header.packet_type   = IQPR_PACKET_TYPE_DATA;
-                tx_header.node_src      = node_id;
-                tx_header.node_dst      = 0;
-
                 // transmit packet
                 printf("transmitting packet %6u/%6u (attempt %4u/%4u) %c\n",
-                        pid, num_packets, num_attempts, max_num_attempts,
+                        tx_pid, num_packets, num_attempts, max_num_attempts,
                         num_attempts > 1 ? '*' : ' ');
-                iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
+                //iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
+                iqpr_txpacket(q, tx_header, tx_payload, tx_payload_len, &fgprops);
 
-                // wait for acknowledgement (minimum timeout is about 3)
-                // TODO : increase timeout based on transmitted packet length
-                for (j=0; j<5; j++) {
-                    ack_received = iqpr_wait_for_ack(q, pid, &rx_header, &stats);
+                // wait for acknowledgement
+                int packet_received =
+                iqpr_rxpacket(q, timespec,
+                              &rx_header,
+                              &rx_header_valid,
+                              &rx_payload,
+                              &rx_payload_len,
+                              &rx_payload_valid,
+                              &stats);
 
-                    if (ack_received)
-                        break;
-                }
+                rx_pid = (rx_header[0] << 8) | rx_header[1];
+                ack_received = packet_received && rx_pid == tx_pid && rx_header[2] == 77;
+
+                if (ack_received)
+                    break;
             } while (!ack_received && (num_attempts < max_num_attempts) );
 
             if (num_attempts == max_num_attempts) {
@@ -204,35 +190,44 @@ int main (int argc, char **argv) {
         // 
         // SLAVE NODE
         //
-        unsigned char * payload = NULL;
-        unsigned int payload_len;
-        unsigned int packet_found;
-        pid = 0;
 
+        int packet_found = 0;
         do {
             // wait for data packet
             do {
                 // attempt to receive data packet
-                packet_found = iqpr_wait_for_packet(q,
-                                                    &payload,
-                                                    &payload_len,
-                                                    &rx_header,
-                                                    &stats);
+                packet_found =
+                iqpr_rxpacket(q,
+                              timespec,
+                              &rx_header,
+                              &rx_header_valid,
+                              &rx_payload,
+                              &rx_payload_len,
+                              &rx_payload_valid,
+                              &stats);
             } while (!packet_found);
+            
+            if (!rx_header_valid || !rx_payload_valid || rx_header[2] != 59) {
+                printf("invalid packet\n");
+                continue;
+            }
+
+            rx_pid = (rx_header[0] << 8) | rx_header[1];
 
             printf("  ping received %4u data bytes on packet [%4u]\n",
-                    payload_len,
-                    rx_header.pid);
+                    rx_payload_len,
+                    rx_pid);
 
             // print received frame statistics
             if (verbose) framesyncstats_print(&stats);
 
             // transmit acknowledgement
-            iqpr_txack(q, rx_header.pid);
+            tx_header[0] = rx_header[0];
+            tx_header[1] = rx_header[1];
+            tx_header[2] = 77;  // ACK code
+            iqpr_txpacket(q, tx_header, NULL, 0, &fgprops);
 
-            pid = rx_header.pid;
-
-        } while (pid != num_packets-1);
+        } while (rx_pid != num_packets-1);
     }
 
     // TODO : stop timer
@@ -240,14 +235,7 @@ int main (int argc, char **argv) {
     // sleep for a small time before stopping tx/rx processes
     usleep(100000);
 
-    // stop data transfer
-    usrp->stop_rx(USRP_CHANNEL);
-    usrp->stop_tx(USRP_CHANNEL);
-
     printf("main process complete\n");
-
-    // delete usrp object
-    delete usrp;
 
     // destroy main data object
     iqpr_destroy(q);

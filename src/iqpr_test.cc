@@ -70,7 +70,7 @@ int main (int argc, char **argv)
 
 #if 1
     //
-    unsigned int timespec = 0;
+    unsigned int    timespec = 10000;
     unsigned char * rx_header = NULL;
     int             rx_header_valid;
     unsigned char * rx_payload = NULL;
