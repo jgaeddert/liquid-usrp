@@ -156,6 +156,21 @@ float iqpr_mac_getrssi(iqpr _q,
 // internal methods
 //
 
+// produce data to rx buffer (request samples to be read from device)
+//  _q              :   iqpr object
+//  _buffer         :   output buffer pointer
+//  _num_samples    :   number of samples in buffer
+void iqpr_rx_produce(iqpr _q,
+                     std::complex<float> ** _buffer,
+                     unsigned int * _num_samples);
+
+// consume data from rx buffer (indicate number of samples that
+// have been read from buffer)
+//  _q              :   iqpr object
+//  _num_samples    :   number of samples consumed
+void iqpr_rx_consume(iqpr _q,
+                     unsigned int _num_samples);
+
 // iqpr internal callback method
 int iqpr_callback(unsigned char * _rx_header,
                   int _rx_header_valid,

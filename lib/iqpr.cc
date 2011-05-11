@@ -44,9 +44,11 @@ struct iqpr_s {
 
     // receiver
     std::vector<std::complex<float> > rx_buffer;    // rx data buffer
-    std::complex<float> data_rx[64];                // rx data buffer (array)
-    std::complex<float> data_rx_decim[32];          // rx decimated
-    std::complex<float> data_rx_resamp[64];         // rx resampled
+    std::complex<float> * data_rx;                  // rx data buffer (array)
+    std::complex<float> * data_rx_decim;            // rx decimated
+    std::complex<float> * data_rx_resamp;           // rx resampled
+    unsigned int num_rx_produced;                   // number of rx resampled elements produced
+    unsigned int num_rx_consumed;                   // number of rx resampled elements consumed
     resamp2_crcf rx_decim;          // half-band decimator
     resamp_crcf rx_resamp;          // arbitrary resampler
     framesyncprops_s fsprops;       // frame synchronizer properties
@@ -96,6 +98,12 @@ iqpr iqpr_create()
     //
     const size_t max_samps_per_packet = q->usrp->get_device()->get_max_recv_samps_per_packet();
     q->rx_buffer.resize(max_samps_per_packet);
+    q->data_rx          = (std::complex<float>*) malloc(max_samps_per_packet*sizeof(std::complex<float>));
+    q->data_rx_decim    = (std::complex<float>*) malloc(max_samps_per_packet*sizeof(std::complex<float>));
+    q->data_rx_resamp   = (std::complex<float>*) malloc(max_samps_per_packet*sizeof(std::complex<float>));
+    q->num_rx_produced  = 0;
+    q->num_rx_consumed  = 0;
+
     q->rx_resamp = resamp_crcf_create(1.0, 7, 0.4, 60.0, 64);
     q->rx_decim = resamp2_crcf_create(7, 0.0, 40.0);
 
@@ -152,6 +160,9 @@ void iqpr_destroy(iqpr _q)
     // 
     // receiver objects
     //
+    free(_q->data_rx);
+    free(_q->data_rx_decim);
+    free(_q->data_rx_resamp);
     resamp_crcf_destroy(_q->rx_resamp);
     resamp2_crcf_destroy(_q->rx_decim);
     flexframesync_destroy(_q->fs);
@@ -615,6 +626,24 @@ float iqpr_mac_getrssi(iqpr _q,
 // iqpr internal methods
 //
 
+// produce data to rx buffer
+//  _q              :   iqpr object
+//  _buffer         :   output buffer pointer
+//  _num_samples    :   number of samples in buffer
+void iqpr_rx_produce(iqpr _q,
+                     std::complex<float> ** _buffer,
+                     unsigned int * _num_samples)
+{
+#if 0
+    // check if buffer isn't yet empty...
+    if (_q->num_rx_resamp > 0) {
+    }
+
+    //
+#endif
+}
+
+// iqpr internal callback method
 int iqpr_callback(unsigned char * _rx_header,
                   int _rx_header_valid,
                   unsigned char * _rx_payload,
