@@ -80,6 +80,7 @@ int main (int argc, char **argv)
     //
 
     printf("starting receiver...\n");
+    iqpr_rx_start(q);
     for (i=0; i<20; i++) {
         int packet_received =
         iqpr_rxpacket(q, timespec,
@@ -93,6 +94,7 @@ int main (int argc, char **argv)
         if (packet_received)
             printf("received packet!\n");
     }
+    iqpr_rx_stop(q);
 #endif
 
 #if 1
