@@ -276,6 +276,27 @@ void iqpr_set_rx_freq(iqpr _q, float _rx_freq)
     _q->usrp->set_rx_freq(_rx_freq);
 }
 
+// set flexframesync properties (receiver)
+void iqpr_rxconfig(iqpr _q,
+                   framesyncprops_s * _fsprops)
+{
+    flexframesync_setprops(_q->fs, _fsprops);
+}
+
+
+// start data transfer
+void iqpr_rx_start(iqpr _q)
+{
+    _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+} 
+
+
+// stop data transfer
+void iqpr_rx_stop(iqpr _q)
+{
+    _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+} 
+
 
 // 
 // low-level functionality
@@ -293,7 +314,7 @@ void iqpr_txpacket(iqpr _q,
                    unsigned int _payload_len,
                    flexframegenprops_s * _fgprops)
 {
-    unsigned int i;
+    //unsigned int i;
 
     // configure frame generator
     if (_fgprops != NULL)
@@ -379,16 +400,6 @@ int iqpr_rxpacket(iqpr _q,
 {
     size_t total_samples = 100000;
 
-    // start data transfer
-#if 0
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE);
-    stream_cmd.num_samps = total_samples;
-    stream_cmd.stream_now = true;
-    _q->usrp->issue_stream_cmd(stream_cmd);
-#else
-    _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-#endif
- 
     uhd::rx_metadata_t md;
 
     // read samples from buffer, run through frame synchronizer
@@ -468,8 +479,6 @@ int iqpr_rxpacket(iqpr _q,
         }
 #endif
     }
-    _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-    //printf("usrp data transfer complete\n");
 
     // packet was never received
     return 0;
