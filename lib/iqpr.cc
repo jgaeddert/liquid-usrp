@@ -51,8 +51,11 @@ struct iqpr_s {
     framesyncprops_s fsprops;       // frame synchronizer properties
     flexframesync fs;               // frame synchronizer
     int rx_packet_found;            // receiver packet found flag
-    unsigned char * rx_data;        // received payload data
-    unsigned int rx_data_len;       // received payload data length
+    unsigned char rx_header[14];    // received frame header
+    int rx_header_valid;            // receiver frame header valid?
+    unsigned char * rx_payload;        // received payload data
+    unsigned int rx_payload_len;       // received payload data length
+    int rx_payload_valid;           // receiver payload data valid?
     framesyncstats_s rx_stats;      // frame synchronizer stats
 
     // transmitter
@@ -107,8 +110,8 @@ iqpr iqpr_create()
     q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
 
     // allocate memory for received data
-    q->rx_data_len = 1024;
-    q->rx_data = (unsigned char*) malloc(q->rx_data_len*sizeof(unsigned char));
+    q->rx_payload_len = 1024;
+    q->rx_payload = (unsigned char*) malloc(q->rx_payload_len*sizeof(unsigned char));
 
 
     // 
@@ -156,7 +159,7 @@ void iqpr_destroy(iqpr _q)
     resamp_crcf_destroy(_q->rx_resamp);
     resamp2_crcf_destroy(_q->rx_decim);
     flexframesync_destroy(_q->fs);
-    free(_q->rx_data);
+    free(_q->rx_payload);
 
     // 
     // transmitter objects
@@ -399,9 +402,13 @@ int iqpr_rxpacket(iqpr _q,
                   int           *  _payload_valid,
                   framesyncstats_s * _stats)
 {
-    unsigned long int total_samples = 100000;
+    unsigned long int total_samples = 380;
     // TODO : start 'timer'
     unsigned long int num_accumulated_samples = 0;
+
+    //
+    if (total_samples < 2) total_samples = 2;   // set minimum
+    if (total_samples % 2) total_samples++;     // must be even
 
     uhd::rx_metadata_t md;
 
@@ -411,6 +418,8 @@ int iqpr_rxpacket(iqpr _q,
     std::complex<float> rx_buffer_resamp[4];
 
     // read samples from buffer, run through frame synchronizer
+    unsigned int n=0;
+    unsigned int nw=0;
     while ( num_accumulated_samples < total_samples) {
 
         // check if we have read entire contents of buffer
@@ -426,6 +435,7 @@ int iqpr_rxpacket(iqpr _q,
                 uhd::io_type_t::COMPLEX_FLOAT32,
                 uhd::device::RECV_MODE_ONE_PACKET
             );
+            //printf("reading data from usrp : rx vector length : %u\n", _q->rx_vector_length);
 
             //handle the error codes
             switch(md.error_code){
@@ -441,45 +451,44 @@ int iqpr_rxpacket(iqpr _q,
 
         // for now copy vector "buff" to array of complex float
         // TODO : apply bandwidth-dependent gain
-        unsigned int n=0;
-        unsigned int nw=0;
-        while (_q->rx_vector_index < _q->rx_vector_length) {
-            num_accumulated_samples++;
+        num_accumulated_samples++;
 
-            // push 2 samples into buffer
-            rx_buffer_decim[n++] = _q->rx_buffer[_q->rx_vector_index++];
+        // push 2 samples into buffer
+        rx_buffer_decim[n++] = _q->rx_buffer[_q->rx_vector_index++];
 
-            if (n==2) {
-                // reset counter
-                n=0;
+        if (n==2) {
+            // reset counter
+            n=0;
 
-                // decimate
-                resamp2_crcf_decim_execute(_q->rx_decim, rx_buffer_decim, &rx_decim_out);
+            // decimate
+            resamp2_crcf_decim_execute(_q->rx_decim, rx_buffer_decim, &rx_decim_out);
 
-                // apply resampler
-                resamp_crcf_execute(_q->rx_resamp, rx_decim_out, rx_buffer_resamp, &nw);
+            // apply resampler
+            resamp_crcf_execute(_q->rx_resamp, rx_decim_out, rx_buffer_resamp, &nw);
 
-                // push through synchronizer
-                flexframesync_execute(_q->fs, rx_buffer_resamp, nw);
+            // push through synchronizer
+            flexframesync_execute(_q->fs, rx_buffer_resamp, nw);
 
-#if 0
-                // check status flag
-                if (_q->rx_packet_found) {
-                    if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
+#if 1
+            // check status flag
+            if (_q->rx_packet_found) {
+                // found packet; set outputs
+                *_header        = _q->rx_header;
+                *_header_valid  = _q->rx_header_valid;
+                *_payload       = _q->rx_payload_valid ? _q->rx_payload     : NULL;
+                *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
+                *_payload_valid = _q->rx_payload_valid;
 
-                    // set outputs
-                    *_payload = _q->rx_data;
-                    *_payload_len = _q->rx_data_len;
-                    memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
-                    memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
-                    return 1;
-                }
+                // reset status flag
+                _q->rx_packet_found = 0;
+
+                return 1;
+            }
 #endif
-            } // resamp
-        } // while
+        } // resamp
     }
-
     // packet was never received
+    //printf("  consumed %6lu / %6lu samples\n", num_accumulated_samples, total_samples);
     return 0;
 }
 
@@ -623,74 +632,53 @@ int iqpr_callback(unsigned char * _rx_header,
                   framesyncstats_s _stats,
                   void * _userdata)
 {
-    printf("********* callback invoked\n");
-#if 0
     iqpr q = (iqpr) _userdata;
 
+    unsigned int pid = (_rx_header[0] << 8) | _rx_header[1];
+    printf("********* callback invoked, pid = %6u\n", pid);
+
     if (q->verbose) {
-        printf("********* callback invoked, ");
-        framesyncstats_print(&_stats);
+        //printf("********* callback invoked, ");
         // ...
     }
 
+    // set internal values
+    q->rx_packet_found  = 1;
+    q->rx_header_valid  = _rx_header_valid;
+    q->rx_payload_valid = _rx_payload_valid;
+
+    // copy header (regardless of validity)
+    memmove(q->rx_header, _rx_header, 14*sizeof(unsigned char));
+
     if ( !_rx_header_valid ) {
-        if (q->verbose) printf("header crc : FAIL\n");
+        //if (q->verbose) printf("header crc : FAIL\n");
+        return 0;
+    }
+
+    if ( !_rx_payload_valid ) {
+        //if (q->verbose) printf("payload crc : FAIL\n");
         return 0;
     }
 
     // save statistics
     memmove(&q->rx_stats, &_stats, sizeof(framesyncstats_s));
 
-    // decode header
-    iqprheader_decode(&q->rx_header, _rx_header);
-    if (q->verbose) printf("packet id: %6u", q->rx_header.pid);
-
-    if (q->verbose) {
-        switch (q->rx_header.packet_type) {
-        case IQPR_PACKET_TYPE_DATA:  printf(" (data)\n"); break;
-        case IQPR_PACKET_TYPE_ACK:   printf(" (ack)\n");  break;
-        default:
-            printf("\n");
-            fprintf(stderr,"error: iqpr_callback(), invaid packet type: %u\n", q->rx_header.packet_type);
-        }
-    }
-
-    if (q->rx_header.packet_type == IQPR_PACKET_TYPE_ACK) {
-        // check to see if we were waiting for an ack and
-        // check to see if this packet matches the one we are waiting for
-        //
-        // TODO : check to see if source/destination ids match as well?
-        if ( (q->rx_state == IQPR_RX_WAIT_FOR_ACK) && (q->rx_header.pid == q->rx_packet_pid) ) {
-            // set status flag
-            q->rx_packet_found = 1;
-        } else {
-            q->rx_packet_found = 0;
-        }
-
-        return 0;
-    }
-
     // re-allocate memory arrays if necessary
-    if (q->rx_data_len != _rx_payload_len) {
-        q->rx_data_len = _rx_payload_len;
-        q->rx_data = (unsigned char*) realloc(q->rx_data, q->rx_data_len*sizeof(unsigned char));
+    if (q->rx_payload_len != _rx_payload_len) {
+        q->rx_payload_len = _rx_payload_len;
+        q->rx_payload = (unsigned char*) realloc(q->rx_payload, q->rx_payload_len*sizeof(unsigned char));
     }
 
     // copy data (regardless of validity)
-    memmove(q->rx_data, _rx_payload, _rx_payload_len*sizeof(unsigned char));
+    memmove(q->rx_payload, _rx_payload, _rx_payload_len*sizeof(unsigned char));
 
     if (!_rx_payload_valid) {
-        if (q->verbose) printf("  <<< payload crc fail >>>\n");
+        //if (q->verbose) printf("  <<< payload crc fail >>>\n");
 
         // payload failed check
         return 0;
     }
 
-    // check to see if we were waiting for a data packet
-    if (q->rx_state == IQPR_RX_WAIT_FOR_DATA)
-        q->rx_packet_found = 1;
-
-#endif
     return 0;
 }
 

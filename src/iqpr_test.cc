@@ -63,6 +63,9 @@ int main (int argc, char **argv)
     iqpr_set_tx_rate(q, 127e3);
     iqpr_set_tx_freq(q, 462e6f);
 
+    // other options
+    iqpr_unset_verbose(q);
+
     unsigned int i;
 
 #if 1
@@ -81,7 +84,7 @@ int main (int argc, char **argv)
 
     printf("starting receiver...\n");
     iqpr_rx_start(q);
-    for (i=0; i<20; i++) {
+    for (i=0; i<20000; i++) {
         int packet_received =
         iqpr_rxpacket(q, timespec,
                       &rx_header,
@@ -91,8 +94,22 @@ int main (int argc, char **argv)
                       &rx_payload_valid,
                       &stats);
 
-        if (packet_received)
-            printf("received packet!\n");
+        if (packet_received) {
+            printf("iqpr received packet");
+
+            if (rx_header_valid) {
+                unsigned int pid = (rx_header[0] << 8) | rx_header[1];
+                printf("[%6u]", pid);
+            } else {
+                printf("header crc : FAIL\n");
+            }
+
+            if (rx_payload_valid) {
+                printf(" %6u bytes\n", rx_payload_len);
+            } else {
+                printf("payload crc : FAIL\n");
+            }
+        }
     }
     iqpr_rx_stop(q);
 #endif
