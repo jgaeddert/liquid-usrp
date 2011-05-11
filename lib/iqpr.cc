@@ -44,11 +44,8 @@ struct iqpr_s {
 
     // receiver
     std::vector<std::complex<float> > rx_buffer;    // rx data buffer
-    std::complex<float> * data_rx;                  // rx data buffer (array)
-    std::complex<float> * data_rx_decim;            // rx decimated
-    std::complex<float> * data_rx_resamp;           // rx resampled
-    unsigned int num_rx_produced;                   // number of rx resampled elements produced
-    unsigned int num_rx_consumed;                   // number of rx resampled elements consumed
+    unsigned int rx_vector_index;                   // index of rx buffer vector
+    unsigned int rx_vector_length;                  // length of rx buffer vector
     resamp2_crcf rx_decim;          // half-band decimator
     resamp_crcf rx_resamp;          // arbitrary resampler
     framesyncprops_s fsprops;       // frame synchronizer properties
@@ -98,12 +95,8 @@ iqpr iqpr_create()
     //
     const size_t max_samps_per_packet = q->usrp->get_device()->get_max_recv_samps_per_packet();
     q->rx_buffer.resize(max_samps_per_packet);
-    q->data_rx          = (std::complex<float>*) malloc(max_samps_per_packet*sizeof(std::complex<float>));
-    q->data_rx_decim    = (std::complex<float>*) malloc(max_samps_per_packet*sizeof(std::complex<float>));
-    q->data_rx_resamp   = (std::complex<float>*) malloc(max_samps_per_packet*sizeof(std::complex<float>));
-    q->num_rx_produced  = 0;
-    q->num_rx_consumed  = 0;
-
+    q->rx_vector_index  = 0;
+    q->rx_vector_length = 0;
     q->rx_resamp = resamp_crcf_create(1.0, 7, 0.4, 60.0, 64);
     q->rx_decim = resamp2_crcf_create(7, 0.0, 40.0);
 
@@ -160,9 +153,6 @@ void iqpr_destroy(iqpr _q)
     // 
     // receiver objects
     //
-    free(_q->data_rx);
-    free(_q->data_rx_decim);
-    free(_q->data_rx_resamp);
     resamp_crcf_destroy(_q->rx_resamp);
     resamp2_crcf_destroy(_q->rx_decim);
     flexframesync_destroy(_q->fs);
@@ -409,86 +399,84 @@ int iqpr_rxpacket(iqpr _q,
                   int           *  _payload_valid,
                   framesyncstats_s * _stats)
 {
-    size_t total_samples = 100000;
+    unsigned long int total_samples = 100000;
+    // TODO : start 'timer'
+    unsigned long int num_accumulated_samples = 0;
 
     uhd::rx_metadata_t md;
 
+    // buffers
+    std::complex<float> rx_buffer_decim[2];
+    std::complex<float> rx_decim_out;
+    std::complex<float> rx_buffer_resamp[4];
+
     // read samples from buffer, run through frame synchronizer
-    //unsigned int i;
-    unsigned int n=0;
-    // TODO : start 'timer'
-    size_t num_accumulated_samples = 0;
     while ( num_accumulated_samples < total_samples) {
 
-        // grab data from port
-        size_t num_rx_samps = _q->usrp->get_device()->recv(
-            &_q->rx_buffer.front(),
-            _q->rx_buffer.size(),
-            md,
-            uhd::io_type_t::COMPLEX_FLOAT32,
-            uhd::device::RECV_MODE_ONE_PACKET
-        );
-        num_accumulated_samples += num_rx_samps;
-        //printf("  num_accumulated_samples : %u\n", num_accumulated_samples);
+        // check if we have read entire contents of buffer
+        if (_q->rx_vector_index == _q->rx_vector_length) {
+            // reset vector index
+            _q->rx_vector_index = 0;
 
-        //handle the error codes
-        switch(md.error_code){
-        case uhd::rx_metadata_t::ERROR_CODE_NONE:
-        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
-            break;
-        default:
-            std::cerr << "Error code: " << md.error_code << std::endl;
-            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
-            exit(1);
+            // grab data from port
+            _q->rx_vector_length = _q->usrp->get_device()->recv(
+                &_q->rx_buffer.front(),
+                _q->rx_buffer.size(),
+                md,
+                uhd::io_type_t::COMPLEX_FLOAT32,
+                uhd::device::RECV_MODE_ONE_PACKET
+            );
+
+            //handle the error codes
+            switch(md.error_code){
+            case uhd::rx_metadata_t::ERROR_CODE_NONE:
+            case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+                break;
+            default:
+                std::cerr << "Error code: " << md.error_code << std::endl;
+                std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+                exit(1);
+            }
         }
 
         // for now copy vector "buff" to array of complex float
         // TODO : apply bandwidth-dependent gain
-        unsigned int j;
+        unsigned int n=0;
         unsigned int nw=0;
-        for (j=0; j<num_rx_samps; j++) {
-            // push 64 samples into buffer
-            _q->data_rx[n++] = _q->rx_buffer[j];
+        while (_q->rx_vector_index < _q->rx_vector_length) {
+            num_accumulated_samples++;
 
-            if (n==64) {
+            // push 2 samples into buffer
+            rx_buffer_decim[n++] = _q->rx_buffer[_q->rx_vector_index++];
+
+            if (n==2) {
                 // reset counter
                 n=0;
 
-                // deimate to 32
-                unsigned int k;
-                for (k=0; k<32; k++)
-                    resamp2_crcf_decim_execute(_q->rx_decim, &_q->data_rx[2*k], &_q->data_rx_decim[k]);
+                // decimate
+                resamp2_crcf_decim_execute(_q->rx_decim, rx_buffer_decim, &rx_decim_out);
 
                 // apply resampler
-                for (k=0; k<32; k++) {
-                    resamp_crcf_execute(_q->rx_resamp, _q->data_rx_decim[k], &_q->data_rx_resamp[n], &nw);
-                    n += nw;
-
-                    assert(n <= 32);
-                }
+                resamp_crcf_execute(_q->rx_resamp, rx_decim_out, rx_buffer_resamp, &nw);
 
                 // push through synchronizer
-                flexframesync_execute(_q->fs, _q->data_rx_resamp, n);
-
-                // reset counter (again)
-                n = 0;
-            }
-
-        }
+                flexframesync_execute(_q->fs, rx_buffer_resamp, nw);
 
 #if 0
-        // check status flag
-        if (_q->rx_packet_found) {
-            if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
+                // check status flag
+                if (_q->rx_packet_found) {
+                    if (_q->verbose) printf(" received data packet %u!\n", _q->rx_header.pid);
 
-            // set outputs
-            *_payload = _q->rx_data;
-            *_payload_len = _q->rx_data_len;
-            memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
-            memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
-            return 1;
-        }
+                    // set outputs
+                    *_payload = _q->rx_data;
+                    *_payload_len = _q->rx_data_len;
+                    memmove(_header, &_q->rx_header, sizeof(struct iqprheader_s));
+                    memmove(_stats,  &_q->rx_stats,  sizeof(framesyncstats_s));
+                    return 1;
+                }
 #endif
+            } // resamp
+        } // while
     }
 
     // packet was never received
@@ -625,23 +613,6 @@ float iqpr_mac_getrssi(iqpr _q,
 // 
 // iqpr internal methods
 //
-
-// produce data to rx buffer
-//  _q              :   iqpr object
-//  _buffer         :   output buffer pointer
-//  _num_samples    :   number of samples in buffer
-void iqpr_rx_produce(iqpr _q,
-                     std::complex<float> ** _buffer,
-                     unsigned int * _num_samples)
-{
-#if 0
-    // check if buffer isn't yet empty...
-    if (_q->num_rx_resamp > 0) {
-    }
-
-    //
-#endif
-}
 
 // iqpr internal callback method
 int iqpr_callback(unsigned char * _rx_header,
