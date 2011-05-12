@@ -49,9 +49,14 @@ void usage() {
     printf("  u,h   :   usage/help\n");
     printf("  f     :   frequency [Hz], default: 462 MHz\n");
     printf("  b     :   bandwidth [Hz], default: 100 kHz\n");
-    printf("  n     :   number of packets, default: 1000\n");
-    printf("  a     :   number of tx attempts (master), default: 100\n");
-    printf("  m/s   :   designate node as master/slave, default: slave\n");
+    printf("  M/S   :   designate node as master/slave, default: slave\n");
+    printf("  N     :   number of packets, default: 1000\n");
+    printf("  A     :   [master] max. number of tx attempts, default: 100\n");
+    printf("  n     :   [master] payload length (bytes), default: 200\n");
+    printf("  m     :   [master] mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
+    printf("  p     :   [master] mod. depth: <1>,2,...8\n");
+    printf("  c     :   [master] fec coding scheme (inner)\n");
+    printf("  k     :   [master] fec coding scheme (outer)\n");
     printf("  v/q   :   set verbose/quiet mode, default: verbose\n");
 }
 
@@ -60,24 +65,37 @@ int main (int argc, char **argv) {
     float frequency = 462e6f;
     float symbolrate = 160e3f;
     unsigned int num_packets = 1000;
-    unsigned int max_num_attempts = 100;    // maximum number of tx attempts
-    unsigned int node_type = PING_NODE_MASTER;
+    unsigned int node_type = PING_NODE_SLAVE;
     int verbose = 1;
+
+    // master node options
+    unsigned int payload_len=200;               // payload length (bytes)
+    unsigned int max_num_attempts = 100;        // maximum number of tx attempts
+    crc_scheme check    = LIQUID_CRC_16;        // data validity check
+    fec_scheme fec0     = LIQUID_FEC_NONE;      // inner FEC scheme
+    fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
+    modulation_scheme mod_scheme = LIQUID_MODEM_QAM;    // modulation scheme
+    unsigned int mod_depth = 2;                         // modulation depth
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhf:b:n:a:msvq")) != EOF) {
+    while ((d = getopt(argc,argv,"uhf:b:N:A:MSn:m:p:c:k:vq")) != EOF) {
         switch (d) {
         case 'u':
         case 'h': usage();                          return 0;
         case 'f': frequency = atof(optarg);         break;
         case 'b': symbolrate = atof(optarg);        break;
-        case 'n': num_packets = atoi(optarg);       break;
-        case 'a': max_num_attempts = atoi(optarg);  break;
-        case 'm': node_type = PING_NODE_MASTER;          break;
-        case 's': node_type = PING_NODE_SLAVE;           break;
-        case 'v': verbose = 1;                      break;
-        case 'q': verbose = 0;                      break;
+        case 'N': num_packets = atoi(optarg);       break;
+        case 'A': max_num_attempts = atoi(optarg);  break;
+        case 'M': node_type = PING_NODE_MASTER;     break;
+        case 'S': node_type = PING_NODE_SLAVE;      break;
+        case 'n': payload_len = atoi(optarg);       break;
+        case 'm': mod_scheme = liquid_getopt_str2mod(optarg);   break;
+        case 'p': mod_depth = atoi(optarg);                     break;
+        case 'c': fec0 = liquid_getopt_str2fec(optarg);         break;
+        case 'k': fec1 = liquid_getopt_str2fec(optarg);         break;
+        case 'v': verbose = 1;                                  break;
+        case 'q': verbose = 0;                                  break;
         default:
             fprintf(stderr,"error: %s, unsupported option\n", argv[0]);
             exit(1);
@@ -122,11 +140,11 @@ int main (int argc, char **argv) {
     flexframegenprops_init_default(&fgprops);
     fgprops.rampup_len   = 40;
     fgprops.phasing_len  = 80;
-    fgprops.check        = LIQUID_CRC_32;
-    fgprops.fec0         = LIQUID_FEC_NONE;
-    fgprops.fec1         = LIQUID_FEC_HAMMING128;
-    fgprops.mod_scheme   = LIQUID_MODEM_PSK;
-    fgprops.mod_bps      = 2;
+    fgprops.check        = check;
+    fgprops.fec0         = fec0;
+    fgprops.fec1         = fec1;
+    fgprops.mod_scheme   = mod_scheme;
+    fgprops.mod_bps      = mod_depth;
     fgprops.rampdn_len   = 40;
     unsigned int tx_pid;
     unsigned char tx_header[14];
@@ -135,6 +153,8 @@ int main (int argc, char **argv) {
 
     unsigned int n;
     unsigned int num_attempts = 0;
+
+    printf("ping: starting node as %s\n", node_type == PING_NODE_MASTER ? "master" : "slave");
 
     iqpr_rx_start(q);
     if (node_type == PING_NODE_MASTER) {
