@@ -66,7 +66,7 @@ int main (int argc, char **argv) {
     float symbolrate = 160e3f;
     unsigned int num_packets = 1000;
     unsigned int node_type = PING_NODE_SLAVE;
-    int verbose = 1;
+    int verbose = 0;
 
     // master node options
     unsigned int payload_len=200;               // payload length (bytes)
@@ -182,9 +182,12 @@ int main (int argc, char **argv) {
                 num_attempts++;
 
                 // transmit packet
-                printf("transmitting packet %6u/%6u (attempt %4u/%4u) %c\n",
-                        tx_pid, num_packets, num_attempts, max_num_attempts,
-                        num_attempts > 1 ? '*' : ' ');
+                if (verbose) {
+                    printf("transmitting packet %6u/%6u (attempt %4u/%4u) %c\n",
+                            tx_pid, num_packets, num_attempts, max_num_attempts,
+                            num_attempts > 1 ? '*' : ' ');
+                }
+
                 //iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
                 iqpr_txpacket(q, tx_header, tx_payload, tx_payload_len, &fgprops);
 
@@ -208,17 +211,23 @@ int main (int argc, char **argv) {
                         rx_pid = (rx_header[0] << 8) | rx_header[1];
 
                         if (!rx_header_valid) {
-                            printf("  rx header invalid!\n");
+                            if (verbose) printf("  rx header invalid!\n");
+                            else         fprintf(stdout,"x");
                         } else if (rx_header[2] != PING_PACKET_ACK) {
                             // effectively ignore our own transmitted signal
                             //printf("  wrong packet type (got %u, expected %u)\n", rx_header[2], PING_PACKET_ACK);
                         } else if (!rx_payload_valid) {
-                            printf("  rx payload invalid!\n");
+                            if (verbose) printf("  rx payload invalid!\n");
+                            else         fprintf(stdout,"X");
                         } else if (rx_pid != tx_pid) {
-                            printf("  ack pid (%4u) does not match tx pid\n", rx_pid);
+                            if (verbose) printf("  ack pid (%4u) does not match tx pid\n", rx_pid);
+                            else         fprintf(stdout,"?");
                         } else {
                             ack_received = 1;
+                            if (verbose) ;
+                            else         fprintf(stdout,".");
                         }
+                        fflush(stdout);
                     }
                 }
 
@@ -235,7 +244,7 @@ int main (int argc, char **argv) {
             } while (!ack_received && (num_attempts < max_num_attempts) );
 
             if (num_attempts == max_num_attempts) {
-                printf("transmitter reached maximum number of attemts; bailing\n");
+                printf("\ntransmitter reached maximum number of attemts; bailing\n");
                 break;
             }
         }
@@ -264,7 +273,9 @@ int main (int argc, char **argv) {
             } while (!packet_found);
             
             if (!rx_header_valid) {
-                printf("  header crc : FAIL\n");
+                if (verbose) printf("  header crc : FAIL\n");
+                else         fprintf(stdout,"x");
+                fflush(stdout);
                 continue;
             } else if (rx_header[2] != PING_PACKET_DATA) {
                 // effectively ignore our own transmitted signal
@@ -276,14 +287,21 @@ int main (int argc, char **argv) {
             //if (rx_pid == 1) break;
 
             if (!rx_payload_valid) {
-                printf("  payload crc : FAIL [%4u]\n", rx_pid);
+                if (verbose) printf("  payload crc : FAIL [%4u]\n", rx_pid);
+                else         fprintf(stdout,"X");
+                fflush(stdout);
                 continue;
             }
 
-            printf("  ping received %4u data bytes on packet [%4u] rssi : %12.4f dB\n",
-                    rx_payload_len,
-                    rx_pid,
-                    stats.rssi);
+            if (verbose) {
+                printf("  ping received %4u data bytes on packet [%4u] rssi : %12.4f dB\n",
+                        rx_payload_len,
+                        rx_pid,
+                        stats.rssi);
+            } else {
+                fprintf(stdout,".");
+                fflush(stdout);
+            }
 
             // print received frame statistics
             //if (verbose) framesyncstats_print(&stats);
@@ -303,11 +321,10 @@ int main (int argc, char **argv) {
         } while (rx_pid != num_packets-1);
     }
     iqpr_rx_stop(q);
+    fflush(stdout);
+    printf("\ndone.\n");
 
     // TODO : stop timer
-
-    // sleep for a small time before stopping tx/rx processes
-    usleep(100000);
 
     printf("main process complete\n");
 
