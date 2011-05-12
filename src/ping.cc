@@ -151,12 +151,20 @@ int main (int argc, char **argv) {
     unsigned int  tx_payload_len = 200;
     unsigned char tx_payload[tx_payload_len];
 
+    // timers and statistics
+    struct timeval timer0;
+    struct timeval timer1;
+    unsigned long int num_bytes_received=0;
+
     unsigned int n;
     unsigned int num_attempts = 0;
 
     printf("ping: starting node as %s\n", node_type == PING_NODE_MASTER ? "master" : "slave");
-
     iqpr_rx_start(q);
+
+    // start timer
+    gettimeofday(&timer0, NULL);
+
     if (node_type == PING_NODE_MASTER) {
         // 
         // MASTER NODE
@@ -236,6 +244,7 @@ int main (int argc, char **argv) {
                 if (ack_received) {
                     //printf("ACK RECEIVED [%4u]!\n", rx_pid);
                     //usleep(10);
+                    num_bytes_received += tx_payload_len;
                     break;
                 } else {
                     //printf("TIMEOUT\n");
@@ -293,6 +302,8 @@ int main (int argc, char **argv) {
                 continue;
             }
 
+            num_bytes_received += tx_payload_len;
+
             if (verbose) {
                 printf("  ping received %4u data bytes on packet [%4u] rssi : %12.4f dB\n",
                         rx_payload_len,
@@ -320,13 +331,24 @@ int main (int argc, char **argv) {
 
         } while (rx_pid != num_packets-1);
     }
+
+    // stop timer
+    gettimeofday(&timer1, NULL);
+
     iqpr_rx_stop(q);
     fflush(stdout);
     printf("\ndone.\n");
 
-    // TODO : stop timer
-
     printf("main process complete\n");
+
+    // compute statistics
+    float runtime = (float)(timer1.tv_sec  - timer0.tv_sec) +
+                    (float)(timer1.tv_usec - timer0.tv_usec)*1e-6f;
+    float data_rate = 8.0f * (float)(num_bytes_received) / runtime;
+    float spectral_efficiency = data_rate / symbolrate;
+    printf("    execution time      : %12.8f s\n", runtime);
+    printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
+    printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
 
     // destroy main data object
     iqpr_destroy(q);
