@@ -93,6 +93,13 @@ iqpr iqpr_create()
     // TODO : set up address as necessary
     q->usrp = uhd::usrp::single_usrp::make(dev_addr);
 
+    // set some properties
+    q->usrp->set_rx_antenna("TX/RX");
+    //q->usrp->set_rx_antenna("RX2");
+    // some hacked magic to 'disable' receive chain when transmitting
+    // (from http://www.ruby-forum.com/topic/1527488)
+    //q->usrp->set_rx_lo_freq((_freq_range.start() + _freq_range.stop())/2.0);
+
     // 
     // receiver objects
     //
@@ -292,6 +299,59 @@ void iqpr_rxconfig(iqpr _q,
 void iqpr_rx_start(iqpr _q)
 {
     _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+
+    resamp2_crcf_clear(_q->rx_decim);
+    resamp_crcf_reset(_q->rx_resamp);
+    flexframesync_reset(_q->fs);
+
+    _q->rx_vector_index  = 0;
+    _q->rx_vector_length = 0;
+
+    //return;
+
+    unsigned long int total_samples = 50;
+    unsigned long int num_accumulated_samples = 0;
+    uhd::rx_metadata_t md;
+
+    // chomp data
+    while ( num_accumulated_samples < total_samples) {
+        // check if we have read entire contents of buffer
+        while (_q->rx_vector_index == _q->rx_vector_length) {
+            // reset vector index
+            _q->rx_vector_index = 0;
+
+            // grab data from port
+            _q->rx_vector_length = _q->usrp->get_device()->recv(
+                &_q->rx_buffer.front(),
+                _q->rx_buffer.size(),
+                md,
+                uhd::io_type_t::COMPLEX_FLOAT32,
+                uhd::device::RECV_MODE_ONE_PACKET
+            );
+            //printf("reading data from usrp : rx vector length : %u\n", _q->rx_vector_length);
+
+            //handle the error codes
+            switch(md.error_code){
+            case uhd::rx_metadata_t::ERROR_CODE_NONE:
+            case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+                break;
+            default:
+                std::cerr << "Error code: " << md.error_code << std::endl;
+                std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+                exit(1);
+            }
+
+            if (_q->rx_vector_length == 0) {
+                printf("WARNING: vector length is zero!!!\n");
+                usleep(10000);
+            }
+
+        }
+
+        num_accumulated_samples++;
+        _q->rx_vector_index++;
+    }
+
 } 
 
 
@@ -299,6 +359,11 @@ void iqpr_rx_start(iqpr _q)
 void iqpr_rx_stop(iqpr _q)
 {
     _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+
+    // clear buffers
+    //_q->rx_buffer.clear();
+    _q->rx_vector_index  = 0;
+    _q->rx_vector_length = 0;
 } 
 
 
@@ -320,6 +385,10 @@ void iqpr_txpacket(iqpr _q,
 {
     //unsigned int i;
 
+    // reset interpolator, resampler (flush buffer)
+    interp_crcf_clear(_q->tx_interp);
+    resamp_crcf_reset(_q->tx_resamp);
+
     // configure frame generator
     if (_fgprops != NULL)
         memmove(&_q->fgprops, _fgprops, sizeof(flexframegenprops_s));
@@ -328,6 +397,8 @@ void iqpr_txpacket(iqpr _q,
 
     unsigned int frame_len = flexframegen_getframelen(_q->fg);
     //printf("frame length : %u\n", frame_len);
+    unsigned int padding = 20;
+    frame_len += padding;
 
     // set up the metadta flags
     uhd::tx_metadata_t md;
@@ -336,6 +407,9 @@ void iqpr_txpacket(iqpr _q,
     md.has_time_spec  = false;  // set to false to send immediately
 
     std::complex<float> frame[frame_len];       // frame
+    unsigned int j;
+    for (j=frame_len-padding; j<frame_len; j++)
+        frame[j] = 0.0;
 
     //printf("[tx] sending packet %u...\n", _pid);
 
@@ -346,7 +420,6 @@ void iqpr_txpacket(iqpr _q,
     std::complex<float> buffer_resamp[6*frame_len]; // resampler
     std::vector<std::complex<float> > buff(6*frame_len);
 
-    unsigned int j;
     float g = 0.3f;
     // interpolate using matched filter
     for (j=0; j<frame_len; j++)
@@ -367,11 +440,13 @@ void iqpr_txpacket(iqpr _q,
     }
 
     //send the entire contents of the buffer
+    //size_t num_tx_samples =
     _q->usrp->get_device()->send(
         &buff.front(), buff.size(), md,
         uhd::io_type_t::COMPLEX_FLOAT32,
         uhd::device::SEND_MODE_FULL_BUFF
     );
+    //printf("sent %6u (expected %6u)\n", num_tx_samples, buff.size());
 
 #if 0
     // send a mini EOB packet
@@ -423,7 +498,7 @@ int iqpr_rxpacket(iqpr _q,
     while ( num_accumulated_samples < total_samples) {
 
         // check if we have read entire contents of buffer
-        if (_q->rx_vector_index == _q->rx_vector_length) {
+        while (_q->rx_vector_index == _q->rx_vector_length) {
             // reset vector index
             _q->rx_vector_index = 0;
 
@@ -447,6 +522,12 @@ int iqpr_rxpacket(iqpr _q,
                 std::cerr << "Unexpected error on recv, exit test..." << std::endl;
                 exit(1);
             }
+
+            if (_q->rx_vector_length == 0) {
+                printf("WARNING: vector length is zero!!!\n");
+                usleep(10000);
+            }
+
         }
 
         // for now copy vector "buff" to array of complex float
@@ -634,10 +715,9 @@ int iqpr_callback(unsigned char * _rx_header,
 {
     iqpr q = (iqpr) _userdata;
 
-    unsigned int pid = (_rx_header[0] << 8) | _rx_header[1];
-    printf("********* callback invoked, pid = %6u\n", pid);
-
     if (q->verbose) {
+        unsigned int pid = (_rx_header[0] << 8) | _rx_header[1];
+        printf("********* callback invoked, pid = %6u\n", pid);
         //printf("********* callback invoked, ");
         // ...
     }
