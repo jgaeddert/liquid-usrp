@@ -24,6 +24,14 @@
 //
 // ping basic data packets back and forth
 //
+// output codes:
+//  'U' :   transmit underflow
+//  'O' :   receiver overflow (processing is likely too intensive)
+//  'x' :   received errors in header
+//  'X' :   received errors in payload
+//  '?' :   received unexpected packet ID
+//  'T' :   [master] ACK timeout
+//
 
 #include <iostream>
 #include <stdio.h>
@@ -69,7 +77,7 @@ int main (int argc, char **argv) {
     int verbose = 0;
 
     // master node options
-    unsigned int payload_len=200;               // payload length (bytes)
+    unsigned int tx_payload_len=200;            // payload length (bytes)
     unsigned int max_num_attempts = 100;        // maximum number of tx attempts
     crc_scheme check    = LIQUID_CRC_16;        // data validity check
     fec_scheme fec0     = LIQUID_FEC_NONE;      // inner FEC scheme
@@ -89,7 +97,7 @@ int main (int argc, char **argv) {
         case 'A': max_num_attempts = atoi(optarg);  break;
         case 'M': node_type = PING_NODE_MASTER;     break;
         case 'S': node_type = PING_NODE_SLAVE;      break;
-        case 'n': payload_len = atoi(optarg);       break;
+        case 'n': tx_payload_len = atoi(optarg);    break;
         case 'm': mod_scheme = liquid_getopt_str2mod(optarg);   break;
         case 'p': mod_depth = atoi(optarg);                     break;
         case 'c': fec0 = liquid_getopt_str2fec(optarg);         break;
@@ -148,7 +156,6 @@ int main (int argc, char **argv) {
     fgprops.rampdn_len   = 40;
     unsigned int tx_pid;
     unsigned char tx_header[14];
-    unsigned int  tx_payload_len = 200;
     unsigned char tx_payload[tx_payload_len];
 
     // timers and statistics
@@ -247,6 +254,8 @@ int main (int argc, char **argv) {
                     num_bytes_received += tx_payload_len;
                     break;
                 } else {
+                    if (verbose) ;
+                    else         fprintf(stdout,"T");
                     //printf("TIMEOUT\n");
                     //goto end;
                 }
@@ -302,7 +311,7 @@ int main (int argc, char **argv) {
                 continue;
             }
 
-            num_bytes_received += tx_payload_len;
+            num_bytes_received += rx_payload_len;
 
             if (verbose) {
                 printf("  ping received %4u data bytes on packet [%4u] rssi : %12.4f dB\n",
