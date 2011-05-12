@@ -75,16 +75,6 @@ static int callback(unsigned char * _rx_header,
     return 0;
 }
 
-double calculate_execution_time(struct rusage _start, struct rusage _finish)
-{
-    double utime = _finish.ru_utime.tv_sec - _start.ru_utime.tv_sec
-        + 1e-6*(_finish.ru_utime.tv_usec - _start.ru_utime.tv_usec);
-    double stime = _finish.ru_stime.tv_sec - _start.ru_stime.tv_sec
-        + 1e-6*(_finish.ru_stime.tv_usec - _start.ru_stime.tv_usec);
-    //printf("utime : %12.8f, stime : %12.8f\n", utime, stime);
-    return utime + stime;
-}
-
 void usage() {
     printf("flexframe_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
