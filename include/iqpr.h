@@ -30,10 +30,6 @@
 #include <liquid/liquid.h>
 #include <uhd/usrp/single_usrp.hpp>
 
-#define IQPR_PACKET_TYPE_DATA       (0)
-#define IQPR_PACKET_TYPE_ACK        (1)
-#define IQPR_PACKET_TYPE_CONTROL    (2)
-
 // 
 // iqpr object interface declarations
 //
