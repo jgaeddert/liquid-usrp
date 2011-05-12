@@ -38,8 +38,11 @@
 
 #include "iqpr.h"
 
-#define NODE_MASTER         (0)
-#define NODE_SLAVE          (1)
+#define PING_NODE_MASTER    (0)
+#define PING_NODE_SLAVE     (1)
+
+#define PING_PACKET_DATA    (59)
+#define PING_PACKET_ACK     (77)
 
 void usage() {
     printf("ping usage:\n");
@@ -58,7 +61,7 @@ int main (int argc, char **argv) {
     float symbolrate = 160e3f;
     unsigned int num_packets = 1000;
     unsigned int max_num_attempts = 100;    // maximum number of tx attempts
-    unsigned int node_type = NODE_MASTER;
+    unsigned int node_type = PING_NODE_MASTER;
     int verbose = 1;
 
     //
@@ -71,8 +74,8 @@ int main (int argc, char **argv) {
         case 'b': symbolrate = atof(optarg);        break;
         case 'n': num_packets = atoi(optarg);       break;
         case 'a': max_num_attempts = atoi(optarg);  break;
-        case 'm': node_type = NODE_MASTER;          break;
-        case 's': node_type = NODE_SLAVE;           break;
+        case 'm': node_type = PING_NODE_MASTER;          break;
+        case 's': node_type = PING_NODE_SLAVE;           break;
         case 'v': verbose = 1;                      break;
         case 'q': verbose = 0;                      break;
         default:
@@ -134,7 +137,7 @@ int main (int argc, char **argv) {
     unsigned int num_attempts = 0;
 
     iqpr_rx_start(q);
-    if (node_type == NODE_MASTER) {
+    if (node_type == PING_NODE_MASTER) {
         // 
         // MASTER NODE
         //
@@ -145,7 +148,7 @@ int main (int argc, char **argv) {
             // initialize header
             tx_header[0] = (tx_pid >> 8) & 0xff;
             tx_header[1] = (tx_pid     ) & 0xff;
-            tx_header[2] = 59;
+            tx_header[2] = PING_PACKET_DATA;
             for (n=3; n<14; n++)
                 tx_header[n] = rand() & 0xff;
 
@@ -186,9 +189,9 @@ int main (int argc, char **argv) {
 
                         if (!rx_header_valid) {
                             printf("  rx header invalid!\n");
-                        } else if (rx_header[2] != 77) {
+                        } else if (rx_header[2] != PING_PACKET_ACK) {
                             // effectively ignore our own transmitted signal
-                            //printf("  wrong packet type (got %u, expected %u)\n", rx_header[2], 77);
+                            //printf("  wrong packet type (got %u, expected %u)\n", rx_header[2], PING_PACKET_ACK);
                         } else if (!rx_payload_valid) {
                             printf("  rx payload invalid!\n");
                         } else if (rx_pid != tx_pid) {
@@ -199,7 +202,7 @@ int main (int argc, char **argv) {
                     }
                 }
 
-                //ack_received = packet_received && rx_pid == tx_pid && rx_header[2] == 77;
+                //ack_received = packet_received && rx_pid == tx_pid && rx_header[2] == PING_PACKET_ACK;
 
                 if (ack_received) {
                     //printf("ACK RECEIVED [%4u]!\n", rx_pid);
@@ -243,7 +246,8 @@ int main (int argc, char **argv) {
             if (!rx_header_valid) {
                 printf("  header crc : FAIL\n");
                 continue;
-            } else if (rx_header[2] != 59) {
+            } else if (rx_header[2] != PING_PACKET_DATA) {
+                // effectively ignore our own transmitted signal
                 //printf("  invalid packet type\n");
                 continue;
             }
@@ -267,7 +271,7 @@ int main (int argc, char **argv) {
             // transmit acknowledgement
             tx_header[0] = rx_header[0];
             tx_header[1] = rx_header[1];
-            tx_header[2] = 77;  // ACK code
+            tx_header[2] = PING_PACKET_ACK;  // ACK code
             for (n=3; n<14; n++)
                 tx_header[n] = rand() & 0xff;
 
