@@ -103,14 +103,14 @@ int main (int argc, char **argv) {
     // 
     // receiver properties
     //
-    unsigned int    timespec = 10000;
+    unsigned int    timespec = 500;
     unsigned char * rx_header = NULL;
     int             rx_header_valid;
     unsigned char * rx_payload = NULL;
     unsigned int    rx_payload_len;
     int             rx_payload_valid;
     framesyncstats_s stats;
-    unsigned char rx_pid = 0;
+    unsigned int rx_pid = 0;
 
     //
     // transmitter properties
@@ -118,21 +118,22 @@ int main (int argc, char **argv) {
     flexframegenprops_s fgprops;
     flexframegenprops_init_default(&fgprops);
     fgprops.rampup_len   = 40;
-    fgprops.phasing_len  = 40;
+    fgprops.phasing_len  = 80;
     fgprops.check        = LIQUID_CRC_32;
     fgprops.fec0         = LIQUID_FEC_NONE;
-    fgprops.fec1         = LIQUID_FEC_NONE;
-    fgprops.mod_scheme   = LIQUID_MODEM_QAM;
-    fgprops.mod_bps      = 4;
+    fgprops.fec1         = LIQUID_FEC_HAMMING128;
+    fgprops.mod_scheme   = LIQUID_MODEM_PSK;
+    fgprops.mod_bps      = 2;
     fgprops.rampdn_len   = 40;
-    unsigned char tx_pid;
+    unsigned int tx_pid;
     unsigned char tx_header[14];
-    unsigned int  tx_payload_len = 1024;
+    unsigned int  tx_payload_len = 200;
     unsigned char tx_payload[tx_payload_len];
 
     unsigned int n;
     unsigned int num_attempts = 0;
 
+    iqpr_rx_start(q);
     if (node_type == NODE_MASTER) {
         // 
         // MASTER NODE
@@ -164,21 +165,50 @@ int main (int argc, char **argv) {
                 //iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
                 iqpr_txpacket(q, tx_header, tx_payload, tx_payload_len, &fgprops);
 
+                //usleep(4000);
+
                 // wait for acknowledgement
-                int packet_received =
-                iqpr_rxpacket(q, timespec,
-                              &rx_header,
-                              &rx_header_valid,
-                              &rx_payload,
-                              &rx_payload_len,
-                              &rx_payload_valid,
-                              &stats);
+                unsigned int timer=0;
+                ack_received=0;
+                while (!ack_received && timer < 25000) {
+                    int packet_received =
+                    iqpr_rxpacket(q, timespec,
+                                  &rx_header,
+                                  &rx_header_valid,
+                                  &rx_payload,
+                                  &rx_payload_len,
+                                  &rx_payload_valid,
+                                  &stats);
+                    timer += timespec;
 
-                rx_pid = (rx_header[0] << 8) | rx_header[1];
-                ack_received = packet_received && rx_pid == tx_pid && rx_header[2] == 77;
+                    if (packet_received) {
+                        rx_pid = (rx_header[0] << 8) | rx_header[1];
 
-                if (ack_received)
+                        if (!rx_header_valid) {
+                            printf("  rx header invalid!\n");
+                        } else if (rx_header[2] != 77) {
+                            // effectively ignore our own transmitted signal
+                            //printf("  wrong packet type (got %u, expected %u)\n", rx_header[2], 77);
+                        } else if (!rx_payload_valid) {
+                            printf("  rx payload invalid!\n");
+                        } else if (rx_pid != tx_pid) {
+                            printf("  ack pid (%4u) does not match tx pid\n", rx_pid);
+                        } else {
+                            ack_received = 1;
+                        }
+                    }
+                }
+
+                //ack_received = packet_received && rx_pid == tx_pid && rx_header[2] == 77;
+
+                if (ack_received) {
+                    //printf("ACK RECEIVED [%4u]!\n", rx_pid);
+                    //usleep(10);
                     break;
+                } else {
+                    //printf("TIMEOUT\n");
+                    //goto end;
+                }
             } while (!ack_received && (num_attempts < max_num_attempts) );
 
             if (num_attempts == max_num_attempts) {
@@ -190,6 +220,9 @@ int main (int argc, char **argv) {
         // 
         // SLAVE NODE
         //
+        fgprops.check        = LIQUID_CRC_NONE;
+        fgprops.mod_scheme   = LIQUID_MODEM_QPSK;
+        fgprops.mod_bps      = 2;
 
         int packet_found = 0;
         do {
@@ -207,28 +240,45 @@ int main (int argc, char **argv) {
                               &stats);
             } while (!packet_found);
             
-            if (!rx_header_valid || !rx_payload_valid || rx_header[2] != 59) {
-                printf("invalid packet\n");
+            if (!rx_header_valid) {
+                printf("  header crc : FAIL\n");
+                continue;
+            } else if (rx_header[2] != 59) {
+                //printf("  invalid packet type\n");
+                continue;
+            }
+            
+            rx_pid = (rx_header[0] << 8) | rx_header[1];
+            //if (rx_pid == 1) break;
+
+            if (!rx_payload_valid) {
+                printf("  payload crc : FAIL [%4u]\n", rx_pid);
                 continue;
             }
 
-            rx_pid = (rx_header[0] << 8) | rx_header[1];
-
-            printf("  ping received %4u data bytes on packet [%4u]\n",
+            printf("  ping received %4u data bytes on packet [%4u] rssi : %12.4f dB\n",
                     rx_payload_len,
-                    rx_pid);
+                    rx_pid,
+                    stats.rssi);
 
             // print received frame statistics
-            if (verbose) framesyncstats_print(&stats);
+            //if (verbose) framesyncstats_print(&stats);
 
             // transmit acknowledgement
             tx_header[0] = rx_header[0];
             tx_header[1] = rx_header[1];
             tx_header[2] = 77;  // ACK code
-            iqpr_txpacket(q, tx_header, NULL, 0, &fgprops);
+            for (n=3; n<14; n++)
+                tx_header[n] = rand() & 0xff;
+
+            unsigned char ack_payload[10];
+            for (n=0; n<10; n++)
+                ack_payload[n] = rand() & 0xff;
+            iqpr_txpacket(q, tx_header, ack_payload, 10, &fgprops);
 
         } while (rx_pid != num_packets-1);
     }
+    iqpr_rx_stop(q);
 
     // TODO : stop timer
 
