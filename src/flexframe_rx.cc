@@ -80,6 +80,8 @@ void usage() {
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
     printf("  t     :   run time [seconds]\n");
+    printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
+    printf("  S     :   squelch threshold [dB] (default: -37dB)\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -97,14 +99,18 @@ int main (int argc, char **argv)
     float frequency = 462.0e6;
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
+    double uhd_rxgain = 20.0;
+    float squelch_threshold = -37.0f;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:t:G:S:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
+        case 'G':   uhd_rxgain = atof(optarg);      break;
+        case 'S':   squelch_threshold = atof(optarg);   break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
         case 'u':
@@ -156,7 +162,7 @@ int main (int argc, char **argv)
     usrp->set_rx_rate(ADC_RATE / decim_rate);
 #endif
     usrp->set_rx_freq(frequency);
-    usrp->set_rx_gain(20);
+    usrp->set_rx_gain(uhd_rxgain);
 
     // add arbitrary resampling component
     resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
@@ -181,7 +187,7 @@ int main (int argc, char **argv)
     // set properties to default
     framesyncprops_s props;
     framesyncprops_init_default(&props);
-    props.squelch_threshold = -37.0f;
+    props.squelch_threshold = squelch_threshold;
     props.squelch_enabled = 1;
 #if 0
     props.agc_bw0 = 1e-3f;
