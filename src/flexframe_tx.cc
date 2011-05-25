@@ -33,7 +33,8 @@ void usage() {
     printf("flexframe_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
-    printf("  g     :   transmit power gain [dB] (default -3dB)\n");
+    printf("  g     :   software transmit power gain [dB] (default: -3dB)\n");
+    printf("  G     :   uhd tx gain [dB] (default: -40dB)\n");
     printf("  t     :   run time [seconds]\n");
     printf("  n     :   payload length (bytes)\n");
     printf("  m     :   mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
@@ -63,6 +64,7 @@ int main (int argc, char **argv)
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
     float txgain_dB = -3.0f;
+    double uhd_txgain = -40.0;
 
     unsigned int packet_spacing=0;                      // spacing b/w frames
     unsigned int payload_len=200;                       // payload length (bytes)
@@ -75,11 +77,12 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:g:t:n:m:p:s:r:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:g:G:t:n:m:p:s:r:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 'g':   txgain_dB = atof(optarg);       break;
+        case 'G':   uhd_txgain = atof(optarg);      break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'n':   payload_len = atoi(optarg);     break;
         case 'm':
@@ -152,7 +155,7 @@ int main (int argc, char **argv)
     usrp->set_tx_rate(DAC_RATE / interp_rate);
 #endif
     usrp->set_tx_freq(frequency);
-    usrp->set_tx_gain(-40);
+    usrp->set_tx_gain(uhd_txgain);
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
