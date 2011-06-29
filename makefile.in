@@ -54,6 +54,14 @@ CPPFLAGS	+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
 LDFLAGS		+= @LIBS@
 ARFLAGS		= r
 
+# 
+# liquid headers
+#
+headers_install	:= iqpr.h
+headers		:= $(headers_install)
+include_headers	:= $(addprefix include/,$(headers))
+
+
 # library source files
 library_src :=				\
 	lib/iqpr.cc			\
@@ -128,6 +136,41 @@ libliquidusrp.dylib: $(library_objs)
 # linux, et al
 libliquidusrp.so: $(library_objs)
 	$(CC) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
+
+
+## 
+## TARGET : install - installs the libraries and header files in the host system
+##
+
+install:
+	@echo "installing..."
+	mkdir -p $(exec_prefix)/lib
+	install -m 644 -p $(SHARED_LIB) libliquidusrp.a $(exec_prefix)/lib
+	mkdir -p $(prefix)/include
+	mkdir -p $(prefix)/include/liquid
+	install -m 644 -p $(addprefix include/,$(headers_install)) $(prefix)/include/liquid
+	@echo ""
+	@echo "---------------------------------------------------------"
+	@echo "  liquid-usrp was successfully installed.     "
+	@echo ""
+	@echo "  On some machines (e.g. Linux) you should rebind your"
+	@echo "  libraries by running 'ldconfig' to make the shared"
+	@echo "  object available.  You might also need to modify your"
+	@echo "  LD_LIBRARY_PATH environment variable to include the"
+	@echo "  directory $(exec_prefix)"
+	@echo "---------------------------------------------------------"
+	@echo ""
+
+## 
+## TARGET : uninstall - uninstalls the libraries and header files in the host system
+##
+
+uninstall:
+	@echo "uninstalling..."
+	$(RM) $(addprefix $(prefix)/include/liquid/, $(headers_install))
+	$(RM) $(exec_prefix)/lib/libliquidusrp.a
+	$(RM) $(exec_prefix)/lib/$(SHARED_LIB)
+	@echo "done."
 
 
 
