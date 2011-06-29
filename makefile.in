@@ -126,7 +126,7 @@ libliquidusrp.dylib: $(library_objs)
 	$(CC) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
 
 # linux, et al
-libliquidusrp.so: $(libraries)
+libliquidusrp.so: $(library_objs)
 	$(CC) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
 
 
@@ -155,3 +155,5 @@ clean-examples:
 ##
 clean: clean-examples
 	$(RM) $(library_objs)
+	$(RM) libliquidusrp.a
+	$(RM) $(SHARED_LIB)
