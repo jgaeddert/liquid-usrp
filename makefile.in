@@ -21,7 +21,12 @@
 # Makefile for liquid SDR libraries, USRP applications
 #
 # Targets:
-#    all  :  build library and all example programs
+#    all                 :   build library and all example programs
+#    install             :   install the dynamic shared library object and
+#                            header file(s)
+#    uninstall           :   uninstall the library and header file(s)
+#    clean               :   clean all targets (bench, check, examples, etc)
+#    examples            :   build all examples
 #
 
 # paths
