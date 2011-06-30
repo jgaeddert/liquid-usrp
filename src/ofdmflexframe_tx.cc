@@ -36,10 +36,10 @@ void usage() {
     printf("  b     :   bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
     printf("  M     :   number of subcarriers, default: 64\n");
     printf("  C     :   cyclic prefix length, default: 16\n");
+    printf("  P     :   payload length [bytes], default: 256\n");
     printf("  m     :   modulation scheme: psk, dpsk, ask, <qam>, apsk\n");
     printf("  p     :   modulation depth [bits/symbol], default: 2\n");
-    printf("  c     :   fec coding scheme (inner)\n");
-    printf("  k     :   fec coding scheme (outer)\n");
+    printf("  c/k   :   fec coding scheme (inner/outer)\n");
     // print all available FEC schemes
     unsigned int i;
     for (i=0; i<LIQUID_FEC_NUM_SCHEMES; i++)
@@ -64,7 +64,7 @@ int main (int argc, char **argv)
 
     modulation_scheme ms = LIQUID_MODEM_QAM;     // modulation scheme
     unsigned int bps = 2;               // modulation depth
-    unsigned int payload_len = 120;     // original data message length
+    unsigned int payload_len = 256;     // original data message length
     crc_scheme check = LIQUID_CRC_32;          // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;         // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_HAMMING128;   // fec (outer)
@@ -73,7 +73,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:M:C:m:p:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:M:C:P:m:p:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -83,6 +83,7 @@ int main (int argc, char **argv)
         case 'b':   bandwidth = atof(optarg);       break;
         case 'M':   M = atoi(optarg);               break;
         case 'C':   cp_len = atoi(optarg);          break;
+        case 'P':   payload_len = atoi(optarg);     break;
         case 'm':
             ms = liquid_getopt_str2mod(optarg);
             if (ms == LIQUID_MODEM_UNKNOWN) {
