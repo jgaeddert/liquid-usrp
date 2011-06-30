@@ -220,14 +220,22 @@ int main (int argc, char **argv)
     unsigned int num_frames = -1;
 
     unsigned int j;
+    unsigned int pid;
     tx_buffer_samples=0;
-    for (i=0; i<num_frames; i++) {
+    for (pid=0; pid<num_frames; pid++) {
         // reset frame generator (resets pilot generator, etc.)
         ofdmflexframegen_reset(fg);
 
-        // initialize header/payload and assemble frame
-        for (j=0; j<8; j++)
+        if (verbose)
+            printf("tx packet id: %6u\n", pid);
+        
+        // write header (first two bytes packet ID, remaining are random)
+        header[0] = (pid >> 8) & 0xff;
+        header[1] = (pid     ) & 0xff;
+        for (j=2; j<8; j++)
             header[j] = rand() & 0xff;
+
+        // initialize payload
         for (j=0; j<payload_len; j++)
             payload[j] = rand() & 0xff;
 

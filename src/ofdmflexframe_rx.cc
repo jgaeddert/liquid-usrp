@@ -44,7 +44,15 @@ int callback(unsigned char *  _header,
              framesyncstats_s _stats,
              void *           _userdata)
 {
-    printf("**** callback invoked : rssi = %8.3f dB\n", _stats.rssi);
+    if (verbose) {
+        printf("********* callback invoked, ");
+        printf("rssi=%8.3fdB, ", _stats.rssi);
+
+        if (_header_valid) {
+            unsigned int packet_id = (_header[0] << 8 | _header[1]);
+            printf("rx packet id: %6u\n", packet_id);
+        }
+    }
 
     // update global counters
 
