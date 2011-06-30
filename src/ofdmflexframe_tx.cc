@@ -69,7 +69,7 @@ int main (int argc, char **argv)
     fec_scheme fec0 = LIQUID_FEC_NONE;         // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_HAMMING128;   // fec (outer)
 
-    double txgain_dB = -3.0f;
+    double txgain_dB = -6.0f;
 
     //
     int d;
@@ -209,7 +209,8 @@ int main (int argc, char **argv)
     std::complex<float> buffer_resamp[3*(M+cp_len)];
 
     // set up the metadta flags
-    std::vector<std::complex<float> > buff(3*(M+cp_len));
+    std::vector<std::complex<float> > buff(256);
+    unsigned int tx_buffer_samples;
     uhd::tx_metadata_t md;
     md.start_of_burst = false;  // never SOB when continuous
     md.end_of_burst   = false;  // 
@@ -218,26 +219,34 @@ int main (int argc, char **argv)
     unsigned int num_frames = -1;
 
     unsigned int j;
+    tx_buffer_samples=0;
     for (i=0; i<num_frames; i++) {
-
         // reset frame generator (resets pilot generator, etc.)
         ofdmflexframegen_reset(fg);
 
         // initialize header/payload and assemble frame
         for (j=0; j<8; j++)
-            header[i] = rand() & 0xff;
+            header[j] = rand() & 0xff;
         for (j=0; j<payload_len; j++)
-            payload[i] = rand() & 0xff;
+            payload[j] = rand() & 0xff;
 
         // assemble frame
         ofdmflexframegen_assemble(fg, header, payload);
 
         // generate frame
         int last_symbol=0;
+        unsigned int zero_pad=0;
         unsigned int num_samples;
-        while (!last_symbol) {
-            // generate symbol
-            last_symbol = ofdmflexframegen_writesymbol(fg, buffer, &num_samples);
+        while (!last_symbol || zero_pad < 2) {
+            if (!last_symbol) {
+                // generate symbol
+                last_symbol = ofdmflexframegen_writesymbol(fg, buffer, &num_samples);
+            } else {
+                zero_pad++;
+                num_samples = M+cp_len;
+                for (j=0; j<num_samples; j++)
+                    buffer[j] = 0.0f;
+            }
 
             // interpolate by 2
             for (j=0; j<num_samples; j++)
@@ -251,17 +260,24 @@ int main (int argc, char **argv)
                 n += nw;
             }
 
-            buff.resize(n);
-            for (j=0; j<n; j++)
-                buff[j] = g*buffer_resamp[j];
+            // push samples into buffer
+            for (j=0; j<n; j++) {
+                buff[tx_buffer_samples++] = g*buffer_resamp[j];
 
-            //send the entire contents of the buffer
-            usrp->get_device()->send(
-                &buff.front(), buff.size(), md,
-                uhd::io_type_t::COMPLEX_FLOAT32,
-                uhd::device::SEND_MODE_FULL_BUFF
-            );
+                if (tx_buffer_samples==256) {
+                    // reset counter
+                    tx_buffer_samples=0;
+
+                    //send the entire contents of the buffer
+                    usrp->get_device()->send(
+                        &buff.front(), buff.size(), md,
+                        uhd::io_type_t::COMPLEX_FLOAT32,
+                        uhd::device::SEND_MODE_FULL_BUFF
+                    );
+                }
+            }
         }
+
 
 #if 0
         // pad remaining samples with zeros
