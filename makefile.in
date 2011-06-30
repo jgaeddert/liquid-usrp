@@ -48,6 +48,9 @@ GREP	:= @GREP@
 AR	:= ar
 RANLIB	:= ranlib
 
+# temporary placeholder for 'all' target (later overwritten)
+all:
+
 ##
 ## TARGET : help - print list of makefile targets
 ##
