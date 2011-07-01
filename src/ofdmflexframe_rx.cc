@@ -50,7 +50,9 @@ int callback(unsigned char *  _header,
 
         if (_header_valid) {
             unsigned int packet_id = (_header[0] << 8 | _header[1]);
-            printf("rx packet id: %6u\n", packet_id);
+            printf("rx packet id: %6u", packet_id);
+            if (_payload_valid) printf("\n");
+            else                printf(" <payload invalid>\n");
         }
     }
 
