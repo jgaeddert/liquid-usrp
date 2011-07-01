@@ -34,6 +34,9 @@ void usage() {
     printf("  q/v   :   quiet/verbose\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
+    printf("  g     :   software tx gain [dB] (default: -6dB)\n");
+    printf("  G     :   uhd tx gain [dB] (default: -40dB)\n");
+    printf("  N     :   number of frames, default: 1000\n");
     printf("  M     :   number of subcarriers, default: 64\n");
     printf("  C     :   cyclic prefix length, default: 16\n");
     printf("  P     :   payload length [bytes], default: 256\n");
@@ -56,7 +59,10 @@ int main (int argc, char **argv)
 
     double frequency = 462.0e6;
     double bandwidth = min_bandwidth;
-    //float num_seconds = 5.0f;
+    unsigned int num_frames = 1000;     // number of frames to transmit
+    double txgain_dB = -6.0f;           // software tx gain [dB]
+    double uhd_txgain = -40.0;          // uhd (hardware) tx gain
+
 
     unsigned int M = 64;                // number of subcarriers
     unsigned int cp_len = 16;           // cyclic prefix length
@@ -69,11 +75,9 @@ int main (int argc, char **argv)
     fec_scheme fec0 = LIQUID_FEC_NONE;         // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_HAMMING128;   // fec (outer)
 
-    double txgain_dB = -6.0f;
-
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:M:C:P:m:p:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:p:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -81,6 +85,9 @@ int main (int argc, char **argv)
         case 'v':   verbose = true;                 break;
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
+        case 'g':   txgain_dB = atof(optarg);       break;
+        case 'G':   uhd_txgain = atof(optarg);      break;
+        case 'N':   num_frames = atoi(optarg);      break;
         case 'M':   M = atoi(optarg);               break;
         case 'C':   cp_len = atoi(optarg);          break;
         case 'P':   payload_len = atoi(optarg);     break;
@@ -151,7 +158,7 @@ int main (int argc, char **argv)
     usrp->set_tx_rate(usrp_tx_rate);
 #endif
     usrp->set_tx_freq(frequency);
-    usrp->set_tx_gain(-40);
+    usrp->set_tx_gain(uhd_txgain);
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
@@ -217,8 +224,6 @@ int main (int argc, char **argv)
     md.end_of_burst   = false;  // 
     md.has_time_spec  = false;  // set to false to send immediately
 
-    unsigned int num_frames = -1;
-
     unsigned int j;
     unsigned int pid;
     tx_buffer_samples=0;
@@ -244,14 +249,14 @@ int main (int argc, char **argv)
 
         // generate frame
         int last_symbol=0;
-        unsigned int zero_pad=0;
+        unsigned int zero_pad=4;
         unsigned int num_samples;
-        while (!last_symbol || zero_pad < 2) {
+        while (!last_symbol || zero_pad > 0) {
             if (!last_symbol) {
                 // generate symbol
                 last_symbol = ofdmflexframegen_writesymbol(fg, buffer, &num_samples);
             } else {
-                zero_pad++;
+                zero_pad--;
                 num_samples = M+cp_len;
                 for (j=0; j<num_samples; j++)
                     buffer[j] = 0.0f;
@@ -302,6 +307,10 @@ int main (int argc, char **argv)
         uhd::io_type_t::COMPLEX_FLOAT32,
         uhd::device::SEND_MODE_FULL_BUFF
     );
+
+    // sleep for a small amount of time to allow USRP buffers
+    // to flush
+    usleep(100000);
 
     //finished
     printf("usrp data transfer complete\n");
