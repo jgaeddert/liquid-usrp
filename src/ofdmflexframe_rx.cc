@@ -30,8 +30,9 @@
  
 static bool verbose;
 
-// data counter
-unsigned int num_packets_received;
+// data counters
+unsigned int num_frames_detected;
+unsigned int num_valid_headers_received;
 unsigned int num_valid_packets_received;
 unsigned int num_valid_bytes_received;
 
@@ -53,12 +54,16 @@ int callback(unsigned char *  _header,
             printf("rx packet id: %6u", packet_id);
             if (_payload_valid) printf("\n");
             else                printf(" <payload invalid>\n");
+        } else {
+            printf("\n");
         }
     }
 
     // update global counters
+    num_frames_detected++;
 
-    num_packets_received++;
+    if (_header_valid)
+        num_valid_headers_received++;
 
     if (_payload_valid) {
         num_valid_packets_received++;
@@ -240,6 +245,12 @@ int main (int argc, char **argv)
     std::complex<float> data_decim[32];
     std::complex<float> data_resamp[64];
  
+    // reset counters
+    num_frames_detected=0;
+    num_valid_headers_received=0;
+    num_valid_packets_received=0;
+    num_valid_bytes_received=0;
+
     unsigned int n=0;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
@@ -303,11 +314,15 @@ int main (int argc, char **argv)
  
     // print results
     float data_rate = num_valid_bytes_received * 8.0f / num_seconds;
-    float percent_valid = (num_packets_received == 0) ?
+    float percent_headers_valid = (num_frames_detected == 0) ?
                           0.0f :
-                          100.0f * (float)num_valid_packets_received / (float)num_packets_received;
-    printf("    packets received    : %6u\n", num_packets_received);
-    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_valid);
+                          100.0f * (float)num_valid_headers_received / (float)num_frames_detected;
+    float percent_packets_valid = (num_frames_detected == 0) ?
+                          0.0f :
+                          100.0f * (float)num_valid_packets_received / (float)num_frames_detected;
+    printf("    frames detected     : %6u\n", num_frames_detected);
+    printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
+    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
     // destroy objects
