@@ -67,7 +67,6 @@ struct iqpr_s {
     unsigned int tx_data_len;       // transmitted payload data length
     ofdmflexframegenprops_s fgprops;    // frame generator properties
     ofdmflexframegen fg;                // frame generator
-    float tx_gain;                  // transmit gain
     resamp2_crcf tx_interp;         // half-band interpolator
     resamp_crcf tx_resamp;          // arbitrary resampler
     //std::complex<float> * frame;    // frame buffer
@@ -107,7 +106,7 @@ iqpr iqpr_create()
     //
     // common
     //
-    q->M = 128;     // number of subcarriers
+    q->M = 64;     // number of subcarriers
     q->cp_len = 8;  // cyclic prefix length
     q->p = NULL;    // subcarrier allocation (NULL gives default)
     q->p = (unsigned int*)malloc(q->M*sizeof(unsigned int));
@@ -170,8 +169,9 @@ iqpr iqpr_create()
 
     //q->tx_buffer.resize(1);
 
-    // set transmit gain
-    q->tx_gain = 1.0f;
+    // set hardware transmit/receive gains
+    iqpr_set_tx_gain(q, -40.0f);
+    iqpr_set_rx_gain(q,  40.0f);
 
     // debugging
     q->verbose = 0;
@@ -445,9 +445,9 @@ void iqpr_txpacket(iqpr _q,
 
     // generate the frame
     int last_symbol=0;
-    unsigned int zero_pad = (256/frame_len) < 1 ? 1 : (256/frame_len);
+    unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
     unsigned int num_samples;
-    float g = 0.3f;
+    float g = 0.1f;
 
     unsigned int j;
     unsigned int tx_buffer_samples=0;

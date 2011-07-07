@@ -84,6 +84,7 @@ int main (int argc, char **argv) {
     fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
     modulation_scheme mod_scheme = LIQUID_MODEM_QAM;    // modulation scheme
     unsigned int mod_depth = 2;                         // modulation depth
+    unsigned int ack_timeout=50000;
 
     //
     int d;
@@ -213,7 +214,8 @@ int main (int argc, char **argv) {
                 // wait for acknowledgement
                 unsigned int timer=0;
                 ack_received=0;
-                while (!ack_received && timer < 25000) {
+                // TODO : estimate ack_timeout based on frame size...
+                while (!ack_received && timer < ack_timeout) {
                     int packet_received =
                     iqpr_rxpacket(q, timespec,
                                   &rx_header,
