@@ -93,7 +93,7 @@ void iqpr_txpacket(iqpr _q,
                    unsigned char * _header,
                    unsigned char * _payload,
                    unsigned int _payload_len,
-                   flexframegenprops_s * _fgprops);
+                   ofdmflexframegenprops_s * _fgprops);
 
 // receive data packet with timeout, returning 1 if found, 0 if not
 //  _q              :   iqpr object
@@ -153,13 +153,13 @@ float iqpr_mac_getrssi(iqpr _q,
 //
 
 // iqpr internal callback method
-int iqpr_callback(unsigned char * _rx_header,
-                  int _rx_header_valid,
-                  unsigned char * _rx_payload,
-                  unsigned int _rx_payload_len,
-                  int _rx_payload_valid,
+int iqpr_callback(unsigned char *  _rx_header,
+                  int              _rx_header_valid,
+                  unsigned char *  _rx_payload,
+                  unsigned int     _rx_payload_len,
+                  int              _rx_payload_valid,
                   framesyncstats_s _stats,
-                  void * _userdata);
+                  void *           _userdata);
 
 #if 0
 // iqpr packet header descriptor (14 bytes total space)
