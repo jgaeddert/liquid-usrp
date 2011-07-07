@@ -107,7 +107,7 @@ iqpr iqpr_create()
     //
     // common
     //
-    q->M = 64;      // number of subcarriers
+    q->M = 128;     // number of subcarriers
     q->cp_len = 8;  // cyclic prefix length
     q->p = NULL;    // subcarrier allocation (NULL gives default)
     q->p = (unsigned int*)malloc(q->M*sizeof(unsigned int));
@@ -445,7 +445,7 @@ void iqpr_txpacket(iqpr _q,
 
     // generate the frame
     int last_symbol=0;
-    unsigned int zero_pad = 4;
+    unsigned int zero_pad = (256/frame_len) < 1 ? 1 : (256/frame_len);
     unsigned int num_samples;
     float g = 0.3f;
 
@@ -757,7 +757,6 @@ int iqpr_callback(unsigned char *  _rx_header,
                   framesyncstats_s _stats,
                   void *           _userdata)
 {
-    printf("********* callback invoked\n");
     iqpr q = (iqpr) _userdata;
 
     if (q->verbose) {

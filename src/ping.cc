@@ -144,16 +144,18 @@ int main (int argc, char **argv) {
     //
     // transmitter properties
     //
-    flexframegenprops_s fgprops;
-    flexframegenprops_init_default(&fgprops);
-    fgprops.rampup_len   = 40;
-    fgprops.phasing_len  = 80;
+    ofdmflexframegenprops_s fgprops;
+    ofdmflexframegenprops_init_default(&fgprops);
     fgprops.check        = check;
     fgprops.fec0         = fec0;
     fgprops.fec1         = fec1;
     fgprops.mod_scheme   = mod_scheme;
     fgprops.mod_bps      = mod_depth;
+#if 0
+    fgprops.rampup_len   = 40;
+    fgprops.phasing_len  = 80;
     fgprops.rampdn_len   = 40;
+#endif
     unsigned int tx_pid;
     unsigned char tx_header[14];
     unsigned char tx_payload[tx_payload_len];
