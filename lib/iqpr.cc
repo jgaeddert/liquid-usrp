@@ -45,7 +45,7 @@ struct iqpr_s {
     //
     unsigned int M;                 // number of subcarriers
     unsigned int cp_len;            // cyclic prefix length
-    unsigned int * p;               // subcarrier allocation
+    unsigned char * p;              // subcarrier allocation
 
     // receiver
     std::vector<std::complex<float> > rx_buffer;    // rx data buffer
@@ -109,7 +109,7 @@ iqpr iqpr_create()
     q->M = 64;     // number of subcarriers
     q->cp_len = 8;  // cyclic prefix length
     q->p = NULL;    // subcarrier allocation (NULL gives default)
-    q->p = (unsigned int*)malloc(q->M*sizeof(unsigned int));
+    q->p = (unsigned char*)malloc(q->M*sizeof(unsigned char));
     unsigned int guard = q->M / 6;
     unsigned int pilot_spacing = 8;
     unsigned int i0 = (q->M/2) - guard;

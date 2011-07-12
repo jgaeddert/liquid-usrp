@@ -175,7 +175,7 @@ int main (int argc, char **argv)
  
 
     // initialize subcarrier allocation
-    unsigned int p[M];
+    unsigned char p[M];
     unsigned int guard = M / 6;
     unsigned int pilot_spacing = 8;
     unsigned int i0 = (M/2) - guard;
