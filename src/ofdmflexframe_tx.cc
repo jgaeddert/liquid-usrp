@@ -29,24 +29,24 @@
 #include <uhd/usrp/single_usrp.hpp>
 
 void usage() {
-    printf("ofdmflexframe_tx -- transmit OFDM packets\n");
-    printf("  u,h   :   usage/help\n");
-    printf("  q/v   :   quiet/verbose\n");
-    printf("  f     :   center frequency [Hz]\n");
-    printf("  b     :   bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
-    printf("  g     :   software tx gain [dB] (default: -6dB)\n");
-    printf("  G     :   uhd tx gain [dB] (default: -40dB)\n");
-    printf("  N     :   number of frames, default: 1000\n");
-    printf("  M     :   number of subcarriers, default: 64\n");
-    printf("  C     :   cyclic prefix length, default: 16\n");
-    printf("  P     :   payload length [bytes], default: 256\n");
-    printf("  m     :   modulation scheme: psk, dpsk, ask, <qam>, apsk\n");
-    printf("  p     :   modulation depth [bits/symbol], default: 2\n");
-    printf("  c/k   :   fec coding scheme (inner/outer)\n");
-    // print all available FEC schemes
-    unsigned int i;
-    for (i=0; i<LIQUID_FEC_NUM_SCHEMES; i++)
-        printf("          [%s] %s\n", fec_scheme_str[i][0], fec_scheme_str[i][1]);
+    printf("ofdmflexframe_tx [OPTION]\n");
+    printf("transmit OFDM packets\n");
+    printf("\n");
+    printf("  u,h   : usage/help\n");
+    printf("  q/v   : quiet/verbose\n");
+    printf("  f     : center frequency [Hz]\n");
+    printf("  b     : bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
+    printf("  g     : software tx gain [dB] (default: -6dB)\n");
+    printf("  G     : uhd tx gain [dB] (default: -40dB)\n");
+    printf("  N     : number of frames, default: 1000\n");
+    printf("  M     : number of subcarriers, default: 64\n");
+    printf("  C     : cyclic prefix length, default: 16\n");
+    printf("  P     : payload length [bytes], default: 256\n");
+    printf("  m     : modulation scheme (qpsk default)\n");
+    liquid_print_modulation_schemes();
+    printf("  c     : coding scheme (inner): h74 default\n");
+    printf("  k     : coding scheme (outer): none default\n");
+    liquid_print_fec_schemes();
 }
 
 int main (int argc, char **argv)
@@ -77,7 +77,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:p:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -92,15 +92,28 @@ int main (int argc, char **argv)
         case 'C':   cp_len = atoi(optarg);          break;
         case 'P':   payload_len = atoi(optarg);     break;
         case 'm':
-            ms = liquid_getopt_str2mod(optarg);
+            liquid_getopt_str2modbps(optarg, &ms, &bps);
             if (ms == LIQUID_MODEM_UNKNOWN) {
-                fprintf(stderr, "error: %s unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
-                ms = LIQUID_MODEM_UNKNOWN;
+                fprintf(stderr,"error: %s, unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
+                exit(-1);
             }
             break;
-        case 'p':   bps = atoi(optarg);             break;
-        case 'c':   fec0 = liquid_getopt_str2fec(optarg);   break;
-        case 'k':   fec1 = liquid_getopt_str2fec(optarg);   break;
+        case 'c':
+            // inner FEC scheme
+            fec0 = liquid_getopt_str2fec(optarg);
+            if (fec0 == LIQUID_FEC_UNKNOWN) {
+                fprintf(stderr,"error: unknown/unsupported inner FEC scheme \"%s\"\n\n",optarg);
+                exit(1);
+            }
+            break;
+        case 'k':
+            // outer FEC scheme
+            fec1 = liquid_getopt_str2fec(optarg);
+            if (fec1 == LIQUID_FEC_UNKNOWN) {
+                fprintf(stderr,"error: unknown/unsupported outer FEC scheme \"%s\"\n\n",optarg);
+                exit(1);
+            }
+            break;
         default:
             usage();
             return 0;
@@ -249,7 +262,7 @@ int main (int argc, char **argv)
 
         // generate frame
         int last_symbol=0;
-        unsigned int zero_pad=4;
+        unsigned int zero_pad=1;
         unsigned int num_samples;
         while (!last_symbol || zero_pad > 0) {
             if (!last_symbol) {
