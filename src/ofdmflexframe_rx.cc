@@ -47,7 +47,7 @@ int callback(unsigned char *  _header,
 {
     if (verbose) {
         printf("********* callback invoked, ");
-        printf("rssi=%8.3fdB, ", _stats.rssi);
+        printf("rssi=%7.2fdB evm=%7.2fdB, ", _stats.rssi, _stats.evm);
 
         if (_header_valid) {
             unsigned int packet_id = (_header[0] << 8 | _header[1]);
