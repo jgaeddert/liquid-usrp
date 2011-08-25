@@ -114,7 +114,7 @@ int main (int argc, char **argv)
     double max_bandwidth = 0.25*(64e6 /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = min_bandwidth;
+    double bandwidth = 100e3f;
     double num_seconds = 5.0f;
 
     // 

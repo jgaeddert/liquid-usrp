@@ -58,7 +58,7 @@ int main (int argc, char **argv)
     double max_bandwidth = 0.25*(64e6 /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = min_bandwidth;
+    double bandwidth = 100e3f;
     unsigned int num_frames = 1000;     // number of frames to transmit
     double txgain_dB = -6.0f;           // software tx gain [dB]
     double uhd_txgain = -40.0;          // uhd (hardware) tx gain
