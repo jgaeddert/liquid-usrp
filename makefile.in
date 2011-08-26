@@ -86,14 +86,15 @@ library_headers :=			\
 
 # example programs
 example_src :=				\
+	src/iqpr_test.cc		\
 	src/flexframe_tx.cc		\
 	src/flexframe_rx.cc		\
-	src/iqpr_test.cc		\
+	src/ofdmflexframe_rx.cc		\
+	src/ofdmflexframe_tx.cc		\
 	src/packet_rx.cc		\
 	src/packet_tx.cc		\
 	src/ping.cc			\
-	src/ofdmflexframe_rx.cc		\
-	src/ofdmflexframe_tx.cc		\
+	src/rssi.cc			\
 
 #	src/crdemo.cc
 #	src/usrp_init_test.cc
