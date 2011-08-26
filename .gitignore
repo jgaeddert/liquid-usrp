@@ -21,35 +21,15 @@ makefile
 octave-core
 
 # ignore all programs
-src/crdemo
-src/firpfbch_tx
 src/flexframe_rx
 src/flexframe_tx
-src/framestats_rx
-src/framestats_tx
-src/fmtx
-src/gmsk_rx
-src/gmsk_tx
 src/iqpr_test
-src/jammer
 src/ofdmflexframe_rx
 src/ofdmflexframe_tx
-src/ofdmframe_rx
-src/ofdmframe_tx
-src/ofdmoqamframe_rx
-src/ofdmoqamframe_tx
-src/ofdmoqamframe64_rx
-src/ofdmoqamframe64_tx
 src/packet_rx
 src/packet_tx
-src/packetstream_rx
-src/packetstream_tx
 src/ping
 src/rssi
-src/tx_rrc
-src/usrp_init_test
-src/usrp_io_test
-src/usrp_rx_gain_correction_test
 
 # miscellany
 *.swp
