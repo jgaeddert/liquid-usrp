@@ -174,7 +174,6 @@ int main (int argc, char **argv)
         // resampler, and push through AGC object
         unsigned int j;
         unsigned int nw=0;
-        unsigned int num_resamp=0;
         for (j=0; j<num_rx_samps; j++) {
             // push 64 samples into buffer
             data_rx[n++] = buff[j];
@@ -184,6 +183,7 @@ int main (int argc, char **argv)
                 n=0;
 
                 // apply resampler
+                unsigned int num_resamp=0;
                 for (k=0; k<64; k++) {
                     resamp_crcf_execute(resamp, data_rx[k], &data_resamp[num_resamp], &nw);
                     num_resamp += nw;
