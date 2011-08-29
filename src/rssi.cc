@@ -37,6 +37,8 @@ void usage() {
     printf("  G     : uhd rx gain [dB] (default: 20dB)\n");
     printf("  q     : quiet\n");
     printf("  v     : verbose\n");
+    printf("  L     : record length (number of samples), default: 1200\n");
+    printf("  o     : output filename\n");
     printf("  u,h   : usage/help\n");
 }
 
@@ -49,15 +51,18 @@ int main (int argc, char **argv)
     float min_bandwidth = 0.25f*(ADC_RATE / 256.0);
     float max_bandwidth = 0.25f*(ADC_RATE /   4.0);
 
-
     float frequency = 462.0e6;
     float bandwidth = 100e3f;
     float num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 
+    // output log file
+    unsigned int log_size = 1200;
+    char filename[256] = "rssi_results.m";
+
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:G:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:t:G:qvL:o:uh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
@@ -65,6 +70,8 @@ int main (int argc, char **argv)
         case 'G':   uhd_rxgain = atof(optarg);      break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
+        case 'L':   log_size = atoi(optarg);        break;
+        case 'o':   strncpy(filename,optarg,255);   break;
         case 'u':
         case 'h':
         default:
@@ -123,7 +130,10 @@ int main (int argc, char **argv)
     // create automatic gain control object and set properties
     agc_crcf agc_rx = agc_crcf_create();
     agc_crcf_set_bandwidth(agc_rx, 0.01f);
-    agc_crcf_set_gain_limits(agc_rx, 1e-3f, 1e4f);
+    agc_crcf_set_gain_limits(agc_rx, 1e-4f, 1e4f);
+
+    // create window buffer to log samples
+    windowf log_buffer = windowf_create(log_size);
 
     //
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
@@ -189,9 +199,13 @@ int main (int argc, char **argv)
                     num_resamp += nw;
                 }
 
-                // push through agc object
-                for (k=0; k<num_resamp; k++)
-                    agc_crcf_execute(agc_rx, data_resamp[i], &agc_out);
+                // push through agc object, push to log buffer
+                for (k=0; k<num_resamp; k++) {
+                    agc_crcf_execute(agc_rx, data_resamp[k], &agc_out);
+
+                    // get linear signal level and push into buffer
+                    windowf_push(log_buffer, agc_crcf_get_signal_level(agc_rx));
+                }
             }
 
         }
@@ -210,6 +224,32 @@ int main (int argc, char **argv)
     // clean object allocation
     resamp_crcf_destroy(resamp);
     agc_crcf_destroy(agc_rx);
+
+    // save log file...
+    FILE * fid = fopen(filename,"w");
+    if (!fid) {
+        fprintf(stderr,"error: %s, could not open '%s' for writing\n", argv[0], filename);
+        exit(1);
+    }
+    fprintf(fid,"%% %s : auto-generated file\n", filename);
+    float * r = NULL;
+    windowf_read(log_buffer,&r);
+    fprintf(fid,"Fs = %e;\n", rx_rate);
+    fprintf(fid,"n = %u;\n", log_size);
+    fprintf(fid,"rssi = zeros(1,n);\n");
+    for (i=0; i<log_size; i++)
+        fprintf(fid,"rssi(%u) = %12.4e;\n", i+1, r[i]);
+    fprintf(fid,"\n\n");
+    fprintf(fid,"t = [0:(n-1)]/Fs;\n");
+    fprintf(fid,"figure;\n");
+    fprintf(fid,"plot(t*1e3,10*log10(rssi));\n");
+    fprintf(fid,"xlabel('time [ms]');\n");
+    fprintf(fid,"ylabel('RSSI [dB]');\n");
+    fprintf(fid,"grid on\n");
+    fclose(fid);
+    printf("output written to '%s'\n", filename);
+
+    windowf_destroy(log_buffer);
 
     return 0;
 }
