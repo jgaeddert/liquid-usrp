@@ -47,7 +47,7 @@ int callback(unsigned char *  _header,
 {
     if (verbose) {
         printf("********* callback invoked, ");
-        printf("rssi=%8.3fdB, ", _stats.rssi);
+        printf("rssi=%7.2fdB evm=%7.2fdB, ", _stats.rssi, _stats.evm);
 
         if (_header_valid) {
             unsigned int packet_id = (_header[0] << 8 | _header[1]);
@@ -114,7 +114,7 @@ int main (int argc, char **argv)
     double max_bandwidth = 0.25*(64e6 /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = min_bandwidth;
+    double bandwidth = 100e3f;
     double num_seconds = 5.0f;
 
     // 
