@@ -37,7 +37,7 @@ void usage() {
     printf("  f     : center frequency [Hz]\n");
     printf("  b     : bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
     printf("  g     : software tx gain [dB] (default: -6dB)\n");
-    printf("  G     : uhd tx gain [dB] (default: -40dB)\n");
+    printf("  G     : uhd tx gain [dB] (default: 40dB)\n");
     printf("  N     : number of frames, default: 1000\n");
     printf("  M     : number of subcarriers, default: 64\n");
     printf("  C     : cyclic prefix length, default: 16\n");
@@ -62,7 +62,7 @@ int main (int argc, char **argv)
     double bandwidth = 100e3f;
     unsigned int num_frames = 1000;     // number of frames to transmit
     double txgain_dB = -6.0f;           // software tx gain [dB]
-    double uhd_txgain = -40.0;          // uhd (hardware) tx gain
+    double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
 
     unsigned int M = 64;                // number of subcarriers
