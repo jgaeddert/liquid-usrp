@@ -54,8 +54,9 @@ int main (int argc, char **argv)
     // command-line options
     bool verbose = true;
 
-    double min_bandwidth = 0.25*(64e6 / 512.0);
-    double max_bandwidth = 0.25*(64e6 /   4.0);
+    unsigned long int DAC_RATE = 64e6;
+    double min_bandwidth = 0.25*(DAC_RATE / 512.0);
+    double max_bandwidth = 0.25*(DAC_RATE /   4.0);
 
     double frequency = 462.0e6;
     double bandwidth = 100e3f;
@@ -149,7 +150,7 @@ int main (int argc, char **argv)
 #else
     // NOTE : the sample rate computation MUST be in double precision so
     //        that the UHD can compute its interpolation rate properly
-    unsigned int interp_rate = (unsigned int)(64e6 / tx_rate);
+    unsigned int interp_rate = (unsigned int)(DAC_RATE / tx_rate);
     // ensure multiple of 4
     interp_rate = (interp_rate >> 2) << 2;
     // NOTE : there seems to be a bug where if the interp rate is equal to
@@ -158,7 +159,14 @@ int main (int argc, char **argv)
     while (interp_rate == 240 || interp_rate == 244)
         interp_rate -= 4;
     // compute usrp sampling rate
-    double usrp_tx_rate = 64e6 / (double)interp_rate;
+    double usrp_tx_rate = DAC_RATE / (double)interp_rate;
+    
+    // try to set tx rate
+    usrp->set_tx_rate(DAC_RATE / interp_rate);
+
+    // get actual tx rate
+    usrp_tx_rate = usrp->get_tx_rate();
+
     //usrp_tx_rate = 262295.081967213;
     // compute arbitrary resampling rate
     double tx_resamp_rate = usrp_tx_rate / tx_rate;
@@ -167,8 +175,6 @@ int main (int argc, char **argv)
             usrp_tx_rate * 1e-3f,
             1.0 / tx_resamp_rate,
             interp_rate);
-
-    usrp->set_tx_rate(usrp_tx_rate);
 #endif
     usrp->set_tx_freq(frequency);
     usrp->set_tx_gain(uhd_txgain);

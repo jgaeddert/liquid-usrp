@@ -139,6 +139,13 @@ int main (int argc, char **argv)
     interp_rate += 4; // ensure tx_resamp_rate <= 1.0
     // compute usrp sampling rate
     double usrp_tx_rate = DAC_RATE / (double)interp_rate;
+    
+    // try to set tx rate
+    usrp->set_tx_rate(DAC_RATE / interp_rate);
+
+    // get actual tx rate
+    usrp_tx_rate = usrp->get_tx_rate();
+
     //usrp_tx_rate = 262295.081967213;
     // compute arbitrary resampling rate
     double tx_resamp_rate = usrp_tx_rate / tx_rate;
@@ -147,8 +154,6 @@ int main (int argc, char **argv)
             usrp_tx_rate * 1e-3f,
             tx_resamp_rate,
             interp_rate);
-
-    usrp->set_tx_rate(DAC_RATE / interp_rate);
 #endif
     usrp->set_tx_freq(frequency);
     usrp->set_tx_gain(uhd_txgain);
