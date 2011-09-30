@@ -151,6 +151,13 @@ int main (int argc, char **argv)
     decim_rate = (decim_rate >> 1) << 1;
     // compute usrp sampling rate
     double usrp_rx_rate = ADC_RATE / decim_rate;
+    
+    // try to set rx rate
+    usrp->set_rx_rate(ADC_RATE / decim_rate);
+
+    // get actual rx rate
+    usrp_rx_rate = usrp->get_rx_rate();
+
     // compute arbitrary resampling rate
     double rx_resamp_rate = rx_rate / usrp_rx_rate;
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
@@ -158,7 +165,6 @@ int main (int argc, char **argv)
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-    usrp->set_rx_rate(ADC_RATE / decim_rate);
 #endif
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(uhd_rxgain);
