@@ -31,25 +31,21 @@
 
 void usage() {
     printf("flexframe_tx:\n");
-    printf("  f     :   center frequency [Hz]\n");
-    printf("  b     :   bandwidth [Hz]\n");
-    printf("  g     :   software transmit power gain [dB] (default: -3dB)\n");
-    printf("  G     :   uhd tx gain [dB] (default: -40dB)\n");
-    printf("  t     :   run time [seconds]\n");
-    printf("  n     :   payload length (bytes)\n");
-    printf("  m     :   mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
-    printf("  p     :   mod. depth: <1>,2,...8\n");
-    printf("  s     :   packet spacing <0>\n");
-    printf("  r     :   ramp up/dn length <64>\n");
-    printf("  c     :   fec coding scheme (inner)\n");
-    printf("  k     :   fec coding scheme (outer)\n");
-    // print all available FEC schemes
-    unsigned int i;
-    for (i=0; i<LIQUID_FEC_NUM_SCHEMES; i++)
-        printf("          [%s] %s\n", fec_scheme_str[i][0], fec_scheme_str[i][1]);
-    printf("  q     :   quiet\n");
-    printf("  v     :   verbose\n");
-    printf("  u,h   :   usage/help\n");
+    printf("  u,h   : usage/help\n");
+    printf("  v/q   : verbose/quiet\n");
+    printf("  f     : center frequency [Hz]\n");
+    printf("  b     : bandwidth [Hz]\n");
+    printf("  g     : software transmit power gain [dB] (default: -3dB)\n");
+    printf("  G     : uhd tx gain [dB] (default: -40dB)\n");
+    printf("  t     : run time [seconds]\n");
+    printf("  n     : payload length (bytes)\n");
+    printf("  m     : mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
+    printf("  p     : mod. depth: <1>,2,...8\n");
+    printf("  s     : packet spacing <0>\n");
+    printf("  r     : ramp up/dn length <64>\n");
+    printf("  c     : fec coding scheme (inner)\n");
+    printf("  k     : fec coding scheme (outer)\n");
+    liquid_print_fec_schemes();
 }
 
 int main (int argc, char **argv)
