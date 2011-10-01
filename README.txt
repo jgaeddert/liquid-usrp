@@ -38,6 +38,8 @@ Build dependencies
                                         libboost-1.37-dev
                                         libboost-math1.37-dev
 
+    install dependencies using port: cmake py-cheetah (py26-cheetah)
+
     $ git clone git://code.ettus.com/ettus/uhd.git
     $ cd uhd
     $ git checkout release_003_000_001
