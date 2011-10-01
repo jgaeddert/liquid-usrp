@@ -25,7 +25,6 @@ Build dependencies
     
     $ git clone git://github.com/jgaeddert/liquid-dsp.git
     $ cd liquid-dsp
-    $ git checkout v1.0.0
     $ ./reconf
     $ ./configure
     $ make

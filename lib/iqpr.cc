@@ -42,14 +42,18 @@ struct iqpr_s {
     // UHD interface to hardware
     uhd::usrp::single_usrp::sptr usrp;
 
+    //
+    unsigned int M;                 // number of subcarriers
+    unsigned int cp_len;            // cyclic prefix length
+    unsigned char * p;              // subcarrier allocation
+
     // receiver
     std::vector<std::complex<float> > rx_buffer;    // rx data buffer
     unsigned int rx_vector_index;                   // index of rx buffer vector
     unsigned int rx_vector_length;                  // length of rx buffer vector
     resamp2_crcf rx_decim;          // half-band decimator
     resamp_crcf rx_resamp;          // arbitrary resampler
-    framesyncprops_s fsprops;       // frame synchronizer properties
-    flexframesync fs;               // frame synchronizer
+    ofdmflexframesync fs;               // frame synchronizer
     int rx_packet_found;            // receiver packet found flag
     unsigned char rx_header[14];    // received frame header
     int rx_header_valid;            // receiver frame header valid?
@@ -61,10 +65,9 @@ struct iqpr_s {
     // transmitter
     unsigned char * tx_data;        // transmitted payload data
     unsigned int tx_data_len;       // transmitted payload data length
-    flexframegenprops_s fgprops;    // frame generator properties
-    flexframegen fg;                // frame generator
-    float tx_gain;                  // transmit gain
-    interp_crcf tx_interp;          // matched-filter interpolator
+    ofdmflexframegenprops_s fgprops;    // frame generator properties
+    ofdmflexframegen fg;                // frame generator
+    resamp2_crcf tx_interp;         // half-band interpolator
     resamp_crcf tx_resamp;          // arbitrary resampler
     //std::complex<float> * frame;    // frame buffer
     std::complex<float> data_tx[32];                // tx data buffer (array)
@@ -100,6 +103,27 @@ iqpr iqpr_create()
     // (from http://www.ruby-forum.com/topic/1527488)
     //q->usrp->set_rx_lo_freq((_freq_range.start() + _freq_range.stop())/2.0);
 
+    //
+    // common
+    //
+    q->M = 64;     // number of subcarriers
+    q->cp_len = 8;  // cyclic prefix length
+    q->p = NULL;    // subcarrier allocation (NULL gives default)
+    q->p = (unsigned char*)malloc(q->M*sizeof(unsigned char));
+    unsigned int guard = q->M / 6;
+    unsigned int pilot_spacing = 8;
+    unsigned int i0 = (q->M/2) - guard;
+    unsigned int i1 = (q->M/2) + guard;
+    unsigned int i;
+    for (i=0; i<q->M; i++) {
+        if ( i == 0 || (i > i0 && i < i1) )
+            q->p[i] = OFDMFRAME_SCTYPE_NULL;
+        else if ( (i%pilot_spacing)==0 )
+            q->p[i] = OFDMFRAME_SCTYPE_PILOT;
+        else
+            q->p[i] = OFDMFRAME_SCTYPE_DATA;
+    }
+
     // 
     // receiver objects
     //
@@ -111,10 +135,7 @@ iqpr iqpr_create()
     q->rx_decim = resamp2_crcf_create(7, 0.0, 40.0);
 
     // create frame synchronizer
-    framesyncprops_init_default(&q->fsprops);
-    q->fsprops.squelch_threshold = -37.0f;
-    q->fsprops.squelch_enabled = 1;
-    q->fs = flexframesync_create(&q->fsprops, iqpr_callback, (void*)q);
+    q->fs = ofdmflexframesync_create(q->M, q->cp_len, q->p, iqpr_callback, (void*)q);
 
     // allocate memory for received data
     q->rx_payload_len = 1024;
@@ -126,31 +147,31 @@ iqpr iqpr_create()
     //
 
     // create frame generator
-    flexframegenprops_init_default(&q->fgprops);
-    q->fgprops.rampup_len   = 16;
-    q->fgprops.phasing_len  = 64;
+    ofdmflexframegenprops_init_default(&q->fgprops);
     q->fgprops.payload_len  = 0;
     q->fgprops.check        = LIQUID_CRC_NONE;
     q->fgprops.fec0         = LIQUID_FEC_NONE;
     q->fgprops.fec1         = LIQUID_FEC_NONE;
     q->fgprops.mod_scheme   = LIQUID_MODEM_QPSK;
     q->fgprops.mod_bps      = 2;
+#if 0
+    q->fgprops.rampup_len   = 16;
+    q->fgprops.phasing_len  = 64;
     q->fgprops.rampdn_len   = 16;
-    q->fg = flexframegen_create(&q->fgprops);
-    flexframegen_print(q->fg);
+#endif
+    q->fg = ofdmflexframegen_create(q->M, q->cp_len, q->p, &q->fgprops);
+    ofdmflexframegen_print(q->fg);
 
     // create interpolator
-    unsigned int k=4;
-    unsigned int m=3;
-    float beta=0.7f;
-    q->tx_interp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,k,m,beta,0);
+    q->tx_interp = resamp2_crcf_create(7,0.0f,40.0f);
 
     q->tx_resamp = resamp_crcf_create(1.0, 7, 0.4, 60.0, 64);
 
     //q->tx_buffer.resize(1);
 
-    // set transmit gain
-    q->tx_gain = 1.0f;
+    // set hardware transmit/receive gains
+    iqpr_set_tx_gain(q, -40.0f);
+    iqpr_set_rx_gain(q,  40.0f);
 
     // debugging
     q->verbose = 0;
@@ -161,18 +182,24 @@ iqpr iqpr_create()
 void iqpr_destroy(iqpr _q)
 {
     // 
+    // common objects
+    //
+    if (_q->p != NULL)
+        free(_q->p);
+
+    // 
     // receiver objects
     //
     resamp_crcf_destroy(_q->rx_resamp);
     resamp2_crcf_destroy(_q->rx_decim);
-    flexframesync_destroy(_q->fs);
+    ofdmflexframesync_destroy(_q->fs);
     free(_q->rx_payload);
 
     // 
     // transmitter objects
     //
-    flexframegen_destroy(_q->fg);
-    interp_crcf_destroy(_q->tx_interp);
+    ofdmflexframegen_destroy(_q->fg);
+    resamp2_crcf_destroy(_q->tx_interp);
     resamp_crcf_destroy(_q->tx_resamp);
 
     // free main object memory
@@ -287,11 +314,11 @@ void iqpr_set_rx_freq(iqpr _q, float _rx_freq)
     _q->usrp->set_rx_freq(_rx_freq);
 }
 
-// set flexframesync properties (receiver)
+// set ofdmflexframesync properties (receiver)
 void iqpr_rxconfig(iqpr _q,
                    framesyncprops_s * _fsprops)
 {
-    flexframesync_setprops(_q->fs, _fsprops);
+    //flexframesync_setprops(_q->fs, _fsprops);
 }
 
 
@@ -302,7 +329,7 @@ void iqpr_rx_start(iqpr _q)
 
     resamp2_crcf_clear(_q->rx_decim);
     resamp_crcf_reset(_q->rx_resamp);
-    flexframesync_reset(_q->fs);
+    ofdmflexframesync_reset(_q->fs);
 
     _q->rx_vector_index  = 0;
     _q->rx_vector_length = 0;
@@ -381,24 +408,19 @@ void iqpr_txpacket(iqpr _q,
                    unsigned char * _header,
                    unsigned char * _payload,
                    unsigned int _payload_len,
-                   flexframegenprops_s * _fgprops)
+                   ofdmflexframegenprops_s * _fgprops)
 {
     //unsigned int i;
 
     // reset interpolator, resampler (flush buffer)
-    interp_crcf_clear(_q->tx_interp);
+    resamp2_crcf_clear(_q->tx_interp);
     resamp_crcf_reset(_q->tx_resamp);
 
     // configure frame generator
     if (_fgprops != NULL)
-        memmove(&_q->fgprops, _fgprops, sizeof(flexframegenprops_s));
+        memmove(&_q->fgprops, _fgprops, sizeof(ofdmflexframegenprops_s));
     _q->fgprops.payload_len = _payload_len;
-    flexframegen_setprops(_q->fg, &_q->fgprops);
-
-    unsigned int frame_len = flexframegen_getframelen(_q->fg);
-    //printf("frame length : %u\n", frame_len);
-    unsigned int padding = 20;
-    frame_len += padding;
+    ofdmflexframegen_setprops(_q->fg, &_q->fgprops);
 
     // set up the metadta flags
     uhd::tx_metadata_t md;
@@ -406,47 +428,69 @@ void iqpr_txpacket(iqpr _q,
     md.end_of_burst   = false;  // 
     md.has_time_spec  = false;  // set to false to send immediately
 
-    std::complex<float> frame[frame_len];       // frame
-    unsigned int j;
-    for (j=frame_len-padding; j<frame_len; j++)
-        frame[j] = 0.0;
+    // compute 'frame' length (actually length of each symbol)
+    unsigned int frame_len = _q->M + _q->cp_len;
+
+    // arrays
+    std::complex<float> buffer[frame_len];    // output time series
+    std::complex<float> buffer_interp[2*frame_len];
+    std::complex<float> buffer_resamp[3*frame_len];
+    std::vector<std::complex<float> > buff(256);
 
     //printf("[tx] sending packet %u...\n", _pid);
 
-    // generate frame
-    flexframegen_execute(_q->fg, _header, _payload, frame);
+    // assemble the frame
+    ofdmflexframegen_reset(_q->fg);
+    ofdmflexframegen_assemble(_q->fg, _header, _payload);
 
-    std::complex<float> buffer_interp[4*frame_len];  // matched-filter interpolator (interp by 4)
-    std::complex<float> buffer_resamp[6*frame_len]; // resampler
-    std::vector<std::complex<float> > buff(6*frame_len);
+    // generate the frame
+    int last_symbol=0;
+    unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
+    unsigned int num_samples;
+    float g = 0.1f;
 
-    float g = 0.3f;
-    // interpolate using matched filter
-    for (j=0; j<frame_len; j++)
-        interp_crcf_execute(_q->tx_interp, g*frame[j], &buffer_interp[4*j]);
+    unsigned int j;
+    unsigned int tx_buffer_samples=0;
+    while (!last_symbol || zero_pad > 0) {
+        if (!last_symbol) {
+            // generate symbol
+            last_symbol = ofdmflexframegen_writesymbol(_q->fg, buffer, &num_samples);
+        } else {
+            zero_pad--;
+            num_samples = frame_len;
+            for (j=0; j<num_samples; j++)
+                buffer[j] = 0.0f;
+        }
+
+        // interpolate by 2
+        for (j=0; j<num_samples; j++)
+            resamp2_crcf_interp_execute(_q->tx_interp, buffer[j], &buffer_interp[2*j]);
         
-    // run resampler
-    unsigned int n=0;
-    unsigned int nw;
-    for (j=0; j<4*frame_len; j++) {
-        resamp_crcf_execute(_q->tx_resamp, buffer_interp[j], &buffer_resamp[n], &nw);
-        n += nw;
-    }
+        // resample
+        unsigned int nw;
+        unsigned int n=0;
+        for (j=0; j<2*num_samples; j++) {
+            resamp_crcf_execute(_q->tx_resamp, buffer_interp[j], &buffer_resamp[n], &nw);
+            n += nw;
+        }
 
-    //printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
-    buff.resize(n);
-    for (j=0; j<n; j++) {
-        buff[j] = buffer_resamp[j];
-    }
+        // push samples into buffer
+        for (j=0; j<n; j++) {
+            buff[tx_buffer_samples++] = g*buffer_resamp[j];
 
-    //send the entire contents of the buffer
-    //size_t num_tx_samples =
-    _q->usrp->get_device()->send(
-        &buff.front(), buff.size(), md,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
-    //printf("sent %6u (expected %6u)\n", num_tx_samples, buff.size());
+            if (tx_buffer_samples==256) {
+                // reset counter
+                tx_buffer_samples=0;
+
+                //send the entire contents of the buffer
+                _q->usrp->get_device()->send(
+                    &buff.front(), buff.size(), md,
+                    uhd::io_type_t::COMPLEX_FLOAT32,
+                    uhd::device::SEND_MODE_FULL_BUFF
+                );
+            }
+        }
+    }
 
 #if 0
     // send a mini EOB packet
@@ -548,7 +592,7 @@ int iqpr_rxpacket(iqpr _q,
             resamp_crcf_execute(_q->rx_resamp, rx_decim_out, rx_buffer_resamp, &nw);
 
             // push through synchronizer
-            flexframesync_execute(_q->fs, rx_buffer_resamp, nw);
+            ofdmflexframesync_execute(_q->fs, rx_buffer_resamp, nw);
 
 #if 1
             // check status flag
@@ -579,11 +623,11 @@ void iqpr_txack(iqpr _q,
 {
     // configure frame generator
     _q->fgprops.payload_len = 0;
-    flexframegen_setprops(_q->fg, &_q->fgprops);
+    ofdmflexframegen_setprops(_q->fg, &_q->fgprops);
 
     unsigned int i;
 
-    unsigned int frame_len = flexframegen_getframelen(_q->fg);
+    unsigned int frame_len = ofdmflexframegen_getframelen(_q->fg);
     std::complex<float> frame[frame_len];
     std::complex<float> mfbuffer[2*frame_len];
 
@@ -605,10 +649,10 @@ void iqpr_txack(iqpr _q,
     _q->fgprops.check       = LIQUID_CRC_NONE;
     _q->fgprops.fec0        = LIQUID_FEC_NONE;
     _q->fgprops.fec1        = LIQUID_FEC_NONE;
-    flexframegen_setprops(_q->fg, &_q->fgprops);
+    ofdmflexframegen_setprops(_q->fg, &_q->fgprops);
 
     // generate frame
-    flexframegen_execute(_q->fg, header, NULL, frame);
+    ofdmflexframegen_execute(_q->fg, header, NULL, frame);
 
     // run interpolator
     for (i=0; i<frame_len; i++) {
@@ -649,7 +693,7 @@ int iqpr_wait_for_ack(iqpr _q,
 #endif
 
         // run through frame synchronizer
-        flexframesync_execute(_q->fs, _q->rx_buffer, 512);
+        ofdmflexframesync_execute(_q->fs, _q->rx_buffer, 512);
 
         // check status flag
         if (_q->rx_packet_found) {
@@ -705,13 +749,13 @@ float iqpr_mac_getrssi(iqpr _q,
 //
 
 // iqpr internal callback method
-int iqpr_callback(unsigned char * _rx_header,
-                  int _rx_header_valid,
-                  unsigned char * _rx_payload,
-                  unsigned int _rx_payload_len,
-                  int _rx_payload_valid,
+int iqpr_callback(unsigned char *  _rx_header,
+                  int              _rx_header_valid,
+                  unsigned char *  _rx_payload,
+                  unsigned int     _rx_payload_len,
+                  int              _rx_payload_valid,
                   framesyncstats_s _stats,
-                  void * _userdata)
+                  void *           _userdata)
 {
     iqpr q = (iqpr) _userdata;
 

@@ -84,6 +84,7 @@ int main (int argc, char **argv) {
     fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
     modulation_scheme mod_scheme = LIQUID_MODEM_QAM;    // modulation scheme
     unsigned int mod_depth = 2;                         // modulation depth
+    unsigned int ack_timeout=50000;
 
     //
     int d;
@@ -144,16 +145,18 @@ int main (int argc, char **argv) {
     //
     // transmitter properties
     //
-    flexframegenprops_s fgprops;
-    flexframegenprops_init_default(&fgprops);
-    fgprops.rampup_len   = 40;
-    fgprops.phasing_len  = 80;
+    ofdmflexframegenprops_s fgprops;
+    ofdmflexframegenprops_init_default(&fgprops);
     fgprops.check        = check;
     fgprops.fec0         = fec0;
     fgprops.fec1         = fec1;
     fgprops.mod_scheme   = mod_scheme;
     fgprops.mod_bps      = mod_depth;
+#if 0
+    fgprops.rampup_len   = 40;
+    fgprops.phasing_len  = 80;
     fgprops.rampdn_len   = 40;
+#endif
     unsigned int tx_pid;
     unsigned char tx_header[14];
     unsigned char tx_payload[tx_payload_len];
@@ -211,7 +214,8 @@ int main (int argc, char **argv) {
                 // wait for acknowledgement
                 unsigned int timer=0;
                 ack_received=0;
-                while (!ack_received && timer < 25000) {
+                // TODO : estimate ack_timeout based on frame size...
+                while (!ack_received && timer < ack_timeout) {
                     int packet_received =
                     iqpr_rxpacket(q, timespec,
                                   &rx_header,

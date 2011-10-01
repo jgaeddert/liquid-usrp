@@ -30,86 +30,75 @@
  
 static bool verbose;
 
-// common data structure
-struct commondata_s {
-    unsigned int symbols_per_frame; // number of ofdm symbols in the frame
-    unsigned int num_symbols_received;
+// data counters
+unsigned int num_frames_detected;
+unsigned int num_valid_headers_received;
+unsigned int num_valid_packets_received;
+unsigned int num_valid_bytes_received;
 
-    // objects
-    modem demod;    // demodulator
-    bpacketsync ps; // packet synchronizer
-
-    // data counter
-    unsigned int num_packets_received;
-    unsigned int num_valid_packets_received;
-    unsigned int num_valid_bytes_received;
-};
-
-static int packet_callback(unsigned char * _payload,
-                           int _payload_valid,
-                           unsigned int _payload_len,
-                           void * _userdata)
+// callback function
+int callback(unsigned char *  _header,
+             int              _header_valid,
+             unsigned char *  _payload,
+             unsigned int     _payload_len,
+             int              _payload_valid,
+             framesyncstats_s _stats,
+             void *           _userdata)
 {
-    // type cast userdata
-    struct commondata_s * q = (struct commondata_s *) _userdata;
+    if (verbose) {
+        printf("********* callback invoked, ");
+        printf("rssi=%7.2fdB evm=%7.2fdB, ", _stats.rssi, _stats.evm);
 
-    if (verbose)
-        printf("  packet received\n");
-
-    q->num_packets_received++;
-    if ( !_payload_valid ) {
-        if (verbose) printf("payload crc : FAIL\n");
-    } else {
-        q->num_valid_packets_received++;
-        q->num_valid_bytes_received += _payload_len;
-    }
-    return 0;
-}
-
-static int ofdm_callback(std::complex<float> * _X,
-                         unsigned int * _p,
-                         unsigned int _M,
-                         void * _userdata)
-{
-    // type cast userdata
-    struct commondata_s * q = (struct commondata_s *) _userdata;
-
-    // get demodulator depth
-    unsigned int bps = modem_get_bps(q->demod);
-
-    // run demodulator, pushing resulting bits to packet synchronizer
-    unsigned int i;
-    for (i=0; i<_M; i++) {
-        if (_p[i] == OFDMFRAME_SCTYPE_DATA) {
-            // run demodulator
-            unsigned int demod_sym;
-            modem_demodulate(q->demod, _X[i], &demod_sym);
-
-            // push through packet synchronizer
-            bpacketsync_execute_sym(q->ps, demod_sym, bps);
+        if (_header_valid) {
+            unsigned int packet_id = (_header[0] << 8 | _header[1]);
+            printf("rx packet id: %6u", packet_id);
+            if (_payload_valid) printf("\n");
+            else                printf(" PAYLOAD INVALID\n");
+        } else {
+            printf("HEADER INVALID\n");
         }
     }
 
-    //printf("**** callback invoked\n");
-    q->num_symbols_received++;
+    // update global counters
+    num_frames_detected++;
 
-    if (q->num_symbols_received == q->symbols_per_frame) {
-        q->num_symbols_received = 0;
-        if (verbose)
-            printf("**** frame received\n");
+    if (_header_valid)
+        num_valid_headers_received++;
 
-        // tell ofdm frame synchronizer to reset
-        return 1;
+    if (_payload_valid) {
+        num_valid_packets_received++;
+        num_valid_bytes_received += _payload_len;
     }
+
+#if 0
+    unsigned int i;
+
+    // print header data to standard output
+    printf("  header rx  :");
+    for (i=0; i<8; i++)
+        printf(" %.2X", _header[i]);
+    printf("\n");
+
+    // print payload data to standard output
+    printf("  payload rx :");
+    for (i=0; i<_payload_len; i++) {
+        printf(" %.2X", _payload[i]);
+        if ( ((i+1)%26)==0 && i !=_payload_len-1 )
+            printf("\n              ");
+    }
+    printf("\n");
+#endif
+
     return 0;
 }
 
 void usage() {
-    printf("ofdmframe_rx -- receive OFDM packets\n");
+    printf("ofdmflexframe_rx -- receive OFDM packets\n");
     printf("  u,h   :   usage/help\n");
     printf("  q/v   :   quiet/verbose\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
+    printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
     printf("  M     :   number of subcarriers, default: 64\n");
     printf("  C     :   cyclic prefix length, default: 16\n");
     printf("  t     :   run time [seconds]\n");
@@ -121,13 +110,15 @@ int main (int argc, char **argv)
 {
     // command-line options
     verbose = false;
+    unsigned long int ADC_RATE = 64e6;
 
-    double min_bandwidth = 0.25*(64e6 / 512.0);
-    double max_bandwidth = 0.25*(64e6 /   4.0);
+    double min_bandwidth = 0.25*(ADC_RATE / 512.0);
+    double max_bandwidth = 0.25*(ADC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = min_bandwidth;
+    double bandwidth = 100e3f;
     double num_seconds = 5.0f;
+    double uhd_rxgain = 20.0;
 
     // 
     unsigned int M = 64;                // number of subcarriers
@@ -138,7 +129,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:M:C:t:m:p:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:m:p:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -146,6 +137,7 @@ int main (int argc, char **argv)
         case 'v':   verbose = true;                 break;
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
+        case 'G':   uhd_rxgain = atof(optarg);      break;
         case 'M':   M = atoi(optarg);               break;
         case 'C':   cp_len = atoi(optarg);          break;
         case 't':   num_seconds = atof(optarg);     break;
@@ -194,11 +186,18 @@ int main (int argc, char **argv)
 #else
     // NOTE : the sample rate computation MUST be in double precision so
     //        that the UHD can compute its decimation rate properly
-    unsigned int decim_rate = (unsigned int)(64e6 / rx_rate);
+    unsigned int decim_rate = (unsigned int)(ADC_RATE / rx_rate);
     // ensure multiple of 2
     decim_rate = (decim_rate >> 1) << 1;
     // compute usrp sampling rate
-    double usrp_rx_rate = 64e6 / (float)decim_rate;
+    double usrp_rx_rate = ADC_RATE / (float)decim_rate;
+    
+    // try to set rx rate
+    usrp->set_rx_rate(ADC_RATE / decim_rate);
+
+    // get actual rx rate
+    usrp_rx_rate = usrp->get_rx_rate();
+
     // compute arbitrary resampling rate
     double rx_resamp_rate = rx_rate / usrp_rx_rate;
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
@@ -206,10 +205,9 @@ int main (int argc, char **argv)
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-    usrp->set_rx_rate(usrp_rx_rate);
 #endif
     usrp->set_rx_freq(frequency);
-    usrp->set_rx_gain(40);
+    usrp->set_rx_gain(uhd_rxgain);
 
     // add arbitrary resampling block
     resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
@@ -226,7 +224,7 @@ int main (int argc, char **argv)
     resamp2_crcf decim = resamp2_crcf_create(7,0.0f,40.0f);
 
     // initialize subcarrier allocation
-    unsigned int p[M];
+    unsigned char p[M];
     unsigned int guard = M / 6;
     unsigned int pilot_spacing = 8;
     unsigned int i0 = (M/2) - guard;
@@ -245,30 +243,9 @@ int main (int argc, char **argv)
     unsigned int M_data=0;
     ofdmframe_validate_sctype(p,M, &M_null, &M_pilot, &M_data);
 
-    // number of ofdm data symbols in frame (excluding preamble)
-    unsigned int num_symbols_data = (2800/M_data) + 1;
-
-    // create common data object
-    struct commondata_s userdata;
-
     // create frame synchronizer
-    ofdmframesync fs = ofdmframesync_create(M, cp_len, p, ofdm_callback, (void*)&userdata);
-    ofdmframesync_print(fs);
-
-    // create demodulator
-    modem demod = modem_create(ms, bps);
-
-    // create packet synchronizer
-    bpacketsync ps = bpacketsync_create(0, packet_callback, (void*)&userdata);
- 
-    // initialize common data object
-    userdata.symbols_per_frame      = num_symbols_data;
-    userdata.num_symbols_received   = 0;
-    userdata.demod                  = demod;
-    userdata.ps                     = ps;
-    userdata.num_packets_received   = 0;
-    userdata.num_valid_packets_received = 0;
-    userdata.num_valid_bytes_received = 0;
+    ofdmflexframesync fs = ofdmflexframesync_create(M, cp_len, p, callback, NULL);
+    ofdmflexframesync_print(fs);
 
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
@@ -278,6 +255,12 @@ int main (int argc, char **argv)
     std::complex<float> data_decim[32];
     std::complex<float> data_resamp[64];
  
+    // reset counters
+    num_frames_detected=0;
+    num_valid_headers_received=0;
+    num_valid_packets_received=0;
+    num_valid_bytes_received=0;
+
     unsigned int n=0;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
@@ -304,12 +287,6 @@ int main (int argc, char **argv)
         unsigned int j;
         unsigned int nw=0;
         for (j=0; j<num_rx_samps; j++) {
-#if 0
-            //data_rx[j] = buff[j];
-            std::complex<float> sample = buff[j];
-            resamp_crcf_execute(resamp, sample, &data_rx[n], &nw);
-            n += nw;
-#endif
             // push 64 samples into buffer
             data_rx[n++] = buff[j];
 
@@ -329,7 +306,7 @@ int main (int argc, char **argv)
                 }
 
                 // push through synchronizer
-                ofdmframesync_execute(fs, data_resamp, n);
+                ofdmflexframesync_execute(fs, data_resamp, n);
 
                 // reset counter (again)
                 n = 0;
@@ -337,16 +314,6 @@ int main (int argc, char **argv)
 
         }
 
-#if 0
-        for (i=0; i<rx_buffer_length; i++) {
-            // push through half-band decimator
-            std::complex<float>decim_out;
-            resamp2_crcf_decim_execute(decim, &data_rx[2*i], &decim_out);
-
-            // run through ofdm frame synchronizer
-            ofdmframesync_execute(fs, &decim_out, 1);
-        }
-#endif
     }
  
     // stop data transfer
@@ -356,20 +323,22 @@ int main (int argc, char **argv)
 
  
     // print results
-    float data_rate = userdata.num_valid_bytes_received * 8.0f / num_seconds;
-    float percent_valid = (userdata.num_packets_received == 0) ?
+    float data_rate = num_valid_bytes_received * 8.0f / num_seconds;
+    float percent_headers_valid = (num_frames_detected == 0) ?
                           0.0f :
-                          100.0f * (float)userdata.num_valid_packets_received / (float)userdata.num_packets_received;
-    printf("    packets received    : %6u\n", userdata.num_packets_received);
-    printf("    valid packets       : %6u (%6.2f%%)\n", userdata.num_valid_packets_received,percent_valid);
+                          100.0f * (float)num_valid_headers_received / (float)num_frames_detected;
+    float percent_packets_valid = (num_frames_detected == 0) ?
+                          0.0f :
+                          100.0f * (float)num_valid_packets_received / (float)num_frames_detected;
+    printf("    frames detected     : %6u\n", num_frames_detected);
+    printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
+    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
     // destroy objects
     resamp_crcf_destroy(resamp);
     resamp2_crcf_destroy(decim);
-    bpacketsync_destroy(ps);
-    modem_destroy(demod);
-    ofdmframesync_destroy(fs);
+    ofdmflexframesync_destroy(fs);
 
     return 0;
 }

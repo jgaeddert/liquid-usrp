@@ -55,12 +55,12 @@ int main (int argc, char **argv)
 
     // set rx parameters
     iqpr_set_rx_gain(q, 20);
-    iqpr_set_rx_rate(q, 127e3);
+    iqpr_set_rx_rate(q, 100e3);
     iqpr_set_rx_freq(q, 462e6f);
 
     // set tx parameters
     iqpr_set_tx_gain(q, -20);
-    iqpr_set_tx_rate(q, 127e3);
+    iqpr_set_tx_rate(q, 100e3);
     iqpr_set_tx_freq(q, 462e6f);
 
     // other options
@@ -84,7 +84,7 @@ int main (int argc, char **argv)
 
     printf("starting receiver...\n");
     iqpr_rx_start(q);
-    for (i=0; i<20000; i++) {
+    for (i=0; i<200; i++) {
         int packet_received =
         iqpr_rxpacket(q, timespec,
                       &rx_header,
@@ -120,16 +120,18 @@ int main (int argc, char **argv)
     // transmitter
     //
 
-    flexframegenprops_s fgprops;
-    flexframegenprops_init_default(&fgprops);
-    fgprops.rampup_len   = 40;
-    fgprops.phasing_len  = 40;
+    ofdmflexframegenprops_s fgprops;
+    ofdmflexframegenprops_init_default(&fgprops);
     fgprops.check        = LIQUID_CRC_32;
     fgprops.fec0         = LIQUID_FEC_NONE;
     fgprops.fec1         = LIQUID_FEC_NONE;
     fgprops.mod_scheme   = LIQUID_MODEM_QAM;
-    fgprops.mod_bps      = 4;
+    fgprops.mod_bps      = 2;
+#if 0
+    fgprops.rampup_len   = 40;
+    fgprops.phasing_len  = 40;
     fgprops.rampdn_len   = 40;
+#endif
 
     unsigned int num_packets = 1000;
     unsigned int payload_len = 200;

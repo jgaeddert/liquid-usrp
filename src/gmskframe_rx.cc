@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
- * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
- *                                      Institute & State University
+ * Copyright (c) 2011 Joseph Gaeddert
+ * Copyright (c) 2011 Virginia Polytechnic Institute & State University
  *
  * This file is part of liquid.
  *
@@ -36,13 +35,13 @@ static unsigned int num_bytes_received;
 
 static float SNRdB_av;
 
-static int callback(unsigned char * _rx_header,
-                    int _rx_header_valid,
-                    unsigned char * _rx_payload,
-                    unsigned int _rx_payload_len,
-                    int _rx_payload_valid,
+static int callback(unsigned char *  _header,
+                    int              _header_valid,
+                    unsigned char *  _payload,
+                    unsigned int     _payload_len,
+                    int              _payload_valid,
                     framesyncstats_s _stats,
-                    void * _userdata)
+                    void *           _userdata)
 {
     num_packets_received++;
     if (verbose) {
@@ -56,27 +55,27 @@ static int callback(unsigned char * _rx_header,
     float SNRdB = _stats.rssi - noise_floor;
     SNRdB_av += SNRdB;
 
-    if ( !_rx_header_valid ) {
+    if ( !_header_valid ) {
         if (verbose) printf("header crc : FAIL\n");
         return 0;
     }
     num_valid_headers_received++;
-    unsigned int packet_id = (_rx_header[0] << 8 | _rx_header[1]);
+    unsigned int packet_id = (_header[0] << 8 | _header[1]);
     if (verbose) printf("packet id: %6u\n", packet_id);
 
-    if ( !_rx_payload_valid ) {
+    if ( !_payload_valid ) {
         if (verbose) printf("payload crc : FAIL\n");
         return 0;
     }
 
     num_valid_packets_received++;
-    num_bytes_received += _rx_payload_len;
+    num_bytes_received += _payload_len;
 
     return 0;
 }
 
 void usage() {
-    printf("flexframe_tx:\n");
+    printf("gmskframe_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
     printf("  b     :   bandwidth [Hz]\n");
     printf("  t     :   run time [seconds]\n");
@@ -97,7 +96,7 @@ int main (int argc, char **argv)
     float max_bandwidth = 0.25f*(ADC_RATE /   4.0);
 
     float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
+    float bandwidth = 100e3;
     float num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
     float squelch_threshold = -37.0f;
@@ -190,25 +189,15 @@ int main (int argc, char **argv)
     num_bytes_received = 0;
     SNRdB_av = 0.0f;
 
-    // set properties to default
-    framesyncprops_s props;
-    framesyncprops_init_default(&props);
-    props.squelch_threshold = squelch_threshold;
-    props.squelch_enabled = 1;
-#if 0
-    props.agc_bw0 = 1e-3f;
-    props.agc_bw1 = 1e-5f;
-    props.agc_gmin = 1e-3f;
-    props.agc_gmax = 1e4f;
-    props.pll_bw0 = 1e-3f;
-    props.pll_bw1 = 3e-5f;
-#endif
-    flexframesync fs = flexframesync_create(&props,callback,NULL);
+    // create frame synchronizer
+    unsigned int k = 2;
+    unsigned int m = 4;
+    float BT = 0.5f;
+    gmskframesync fs = gmskframesync_create(k,m,BT,callback,NULL);
 
     std::complex<float> data_rx[64];
     std::complex<float> data_decim[32];
     std::complex<float> data_resamp[64];
-
 
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
@@ -265,7 +254,7 @@ int main (int argc, char **argv)
                 }
 
                 // push through synchronizer
-                flexframesync_execute(fs, data_resamp, n);
+                gmskframesync_execute(fs, data_resamp, n);
 
                 // reset counter (again)
                 n = 0;
@@ -303,7 +292,7 @@ int main (int argc, char **argv)
     printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
 
     // clean it up
-    flexframesync_destroy(fs);
+    gmskframesync_destroy(fs);
     resamp_crcf_destroy(resamp);
     resamp2_crcf_destroy(decim);
 

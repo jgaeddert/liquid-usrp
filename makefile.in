@@ -21,7 +21,13 @@
 # Makefile for liquid SDR libraries, USRP applications
 #
 # Targets:
-#    all  :  build library and all example programs
+#    all                 :   build library and all example programs
+#    install             :   install the dynamic shared library object and
+#                            header file(s)
+#    uninstall           :   uninstall the library and header file(s)
+#    clean               :   clean all targets (bench, check, examples, etc)
+#    examples            :   build all examples
+#    help                :   print list of makefile targets to stdout
 #
 
 # paths
@@ -38,13 +44,21 @@ CXX	:= @CXX@
 MV	:= mv -f
 RM	:= rm -f
 SED	:= sed
+GREP	:= @GREP@
 AR	:= ar
 RANLIB	:= ranlib
 
+# temporary placeholder for 'all' target (later overwritten)
+all:
+
 ##
-## TARGET : all
+## TARGET : help - print list of makefile targets
 ##
-all : libraries examples
+
+# look for all occurences of '## TARGET : ' and print rest of line to screen
+help:
+	@echo "Targets for liquid-usrp makefile:"
+	@$(GREP) -E "^## TARGET : " [Mm]akefile | $(SED) 's/## TARGET : /  /'
 
 
 # flags
@@ -53,6 +67,14 @@ CFLAGS		+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
 CPPFLAGS	+= $(INCLUDE_CFLAGS) -g -O2 -Wall -fPIC
 LDFLAGS		+= @LIBS@
 ARFLAGS		= r
+
+# 
+# liquid headers
+#
+headers_install	:= iqpr.h
+headers		:= $(headers_install)
+include_headers	:= $(addprefix include/,$(headers))
+
 
 # library source files
 library_src :=				\
@@ -64,14 +86,17 @@ library_headers :=			\
 
 # example programs
 example_src :=				\
+	src/iqpr_test.cc		\
 	src/flexframe_tx.cc		\
 	src/flexframe_rx.cc		\
-	src/iqpr_test.cc		\
+	src/gmskframe_tx.cc		\
+	src/gmskframe_rx.cc		\
+	src/ofdmflexframe_rx.cc		\
+	src/ofdmflexframe_tx.cc		\
 	src/packet_rx.cc		\
 	src/packet_tx.cc		\
 	src/ping.cc			\
-	src/ofdmframe_rx.cc		\
-	src/ofdmframe_tx.cc		\
+	src/rssi.cc			\
 
 #	src/crdemo.cc
 #	src/usrp_init_test.cc
@@ -100,8 +125,10 @@ example_src :=				\
 
 
 ##
-## TARGET : Shared Library
+## TARGET : all - build shared library and examples (default)
 ##
+
+all : libraries examples
 
 library_objs	= $(patsubst %.cc,%.o,$(library_src))
 
@@ -126,13 +153,48 @@ libliquidusrp.dylib: $(library_objs)
 	$(CC) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
 
 # linux, et al
-libliquidusrp.so: $(libraries)
+libliquidusrp.so: $(library_objs)
 	$(CC) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
+
+
+## 
+## TARGET : install - installs the libraries and header files in the host system
+##
+
+install:
+	@echo "installing..."
+	mkdir -p $(exec_prefix)/lib
+	install -m 644 -p $(SHARED_LIB) libliquidusrp.a $(exec_prefix)/lib
+	mkdir -p $(prefix)/include
+	mkdir -p $(prefix)/include/liquid
+	install -m 644 -p $(addprefix include/,$(headers_install)) $(prefix)/include/liquid
+	@echo ""
+	@echo "---------------------------------------------------------"
+	@echo "  liquid-usrp was successfully installed.     "
+	@echo ""
+	@echo "  On some machines (e.g. Linux) you should rebind your"
+	@echo "  libraries by running 'ldconfig' to make the shared"
+	@echo "  object available.  You might also need to modify your"
+	@echo "  LD_LIBRARY_PATH environment variable to include the"
+	@echo "  directory $(exec_prefix)"
+	@echo "---------------------------------------------------------"
+	@echo ""
+
+## 
+## TARGET : uninstall - uninstalls the libraries and header files in the host system
+##
+
+uninstall:
+	@echo "uninstalling..."
+	$(RM) $(addprefix $(prefix)/include/liquid/, $(headers_install))
+	$(RM) $(exec_prefix)/lib/libliquidusrp.a
+	$(RM) $(exec_prefix)/lib/$(SHARED_LIB)
+	@echo "done."
 
 
 
 ##
-## TARGET : examples
+## TARGET : examples - build all examples binaries
 ##
 
 example_objs	= $(patsubst %.cc,%.o,$(example_src))
@@ -151,7 +213,9 @@ clean-examples:
 	$(RM) $(example_progs)
 
 ##
-## TARGET : clean
+## TARGET : clean - clean build (objects, dependencies, libraries, etc.)
 ##
 clean: clean-examples
 	$(RM) $(library_objs)
+	$(RM) libliquidusrp.a
+	$(RM) $(SHARED_LIB)
