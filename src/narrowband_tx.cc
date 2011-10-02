@@ -29,15 +29,17 @@
 #include <uhd/usrp/single_usrp.hpp>
 
 void usage() {
-    printf("narrowband_tx:\n");
+    printf("Usage: narrowband_tx [OPTION]:\n");
     printf("  h     : help\n");
     printf("  f     : center frequency [Hz]\n");
-    printf("  b     : bandwidth [Hz]\n");
-    printf("  g     : software transmit power gain [dB] (default: -3dB)\n");
-    printf("  G     : uhd tx gain [dB] (default: -40dB)\n");
+    printf("  b     : bandwidth (symbol rate) [Hz]\n");
+    printf("  g     : software tx gain [dB] (default: -3dB)\n");
+    printf("  G     : hardware tx gain [dB] (default: 40dB)\n");
     printf("  t     : run time [seconds]\n");
     printf("  m     : modulation scheme (qpsk default)\n");
     liquid_print_modulation_schemes();
+    printf("  M     :   filter delay [symbols]\n");
+    printf("  B     :   filter excess bandwidth factor [0.0 min, 1.0 max]\n");
 }
 
 int main (int argc, char **argv)
@@ -48,13 +50,13 @@ int main (int argc, char **argv)
     float min_bandwidth = 0.25f*(DAC_RATE / 256.0);
     float max_bandwidth = 0.25f*(DAC_RATE /   4.0);
 
-    float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
-    float num_seconds = 5.0f;
-    float txgain_dB = -3.0f;
-    double uhd_txgain = -40.0;
-    modulation_scheme ms = LIQUID_MODEM_QPSK;   // modulation scheme
-    unsigned int bps     = 2;                   // modulation depth (bits/symbol)
+    float frequency         = 462.0e6;              // carrier frequency [Hz]
+    float bandwidth         = 100e3;                // bandwidth (symbol rate) [Hz]
+    float num_seconds       = 5.0f;                 // run time [seconds]
+    float txgain_dB         = -3.0f;                // software gain
+    double uhd_txgain       = 40.0;                 // hardware gain
+    modulation_scheme ms    = LIQUID_MODEM_QPSK;    // modulation scheme
+    unsigned int bps        = 2;                    // modulation depth (bits/symbol)
 
     // matched-filter interpolator options
     unsigned int M=4;   // filter samples/symbol
@@ -64,7 +66,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:g:G:t:n:m:p:s:r:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"hf:b:g:G:t:m:M:B:")) != EOF) {
         switch (d) {
         case 'h':   usage();                        return 0;
         case 'f':   frequency = atof(optarg);       break;
@@ -74,6 +76,8 @@ int main (int argc, char **argv)
         case 't':   num_seconds = atof(optarg);     break;
             liquid_getopt_str2modbps(optarg,&ms,&bps);
             break;
+        case 'M':   m = atoi(optarg);               break;
+        case 'B':   beta = atof(optarg);            break;
         default:
             return 0;
         }
