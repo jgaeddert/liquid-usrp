@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2007, 2008, 2009, 2010 Joseph Gaeddert
- * Copyright (c) 2007, 2008, 2009, 2010 Virginia Polytechnic
- *                                      Institute & State University
+ * Copyright (c) 2011 Joseph Gaeddert
+ * Copyright (c) 2011 Virginia Polytechnic Institute & State University
  *
  * This file is part of liquid.
  *
@@ -30,7 +29,7 @@
 #include <uhd/usrp/single_usrp.hpp>
 
 void usage() {
-    printf("flexframe_tx:\n");
+    printf("gmskframe_tx:\n");
     printf("  u,h   : usage/help\n");
     printf("  v/q   : verbose/quiet\n");
     printf("  f     : center frequency [Hz]\n");
@@ -57,7 +56,7 @@ int main (int argc, char **argv)
     float max_bandwidth = 0.25f*(DAC_RATE /   4.0);
 
     float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
+    float bandwidth = 100e3;
     float num_seconds = 5.0f;
     float txgain_dB = -3.0f;
     double uhd_txgain = -40.0;
@@ -164,21 +163,15 @@ int main (int argc, char **argv)
     resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, tx_resamp_rate);
 
-    // create flexframegen object
-    flexframegenprops_s fgprops;
-    flexframegenprops_init_default(&fgprops);
-    fgprops.rampup_len  = ramp_len;
-    fgprops.phasing_len = 64;
-    fgprops.check       = check;    // cyclic redundancy check
-    fgprops.fec0        = fec0;     // inner FEC scheme
-    fgprops.fec1        = fec1;     // outer FEC scheme
-    fgprops.payload_len = payload_len;
-    fgprops.mod_scheme  = mod_scheme;
-    fgprops.mod_bps     = mod_depth;
-    fgprops.rampdn_len  = ramp_len;
+    // half-band resampler
+    resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
 
-    flexframegen fg = flexframegen_create(&fgprops);
-    flexframegen_print(fg);
+    // create gmskframegen object
+    unsigned int k = 2;
+    unsigned int m = 4;
+    float BT = 0.5f;
+    gmskframegen fg = gmskframegen_create(k,m,BT);
+    gmskframegen_print(fg);
 
     // set up the metadta flags
     uhd::tx_metadata_t md;
@@ -187,29 +180,17 @@ int main (int argc, char **argv)
     md.has_time_spec  = false;  // set to false to send immediately
 
     // framing buffers
-    unsigned int frame_len = flexframegen_getframelen(fg);
-    std::complex<float> frame[frame_len];
-#if 0
-    std::complex<float> buffer_interp[64];  // matched-filter interpolator (interp by 4)
-    std::complex<float> buffer_resamp[128]; // resampler
-#else
-    std::complex<float> buffer_interp[4*frame_len];  // matched-filter interpolator (interp by 4)
-    std::complex<float> buffer_resamp[6*frame_len]; // resampler
-    std::vector<std::complex<float> > buff(6*frame_len);
-#endif
+    std::complex<float> buffer[k];
+    std::complex<float> buffer_interp[2*k];
+    std::complex<float> buffer_resamp[8*k]; // resampler
+    std::vector<std::complex<float> > buff(256);
+    unsigned int tx_buffer_samples = 0;
 
-    printf("frame length        :   %u\n", frame_len);
-
-    unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(4*frame_len));
-
-    // create pulse-shaping interpolator
-    unsigned int k=4;
-    unsigned int m=3;
-    float beta=0.7f;
-    interp_crcf mfinterp = interp_crcf_create_rnyquist(LIQUID_RNYQUIST_RRC,k,m,beta,0);
+    //unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(4*frame_len));
+    unsigned int num_blocks = 1024;
 
     // data buffers
-    unsigned char header[14];
+    unsigned char header[8];
     unsigned char payload[payload_len];
 
     // transmitter gain (linear)
@@ -218,58 +199,67 @@ int main (int argc, char **argv)
     unsigned int i, j, pid=0;
     // start transmitter
     for (i=0; i<num_blocks; i++) {
-        // generate the frame / transmit silence
-        if ((i%(packet_spacing+1))==0) {
+        // generate random data
+        for (j=0; j<payload_len; j++)
+            payload[j] = rand() & 0xff;
 
-            // generate random data
-            for (j=0; j<payload_len; j++)
-                payload[j] = rand() & 0xff;
+        // write header (first two bytes packet ID, remaining are random)
+        header[0] = (pid >> 8) & 0xff;
+        header[1] = (pid     ) & 0xff;
+        for (j=2; j<8; j++)
+            header[j] = rand() & 0xff;
 
-            // write header (first two bytes packet ID, remaining are random)
-            header[0] = (pid >> 8) & 0xff;
-            header[1] = (pid     ) & 0xff;
-            for (j=2; j<14; j++)
-                header[j] = rand() & 0xff;
+        if (verbose)
+            printf("packet id: %6u\n", pid);
+        
+        // increment packet id (modulo 2^16)
+        pid = (pid+1) & 0xffff;
 
-            if (verbose)
-                printf("packet id: %6u\n", pid);
-            
-            // increment packet id (modulo 2^16)
-            pid = (pid+1) & 0xffff;
+        // generate frame
+        //gmskframegen_execute(fg, header, payload, frame);
+        gmskframegen_assemble(fg, header, payload, payload_len, check, fec0, fec1);
 
-            // generate frame
-            flexframegen_execute(fg, header, payload, frame);
+        //
+        //unsigned int frame_len = gmskframegen_get_frame_len(fg);
+        
+        // 
+        // generate frame
+        //
+        int frame_complete = 0;
+        while (!frame_complete) {
+            // generate k samples
+            frame_complete = gmskframegen_write_samples(fg, buffer);
 
-            // interpolate using matched filter
-            for (j=0; j<frame_len; j++)
-                interp_crcf_execute(mfinterp, g*frame[j], &buffer_interp[4*j]);
-            
-        } else {
-            // flush interpolator with zeros
-            for (j=0; j<frame_len; j++)
-                interp_crcf_execute(mfinterp, 0.0f, &buffer_interp[4*j]);
+            // interpolate by 2
+            for (j=0; j<k; j++)
+                resamp2_crcf_interp_execute(interp, buffer[j], &buffer_interp[2*j]);
+
+            // resample
+            // resample
+            unsigned int nw;
+            unsigned int n=0;
+            for (j=0; j<2*k; j++) {
+                resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
+                n += nw;
+            }
+
+            // push samples into buffer
+            for (j=0; j<n; j++) {
+                buff[tx_buffer_samples++] = g*buffer_resamp[j];
+
+                if (tx_buffer_samples==256) {
+                    // reset counter
+                    tx_buffer_samples=0;
+
+                    //send the entire contents of the buffer
+                    usrp->get_device()->send(
+                        &buff.front(), buff.size(), md,
+                        uhd::io_type_t::COMPLEX_FLOAT32,
+                        uhd::device::SEND_MODE_FULL_BUFF
+                    );
+                }
+            }
         }
-
-        // run resampler
-        unsigned int n=0;
-        unsigned int nw;
-        for (j=0; j<4*frame_len; j++) {
-            resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
-            n += nw;
-        }
-
-        //printf(" n = %6u (frame_len : %6u)\n", n, frame_len);
-        buff.resize(n);
-        for (j=0; j<n; j++) {
-            buff[j] = buffer_resamp[j];
-        }
-
-        //send the entire contents of the buffer
-        usrp->get_device()->send(
-            &buff.front(), buff.size(), md,
-            uhd::io_type_t::COMPLEX_FLOAT32,
-            uhd::device::SEND_MODE_FULL_BUFF
-        );
 
  
     }
@@ -287,8 +277,8 @@ int main (int argc, char **argv)
 
  
     // clean it up
-    flexframegen_destroy(fg);
-    interp_crcf_destroy(mfinterp);
+    gmskframegen_destroy(fg);
+    resamp2_crcf_destroy(interp);
     resamp_crcf_destroy(resamp);
     return 0;
 }

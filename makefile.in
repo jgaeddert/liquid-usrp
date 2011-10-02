@@ -90,6 +90,8 @@ example_src :=				\
 	src/flexframe_tx.cc		\
 	src/flexframe_rx.cc		\
 	src/narrowband_tx.cc		\
+	src/gmskframe_tx.cc		\
+	src/gmskframe_rx.cc		\
 	src/ofdmflexframe_rx.cc		\
 	src/ofdmflexframe_tx.cc		\
 	src/packet_rx.cc		\

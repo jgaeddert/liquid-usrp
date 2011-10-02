@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Joseph Gaeddert
+ * Copyright (c) 2011 Joseph Gaeddert
  * Copyright (c) 2011 Virginia Polytechnic Institute & State University
  *
  * This file is part of liquid.
@@ -26,52 +26,92 @@
 #include <liquid/liquid.h>
 
 #include <uhd/usrp/single_usrp.hpp>
+ 
+static bool verbose;
+static unsigned int num_packets_received;
+static unsigned int num_valid_headers_received;
+static unsigned int num_valid_packets_received;
+static unsigned int num_bytes_received;
+
+static float SNRdB_av;
+
+static int callback(unsigned char *  _header,
+                    int              _header_valid,
+                    unsigned char *  _payload,
+                    unsigned int     _payload_len,
+                    int              _payload_valid,
+                    framesyncstats_s _stats,
+                    void *           _userdata)
+{
+    num_packets_received++;
+    if (verbose) {
+        printf("********* callback invoked, ");
+        printf("evm=%5.1fdB, ", _stats.evm);
+        printf("rssi=%5.1fdB, ", _stats.rssi);
+    }
+
+    // make better estimate of SNR
+    float noise_floor = -38.0f; // noise floor estimate
+    float SNRdB = _stats.rssi - noise_floor;
+    SNRdB_av += SNRdB;
+
+    if ( !_header_valid ) {
+        if (verbose) printf("header crc : FAIL\n");
+        return 0;
+    }
+    num_valid_headers_received++;
+    unsigned int packet_id = (_header[0] << 8 | _header[1]);
+    if (verbose) printf("packet id: %6u\n", packet_id);
+
+    if ( !_payload_valid ) {
+        if (verbose) printf("payload crc : FAIL\n");
+        return 0;
+    }
+
+    num_valid_packets_received++;
+    num_bytes_received += _payload_len;
+
+    return 0;
+}
 
 void usage() {
-    printf("Usage: rssi [OPTION]\n");
-    printf("Run receiver, simply printing RSSI to screen periodically\n");
-    printf("\n");
-    printf("  f     : center frequency [Hz]\n");
-    printf("  b     : bandwidth [Hz]\n");
-    printf("  t     : run time [seconds]\n");
-    printf("  G     : uhd rx gain [dB] (default: 20dB)\n");
-    printf("  q     : quiet\n");
-    printf("  v     : verbose\n");
-    printf("  L     : record length (number of samples), default: 1200\n");
-    printf("  o     : output filename\n");
-    printf("  u,h   : usage/help\n");
+    printf("gmskframe_tx:\n");
+    printf("  f     :   center frequency [Hz]\n");
+    printf("  b     :   bandwidth [Hz]\n");
+    printf("  t     :   run time [seconds]\n");
+    printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
+    printf("  S     :   squelch threshold [dB] (default: -37dB)\n");
+    printf("  q     :   quiet\n");
+    printf("  v     :   verbose\n");
+    printf("  u,h   :   usage/help\n");
 }
 
 int main (int argc, char **argv)
 {
     // command-line options
-    int verbose = true;
-
+    verbose = true;
     unsigned long int ADC_RATE = 64e6;
+
     float min_bandwidth = 0.25f*(ADC_RATE / 256.0);
     float max_bandwidth = 0.25f*(ADC_RATE /   4.0);
 
     float frequency = 462.0e6;
-    float bandwidth = 100e3f;
+    float bandwidth = 100e3;
     float num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
-
-    // output log file
-    unsigned int log_size = 1200;
-    char filename[256] = "rssi_results.m";
+    float squelch_threshold = -37.0f;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:G:qvL:o:uh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:t:G:S:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'G':   uhd_rxgain = atof(optarg);      break;
+        case 'S':   squelch_threshold = atof(optarg);   break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
-        case 'L':   log_size = atoi(optarg);        break;
-        case 'o':   strncpy(filename,optarg,255);   break;
         case 'u':
         case 'h':
         default:
@@ -111,6 +151,13 @@ int main (int argc, char **argv)
     decim_rate = (decim_rate >> 1) << 1;
     // compute usrp sampling rate
     double usrp_rx_rate = ADC_RATE / decim_rate;
+    
+    // try to set rx rate
+    usrp->set_rx_rate(ADC_RATE / decim_rate);
+
+    // get actual rx rate
+    usrp_rx_rate = usrp->get_rx_rate();
+
     // compute arbitrary resampling rate
     double rx_resamp_rate = rx_rate / usrp_rx_rate;
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
@@ -118,24 +165,17 @@ int main (int argc, char **argv)
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-    usrp->set_rx_rate(ADC_RATE / decim_rate);
 #endif
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(uhd_rxgain);
 
-    // create and initialize arbitrary resampling component
+    // add arbitrary resampling component
     resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, rx_resamp_rate);
 
-    // create automatic gain control object and set properties
-    agc_crcf agc_rx = agc_crcf_create();
-    agc_crcf_set_bandwidth(agc_rx, 0.01f);
-    agc_crcf_set_gain_limits(agc_rx, 1e-4f, 1e4f);
+    // half-band resampler
+    resamp2_crcf decim = resamp2_crcf_create(7,0.0f,40.0f);
 
-    // create window buffer to log samples
-    windowf log_buffer = windowf_create(log_size);
-
-    //
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
     unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
 
@@ -143,18 +183,28 @@ int main (int argc, char **argv)
     uhd::rx_metadata_t md;
     std::vector<std::complex<float> > buff(max_samps_per_packet);
 
-    std::complex<float> data_rx[64];        // received data straight from USRP
-    std::complex<float> data_resamp[200];   // resampled data
+    num_packets_received = 0;
+    num_valid_packets_received = 0;
+    num_valid_headers_received = 0;
+    num_bytes_received = 0;
+    SNRdB_av = 0.0f;
+
+    // create frame synchronizer
+    unsigned int k = 2;
+    unsigned int m = 4;
+    float BT = 0.5f;
+    gmskframesync fs = gmskframesync_create(k,m,BT,callback,NULL);
+
+    std::complex<float> data_rx[64];
+    std::complex<float> data_decim[32];
+    std::complex<float> data_resamp[64];
 
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
     unsigned int i;
-    unsigned int k;
-    unsigned int n=0;   // sample counter
-    std::complex<float> agc_out;
-
+    unsigned int n=0;
     for (i=0; i<num_blocks; i++) {
         // grab data from port
         size_t num_rx_samps = usrp->get_device()->recv(
@@ -180,8 +230,8 @@ int main (int argc, char **argv)
             return 1;
         }
 
-        // copy vector "buff" to array of complex float, run
-        // resampler, and push through AGC object
+        // for now copy vector "buff" to array of complex float
+        // TODO : apply bandwidth-dependent gain
         unsigned int j;
         unsigned int nw=0;
         for (j=0; j<num_rx_samps; j++) {
@@ -192,64 +242,59 @@ int main (int argc, char **argv)
                 // reset counter
                 n=0;
 
+                // deimate to 32
+                unsigned int k;
+                for (k=0; k<32; k++)
+                    resamp2_crcf_decim_execute(decim, &data_rx[2*k], &data_decim[k]);
+
                 // apply resampler
-                unsigned int num_resamp=0;
-                for (k=0; k<64; k++) {
-                    resamp_crcf_execute(resamp, data_rx[k], &data_resamp[num_resamp], &nw);
-                    num_resamp += nw;
+                for (k=0; k<32; k++) {
+                    resamp_crcf_execute(resamp, data_decim[k], &data_resamp[n], &nw);
+                    n += nw;
                 }
 
-                // push through agc object, push to log buffer
-                for (k=0; k<num_resamp; k++) {
-                    agc_crcf_execute(agc_rx, data_resamp[k], &agc_out);
+                // push through synchronizer
+                gmskframesync_execute(fs, data_resamp, n);
 
-                    // get linear signal level and push into buffer
-                    windowf_push(log_buffer, agc_crcf_get_signal_level(agc_rx));
-                }
+                // reset counter (again)
+                n = 0;
             }
 
         }
 
-        // print rssi to screen
-        if ( (i%10)==0 )
-            printf("rssi : %12.8f dB\n", agc_crcf_get_rssi(agc_rx));
-
     }
  
+
     // stop data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
     printf("\n");
     printf("usrp data transfer complete\n");
 
-    // clean object allocation
+    // print results
+    float data_rate = 8.0f * (float)(num_bytes_received) / num_seconds;
+    float percent_headers_valid = (num_packets_received == 0) ?
+                          0.0f :
+                          100.0f * (float)num_valid_headers_received / (float)num_packets_received;
+    float percent_packets_valid = (num_packets_received == 0) ?
+                          0.0f :
+                          100.0f * (float)num_valid_packets_received / (float)num_packets_received;
+    if (num_packets_received > 0)
+        SNRdB_av /= num_packets_received;
+    float PER = 1.0f - 0.01f*percent_packets_valid;
+    float spectral_efficiency = data_rate / bandwidth;
+    printf("    packets received    : %6u\n", num_packets_received);
+    printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
+    printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
+    printf("    packet error rate   : %16.8e\n", PER);
+    printf("    average SNR [dB]    : %8.4f\n", SNRdB_av);
+    printf("    bytes_received      : %6u\n", num_bytes_received);
+    printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
+    printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
+
+    // clean it up
+    gmskframesync_destroy(fs);
     resamp_crcf_destroy(resamp);
-    agc_crcf_destroy(agc_rx);
-
-    // save log file...
-    FILE * fid = fopen(filename,"w");
-    if (!fid) {
-        fprintf(stderr,"error: %s, could not open '%s' for writing\n", argv[0], filename);
-        exit(1);
-    }
-    fprintf(fid,"%% %s : auto-generated file\n", filename);
-    float * r = NULL;
-    windowf_read(log_buffer,&r);
-    fprintf(fid,"Fs = %e;\n", rx_rate);
-    fprintf(fid,"n = %u;\n", log_size);
-    fprintf(fid,"rssi = zeros(1,n);\n");
-    for (i=0; i<log_size; i++)
-        fprintf(fid,"rssi(%u) = %12.4e;\n", i+1, r[i]);
-    fprintf(fid,"\n\n");
-    fprintf(fid,"t = [0:(n-1)]/Fs;\n");
-    fprintf(fid,"figure;\n");
-    fprintf(fid,"plot(t*1e3,10*log10(rssi));\n");
-    fprintf(fid,"xlabel('time [ms]');\n");
-    fprintf(fid,"ylabel('RSSI [dB]');\n");
-    fprintf(fid,"grid on\n");
-    fclose(fid);
-    printf("output written to '%s'\n", filename);
-
-    windowf_destroy(log_buffer);
+    resamp2_crcf_destroy(decim);
 
     return 0;
 }
