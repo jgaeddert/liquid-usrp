@@ -59,22 +59,22 @@ int main (int argc, char **argv)
     double max_bandwidth = 0.25*(DAC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = 100e3f;
+    double bandwidth = 80e3f;
     unsigned int num_frames = 1000;     // number of frames to transmit
     double txgain_dB = -6.0f;           // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
-
-    unsigned int M = 64;                // number of subcarriers
-    unsigned int cp_len = 16;           // cyclic prefix length
+    // ofdm properties
+    unsigned int M = 48;                // number of subcarriers
+    unsigned int cp_len = 8;            // cyclic prefix length
     unsigned int num_symbols_S0 = 3;    // number of S0 symbols
 
-    modulation_scheme ms = LIQUID_MODEM_QAM;     // modulation scheme
-    unsigned int bps = 2;               // modulation depth
-    unsigned int payload_len = 256;     // original data message length
-    crc_scheme check = LIQUID_CRC_32;          // data validity check
-    fec_scheme fec0 = LIQUID_FEC_NONE;         // fec (inner)
-    fec_scheme fec1 = LIQUID_FEC_HAMMING128;   // fec (outer)
+    modulation_scheme ms = LIQUID_MODEM_QAM;// modulation scheme
+    unsigned int bps = 2;                   // modulation depth
+    unsigned int payload_len = 256;         // original data message length
+    crc_scheme check = LIQUID_CRC_32;       // data validity check
+    fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
+    fec_scheme fec1 = LIQUID_FEC_HAMMING128;// fec (outer)
 
     //
     int d;
@@ -134,10 +134,6 @@ int main (int argc, char **argv)
         exit(1);
     }
 
-    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-
     uhd::device_addr_t dev_addr;
     //dev_addr["addr0"] = "192.168.10.2";
     //dev_addr["addr1"] = "192.168.10.3";
@@ -145,9 +141,7 @@ int main (int argc, char **argv)
 
     // set properties
     double tx_rate = 4.0*bandwidth;
-#if 0
-    usrp->set_tx_rate(tx_rate);
-#else
+
     // NOTE : the sample rate computation MUST be in double precision so
     //        that the UHD can compute its interpolation rate properly
     unsigned int interp_rate = (unsigned int)(DAC_RATE / tx_rate);
@@ -170,14 +164,20 @@ int main (int argc, char **argv)
     //usrp_tx_rate = 262295.081967213;
     // compute arbitrary resampling rate
     double tx_resamp_rate = usrp_tx_rate / tx_rate;
+
+    usrp->set_tx_freq(frequency);
+    usrp->set_tx_gain(uhd_txgain);
+
+    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
+
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
             tx_rate * 1e-3f,
             usrp_tx_rate * 1e-3f,
             1.0 / tx_resamp_rate,
             interp_rate);
-#endif
-    usrp->set_tx_freq(frequency);
-    usrp->set_tx_gain(uhd_txgain);
+
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
