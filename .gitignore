@@ -23,6 +23,8 @@ octave-core
 # ignore all programs
 src/flexframe_rx
 src/flexframe_tx
+src/gmskframe_rx
+src/gmskframe_tx
 src/iqpr_test
 src/ofdmflexframe_rx
 src/ofdmflexframe_tx
