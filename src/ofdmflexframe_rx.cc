@@ -248,7 +248,9 @@ int main (int argc, char **argv)
     num_valid_bytes_received=0;
 
     unsigned int n=0;
-    for (i=0; i<num_blocks; i++) {
+    unsigned int block_counter=0;
+    bool continue_running=true;
+    while (continue_running) {
         // grab data from port
         size_t num_rx_samps = usrp->get_device()->recv(
             &buff.front(), buff.size(), md,
@@ -296,6 +298,11 @@ int main (int argc, char **argv)
 
                 // reset counter (again)
                 n = 0;
+
+                // increment block counter
+                block_counter++;
+                if (block_counter == num_blocks)
+                    continue_running = false;
             }
 
         }
