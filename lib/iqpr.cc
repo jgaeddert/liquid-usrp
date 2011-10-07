@@ -256,24 +256,31 @@ void iqpr_set_tx_rate(iqpr _q, float _tx_rate)
     unsigned int interp_rate = (unsigned int)(DAC_RATE / _tx_rate);
     // ensure multiple of 4
     interp_rate = (interp_rate >> 2) << 2;
-    interp_rate += 4; // ensure tx_resamp_rate <= 1.0
+    
+    //
+    while (interp_rate == 240 || interp_rate == 244)
+        interp_rate -= 4;
 
     // compute usrp sampling rate
     double usrp_tx_rate = DAC_RATE / (double)interp_rate;
 
+    // set hardware sampling rate
+    _q->usrp->set_tx_rate(usrp_tx_rate);
+
+    // get actual rate
+    usrp_tx_rate = _q->usrp->get_tx_rate();
+
     // compute arbitrary resampling rate
     double tx_resamp_rate = usrp_tx_rate / _tx_rate;
-    printf("sample rate :   %12.8f kHz = %12.8f / %8.6f (interp %u)\n",
-            _tx_rate * 1e-3f,
-            usrp_tx_rate * 1e-3f,
-            tx_resamp_rate,
-            interp_rate);
-
-    // set hardware sampling rate
-    _q->usrp->set_tx_rate(DAC_RATE / interp_rate);
-
+    
     // set software resampling rate
     resamp_crcf_setrate(_q->tx_resamp, tx_resamp_rate);
+
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
+            _tx_rate * 1e-3f,
+            usrp_tx_rate * 1e-3f,
+            1.0f / tx_resamp_rate,
+            interp_rate);
 }
 
 // set transmit/receive sample rate
@@ -291,19 +298,23 @@ void iqpr_set_rx_rate(iqpr _q, float _rx_rate)
     // compute usrp sampling rate
     double usrp_rx_rate = ADC_RATE / decim_rate;
 
+    // set hardware sampling rate
+    _q->usrp->set_rx_rate(usrp_rx_rate);
+
+    // get actual hardware sampling rate
+    usrp_rx_rate = _q->usrp->get_rx_rate();
+
     // compute arbitrary resampling rate
     double rx_resamp_rate = _rx_rate / usrp_rx_rate;
+
+    // set software resampling rate
+    resamp_crcf_setrate(_q->rx_resamp, rx_resamp_rate);
+
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
             _rx_rate * 1e-3f,
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-
-    // set hardware sampling rate
-    _q->usrp->set_rx_rate(ADC_RATE / decim_rate);
-
-    // set software resampling rate
-    resamp_crcf_setrate(_q->rx_resamp, rx_resamp_rate);
 }
 
 // set transmit/receive frequency
