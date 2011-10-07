@@ -48,7 +48,7 @@ struct iqpr_s {
     unsigned char * p;              // subcarrier allocation
 
     // receiver
-    std::vector<std::complex<float> > rx_buffer;    // rx data buffer
+    std::vector<std::complex<float> > * rx_buffer;    // rx data buffer
     unsigned int rx_vector_index;                   // index of rx buffer vector
     unsigned int rx_vector_length;                  // length of rx buffer vector
     resamp2_crcf rx_decim;          // half-band decimator
@@ -106,7 +106,7 @@ iqpr iqpr_create()
     //
     // common
     //
-    q->M = 64;     // number of subcarriers
+    q->M = 40;      // number of subcarriers
     q->cp_len = 8;  // cyclic prefix length
     q->p = NULL;    // subcarrier allocation (NULL gives default)
     q->p = (unsigned char*)malloc(q->M*sizeof(unsigned char));
@@ -128,7 +128,8 @@ iqpr iqpr_create()
     // receiver objects
     //
     const size_t max_samps_per_packet = q->usrp->get_device()->get_max_recv_samps_per_packet();
-    q->rx_buffer.resize(max_samps_per_packet);
+    q->rx_buffer = new std::vector< std::complex<float> >(max_samps_per_packet);
+    printf("rx buffer size: %u\n", (unsigned int)(q->rx_buffer->size()));
     q->rx_vector_index  = 0;
     q->rx_vector_length = 0;
     q->rx_resamp = resamp_crcf_create(1.0, 7, 0.4, 60.0, 64);
@@ -170,8 +171,8 @@ iqpr iqpr_create()
     //q->tx_buffer.resize(1);
 
     // set hardware transmit/receive gains
-    iqpr_set_tx_gain(q, -40.0f);
-    iqpr_set_rx_gain(q,  40.0f);
+    iqpr_set_tx_gain(q, 40.0f);
+    iqpr_set_rx_gain(q, 40.0f);
 
     // debugging
     q->verbose = 0;
@@ -186,6 +187,9 @@ void iqpr_destroy(iqpr _q)
     //
     if (_q->p != NULL)
         free(_q->p);
+
+    // destroy receiver buffer
+    delete _q->rx_buffer;
 
     // 
     // receiver objects
@@ -325,6 +329,7 @@ void iqpr_rxconfig(iqpr _q,
 // start data transfer
 void iqpr_rx_start(iqpr _q)
 {
+    printf("issuing stream command...\n");
     _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
     resamp2_crcf_clear(_q->rx_decim);
@@ -349,8 +354,8 @@ void iqpr_rx_start(iqpr _q)
 
             // grab data from port
             _q->rx_vector_length = _q->usrp->get_device()->recv(
-                &_q->rx_buffer.front(),
-                _q->rx_buffer.size(),
+                &_q->rx_buffer->front(),
+                _q->rx_buffer->size(),
                 md,
                 uhd::io_type_t::COMPLEX_FLOAT32,
                 uhd::device::RECV_MODE_ONE_PACKET
@@ -548,8 +553,8 @@ int iqpr_rxpacket(iqpr _q,
 
             // grab data from port
             _q->rx_vector_length = _q->usrp->get_device()->recv(
-                &_q->rx_buffer.front(),
-                _q->rx_buffer.size(),
+                &_q->rx_buffer->front(),
+                _q->rx_buffer->size(),
                 md,
                 uhd::io_type_t::COMPLEX_FLOAT32,
                 uhd::device::RECV_MODE_ONE_PACKET
@@ -579,7 +584,7 @@ int iqpr_rxpacket(iqpr _q,
         num_accumulated_samples++;
 
         // push 2 samples into buffer
-        rx_buffer_decim[n++] = _q->rx_buffer[_q->rx_vector_index++];
+        rx_buffer_decim[n++] = (*_q->rx_buffer)[_q->rx_vector_index++];
 
         if (n==2) {
             // reset counter
