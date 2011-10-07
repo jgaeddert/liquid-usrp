@@ -71,7 +71,7 @@ void usage() {
 int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
-    float symbolrate = 160e3f;
+    float symbolrate = 80e3f;
     unsigned int num_packets = 1000;
     unsigned int node_type = PING_NODE_SLAVE;
     int verbose = 0;
@@ -115,12 +115,12 @@ int main (int argc, char **argv) {
     iqpr q = iqpr_create();
 
     // set rx parameters
-    iqpr_set_rx_gain(q, 20);
+    iqpr_set_rx_gain(q, 40);
     iqpr_set_rx_rate(q, symbolrate);
     iqpr_set_rx_freq(q, frequency);
 
     // set tx parameters
-    iqpr_set_tx_gain(q, -20);
+    iqpr_set_tx_gain(q, 40);
     iqpr_set_tx_rate(q, symbolrate);
     iqpr_set_tx_freq(q, frequency);
 
