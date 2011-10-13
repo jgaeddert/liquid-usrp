@@ -242,7 +242,7 @@ int main (int argc, char **argv)
     fprintf(fid,"\n\n");
     fprintf(fid,"t = [0:(n-1)]/Fs;\n");
     fprintf(fid,"figure;\n");
-    fprintf(fid,"plot(t*1e3,10*log10(rssi));\n");
+    fprintf(fid,"plot(t*1e3,20*log10(rssi));\n");
     fprintf(fid,"xlabel('time [ms]');\n");
     fprintf(fid,"ylabel('RSSI [dB]');\n");
     fprintf(fid,"grid on\n");
