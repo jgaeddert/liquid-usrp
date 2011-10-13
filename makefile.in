@@ -221,3 +221,14 @@ clean: clean-examples
 	$(RM) $(library_objs)
 	$(RM) libliquidusrp.a
 	$(RM) $(SHARED_LIB)
+
+
+##
+## TARGET : distclean - clean everything but the originally-distributed files
+##
+distclean: clean
+	@echo "cleaning distribution..."
+	$(RM) octave-core *.m
+	$(RM) configure config.h config.h.in config.h.in~ config.log config.status
+	$(RM) -r autom4te.cache
+	$(RM) makefile
