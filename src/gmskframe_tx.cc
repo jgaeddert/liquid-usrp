@@ -28,6 +28,8 @@
 
 #include <uhd/usrp/single_usrp.hpp>
 
+#include "timer.h"
+
 void usage() {
     printf("gmskframe_tx:\n");
     printf("  u,h   : usage/help\n");
@@ -186,9 +188,6 @@ int main (int argc, char **argv)
     std::vector<std::complex<float> > buff(256);
     unsigned int tx_buffer_samples = 0;
 
-    //unsigned int num_blocks = (unsigned int)((4.0f*bandwidth*num_seconds)/(4*frame_len));
-    unsigned int num_blocks = 1024;
-
     // data buffers
     unsigned char header[8];
     unsigned char payload[payload_len];
@@ -196,9 +195,15 @@ int main (int argc, char **argv)
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/10.0f);
  
-    unsigned int i, j, pid=0;
+    // run conditions
+    int continue_running = 1;
+    timer t0 = timer_create();
+    timer_tic(t0);
+
+    unsigned int j;
+    unsigned int pid=0;
     // start transmitter
-    for (i=0; i<num_blocks; i++) {
+    while (continue_running) {
         // generate random data
         for (j=0; j<payload_len; j++)
             payload[j] = rand() & 0xff;
@@ -261,7 +266,9 @@ int main (int argc, char **argv)
             }
         }
 
- 
+        // check runtime
+        if (timer_toc(t0) >= num_seconds)
+            continue_running = 0;
     }
  
     // send a mini EOB packet
@@ -275,11 +282,12 @@ int main (int argc, char **argv)
     //finished
     printf("usrp data transfer complete\n");
 
- 
     // clean it up
     gmskframegen_destroy(fg);
     resamp2_crcf_destroy(interp);
     resamp_crcf_destroy(resamp);
+    timer_destroy(t0);
+
     return 0;
 }
 

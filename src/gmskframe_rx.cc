@@ -27,6 +27,8 @@
 
 #include <uhd/usrp/single_usrp.hpp>
  
+#include "timer.h"
+
 static bool verbose;
 static unsigned int num_packets_received;
 static unsigned int num_valid_headers_received;
@@ -177,7 +179,6 @@ int main (int argc, char **argv)
     resamp2_crcf decim = resamp2_crcf_create(7,0.0f,40.0f);
 
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
-    unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
 
     //allocate recv buffer and metatdata
     uhd::rx_metadata_t md;
@@ -203,9 +204,13 @@ int main (int argc, char **argv)
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    unsigned int i;
+    // run conditions
+    int continue_running = 1;
+    timer t0 = timer_create();
+    timer_tic(t0);
+
     unsigned int n=0;
-    for (i=0; i<num_blocks; i++) {
+    while (continue_running) {
         // grab data from port
         size_t num_rx_samps = usrp->get_device()->recv(
             &buff.front(), buff.size(), md,
@@ -262,8 +267,13 @@ int main (int argc, char **argv)
 
         }
 
+        // check runtime
+        if (timer_toc(t0) >= num_seconds)
+            continue_running = 0;
     }
- 
+
+    // compute actual run-time
+    float runtime = timer_toc(t0);
 
     // stop data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
@@ -271,7 +281,7 @@ int main (int argc, char **argv)
     printf("usrp data transfer complete\n");
 
     // print results
-    float data_rate = 8.0f * (float)(num_bytes_received) / num_seconds;
+    float data_rate = 8.0f * (float)(num_bytes_received) / runtime;
     float percent_headers_valid = (num_packets_received == 0) ?
                           0.0f :
                           100.0f * (float)num_valid_headers_received / (float)num_packets_received;
@@ -287,7 +297,8 @@ int main (int argc, char **argv)
     printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
     printf("    packet error rate   : %16.8e\n", PER);
     printf("    average SNR [dB]    : %8.4f\n", SNRdB_av);
-    printf("    bytes_received      : %6u\n", num_bytes_received);
+    printf("    bytes received      : %6u\n", num_bytes_received);
+    printf("    run time            : %f s\n", runtime);
     printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
     printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
 
@@ -295,6 +306,7 @@ int main (int argc, char **argv)
     gmskframesync_destroy(fs);
     resamp_crcf_destroy(resamp);
     resamp2_crcf_destroy(decim);
+    timer_destroy(t0);
 
     return 0;
 }
