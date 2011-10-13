@@ -79,10 +79,12 @@ include_headers	:= $(addprefix include/,$(headers))
 # library source files
 library_src :=				\
 	lib/iqpr.cc			\
+	lib/timer.cc			\
 
 # library header files
 library_headers :=			\
 	include/iqpr.h			\
+	include/timer.h			\
 
 # example programs
 example_src :=				\
