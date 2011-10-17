@@ -47,6 +47,7 @@ void usage() {
     printf("  c     : coding scheme (inner): h74 default\n");
     printf("  k     : coding scheme (outer): none default\n");
     liquid_print_fec_schemes();
+    printf("  z     : number of subcarriers to notch in the center band, default: 0\n");
 }
 
 int main (int argc, char **argv)
@@ -75,10 +76,12 @@ int main (int argc, char **argv)
     crc_scheme check = LIQUID_CRC_32;       // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_HAMMING128;// fec (outer)
+    
+    unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:c:k:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -114,6 +117,9 @@ int main (int argc, char **argv)
                 fprintf(stderr,"error: unknown/unsupported outer FEC scheme \"%s\"\n\n",optarg);
                 exit(1);
             }
+            break;
+        case 'z':
+            num_notched = atoi(optarg);
             break;
         default:
             usage();
@@ -201,6 +207,8 @@ int main (int argc, char **argv)
     unsigned int i1 = (M/2) + guard;
     for (i=0; i<M; i++) {
         if ( i == 0 || (i > i0 && i < i1) )
+            p[i] = OFDMFRAME_SCTYPE_NULL;
+        else if ( i < num_notched || i > M-num_notched)
             p[i] = OFDMFRAME_SCTYPE_NULL;
         else if ( (i%pilot_spacing)==0 )
             p[i] = OFDMFRAME_SCTYPE_PILOT;

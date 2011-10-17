@@ -87,6 +87,7 @@ void usage() {
     printf("  t     :   run time [seconds]\n");
     printf("  m     :   modulation scheme: psk, dpsk, ask, <qam>, apsk\n");
     printf("  p     :   modulation depth [bits/symbol], default: 2\n");
+    printf("  z     : number of subcarriers to notch in the center band, default: 0\n");
 }
 
 int main (int argc, char **argv)
@@ -110,9 +111,11 @@ int main (int argc, char **argv)
     modulation_scheme ms = LIQUID_MODEM_QAM;
     unsigned int bps = 2;
 
+    unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
+
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:m:p:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:m:p:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -132,6 +135,7 @@ int main (int argc, char **argv)
             }
             break;
         case 'p':   bps = atoi(optarg);             break;
+        case 'z':   num_notched = atoi(optarg);     break;
         default:
             usage();
             return 0;
@@ -217,6 +221,8 @@ int main (int argc, char **argv)
     unsigned int i1 = (M/2) + guard;
     for (i=0; i<M; i++) {
         if ( i == 0 || (i > i0 && i < i1) )
+            p[i] = OFDMFRAME_SCTYPE_NULL;
+        else if ( i < num_notched || i > M-num_notched)
             p[i] = OFDMFRAME_SCTYPE_NULL;
         else if ( (i%pilot_spacing)==0 )
             p[i] = OFDMFRAME_SCTYPE_PILOT;
