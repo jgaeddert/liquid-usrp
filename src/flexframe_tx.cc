@@ -39,10 +39,10 @@ void usage() {
     printf("  G     : uhd tx gain [dB] (default: -40dB)\n");
     printf("  t     : run time [seconds]\n");
     printf("  n     : payload length (bytes)\n");
-    printf("  m     : mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
-    printf("  p     : mod. depth: <1>,2,...8\n");
     printf("  s     : packet spacing <0>\n");
     printf("  r     : ramp up/dn length <64>\n");
+    printf("  m     : modulation scheme (qpsk default)\n");
+    liquid_print_modulation_schemes();
     printf("  c     : fec coding scheme (inner)\n");
     printf("  k     : fec coding scheme (outer)\n");
     liquid_print_fec_schemes();
@@ -62,18 +62,18 @@ int main (int argc, char **argv)
     float txgain_dB = -3.0f;
     double uhd_txgain = -40.0;
 
-    unsigned int packet_spacing=0;                      // spacing b/w frames
-    unsigned int payload_len=200;                       // payload length (bytes)
-    crc_scheme check    = LIQUID_CRC_16;                // data validity check
-    fec_scheme fec0     = LIQUID_FEC_NONE;              // inner FEC scheme
-    fec_scheme fec1     = LIQUID_FEC_HAMMING74;         // outer FEC scheme
-    modulation_scheme mod_scheme = LIQUID_MODEM_QAM;    // modulation scheme
-    unsigned int mod_depth = 2;                         // modulation depth
-    unsigned int ramp_len = 64;                         // phasing ramp up/down length
+    unsigned int packet_spacing=0;              // spacing b/w frames
+    unsigned int payload_len=200;               // payload length (bytes)
+    crc_scheme check    = LIQUID_CRC_16;        // data validity check
+    fec_scheme fec0     = LIQUID_FEC_NONE;      // inner FEC scheme
+    fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
+    modulation_scheme ms= LIQUID_MODEM_QAM;     // modulation scheme
+    unsigned int bps = 2;                       // modulation depth
+    unsigned int ramp_len = 64;                 // phasing ramp up/down length
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:g:G:t:n:m:p:s:r:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:g:G:t:n:s:r:m:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
@@ -81,12 +81,14 @@ int main (int argc, char **argv)
         case 'G':   uhd_txgain = atof(optarg);      break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'n':   payload_len = atoi(optarg);     break;
-        case 'm':
-            mod_scheme = liquid_getopt_str2mod(optarg);
-            break;
-        case 'p':   mod_depth = atoi(optarg);       break;
         case 's':   packet_spacing = atoi(optarg);  break;
         case 'r':   ramp_len = atoi(optarg);        break;
+        case 'm':
+            liquid_getopt_str2modbps(optarg, &ms, &bps);
+            if (ms == LIQUID_MODEM_UNKNOWN) {
+                fprintf(stderr,"error: %s, unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
+                exit(-1);
+            }
         case 'c':   fec0 = liquid_getopt_str2fec(optarg);         break;
         case 'k':   fec1 = liquid_getopt_str2fec(optarg);         break;
         case 'q':   verbose = false;                break;
@@ -111,7 +113,7 @@ int main (int argc, char **argv)
     } else if (fec0 == LIQUID_FEC_UNKNOWN || fec1 == LIQUID_FEC_UNKNOWN) {
         fprintf(stderr,"error: unsupported FEC scheme\n");
         return 1;
-    } else if (mod_scheme == LIQUID_MODEM_UNKNOWN) {
+    } else if (ms == LIQUID_MODEM_UNKNOWN) {
         fprintf(stderr,"error: unsupported modulation scheme\n");
         return 0;
     }
@@ -173,8 +175,8 @@ int main (int argc, char **argv)
     fgprops.fec0        = fec0;     // inner FEC scheme
     fgprops.fec1        = fec1;     // outer FEC scheme
     fgprops.payload_len = payload_len;
-    fgprops.mod_scheme  = mod_scheme;
-    fgprops.mod_bps     = mod_depth;
+    fgprops.mod_scheme  = ms;
+    fgprops.mod_bps     = bps;
     fgprops.rampdn_len  = ramp_len;
 
     flexframegen fg = flexframegen_create(&fgprops);
