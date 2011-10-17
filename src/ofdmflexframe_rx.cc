@@ -29,6 +29,8 @@
 
 #include <uhd/usrp/single_usrp.hpp>
  
+#include "timer.h"
+
 static bool verbose;
 
 // data counters
@@ -203,7 +205,6 @@ int main (int argc, char **argv)
 
     unsigned int block_len = 64;
     assert( (block_len % 2) == 0);  // ensure block length is even
-    unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(float)(block_len));
 
     //allocate recv buffer and metatdata
     uhd::rx_metadata_t md;
@@ -253,9 +254,12 @@ int main (int argc, char **argv)
     num_valid_packets_received=0;
     num_valid_bytes_received=0;
 
+    // run conditions
+    int continue_running = 1;
+    timer t0 = timer_create();
+    timer_tic(t0);
+
     unsigned int n=0;
-    unsigned int block_counter=0;
-    bool continue_running=true;
     while (continue_running) {
         // grab data from port
         size_t num_rx_samps = usrp->get_device()->recv(
@@ -304,22 +308,21 @@ int main (int argc, char **argv)
 
                 // reset counter (again)
                 n = 0;
-
-                // increment block counter
-                block_counter++;
-                if (block_counter == num_blocks)
-                    continue_running = false;
             }
-
         }
 
+        // check runtime
+        if (timer_toc(t0) >= num_seconds)
+            continue_running = 0;
     }
  
+    // compute actual run-time
+    float runtime = timer_toc(t0);
+
     // stop data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
     printf("\n");
     printf("usrp data transfer complete\n");
-
  
     // print results
     float data_rate = num_valid_bytes_received * 8.0f / num_seconds;
@@ -332,12 +335,15 @@ int main (int argc, char **argv)
     printf("    frames detected     : %6u\n", num_frames_detected);
     printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
     printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
+    printf("    bytes received      : %6u\n", num_valid_bytes_received);
+    printf("    run time            : %f s\n", runtime);
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
     // destroy objects
     resamp_crcf_destroy(resamp);
     resamp2_crcf_destroy(decim);
     ofdmflexframesync_destroy(fs);
+    timer_destroy(t0);
 
     return 0;
 }
