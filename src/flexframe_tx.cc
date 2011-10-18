@@ -89,6 +89,7 @@ int main (int argc, char **argv)
                 fprintf(stderr,"error: %s, unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
                 exit(-1);
             }
+            break;
         case 'c':   fec0 = liquid_getopt_str2fec(optarg);         break;
         case 'k':   fec1 = liquid_getopt_str2fec(optarg);         break;
         case 'q':   verbose = false;                break;
