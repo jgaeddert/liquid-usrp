@@ -49,8 +49,10 @@ int callback(unsigned char *  _header,
              void *           _userdata)
 {
     if (verbose) {
-        printf("********* callback invoked, ");
-        printf("rssi=%7.2fdB evm=%7.2fdB, ", _stats.rssi, _stats.evm);
+        // compute true carrier offset
+        double samplerate = *((double*)_userdata);
+        float cfo = _stats.cfo / M_PI * samplerate * 1e-3f;
+        printf("***** rssi=%7.2fdB evm=%7.2fdB, cfo=%7.2fkHz, ", _stats.rssi, _stats.evm, cfo);
 
         if (_header_valid) {
             unsigned int packet_id = (_header[0] << 8 | _header[1]);
@@ -237,7 +239,7 @@ int main (int argc, char **argv)
     ofdmframe_validate_sctype(p,M, &M_null, &M_pilot, &M_data);
 
     // create frame synchronizer
-    ofdmflexframesync fs = ofdmflexframesync_create(M, cp_len, p, callback, NULL);
+    ofdmflexframesync fs = ofdmflexframesync_create(M, cp_len, p, callback, (void*)&bandwidth);
     ofdmflexframesync_print(fs);
 
     // start data transfer
