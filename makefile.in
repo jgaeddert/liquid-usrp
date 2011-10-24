@@ -152,11 +152,11 @@ libliquidusrp.a: $(library_objs)
 #
 # gcc -dynamiclib -install_name libliquidusrp.dylib -o libliquidusrp.dylib libmodem.a libutility.a 
 libliquidusrp.dylib: $(library_objs)
-	$(CC) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
+	$(CXX) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
 
 # linux, et al
 libliquidusrp.so: $(library_objs)
-	$(CC) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
+	$(CXX) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
 
 
 ## 
