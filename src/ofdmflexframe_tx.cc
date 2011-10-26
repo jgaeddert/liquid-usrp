@@ -196,8 +196,7 @@ int main (int argc, char **argv)
     resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
 
     // transmitter gain (linear)
-    float g = powf(10.0f, txgain_dB/10.0f);
- 
+    float g = powf(10.0f, txgain_dB/20.0f);
 
     // initialize subcarrier allocation
     unsigned char p[M];

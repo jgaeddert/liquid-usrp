@@ -193,7 +193,7 @@ int main (int argc, char **argv)
     unsigned char payload[payload_len];
 
     // transmitter gain (linear)
-    float g = powf(10.0f, txgain_dB/10.0f);
+    float g = powf(10.0f, txgain_dB/20.0f);
  
     // run conditions
     int continue_running = 1;
