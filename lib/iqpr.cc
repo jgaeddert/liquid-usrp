@@ -149,7 +149,6 @@ iqpr iqpr_create()
 
     // create frame generator
     ofdmflexframegenprops_init_default(&q->fgprops);
-    q->fgprops.payload_len  = 0;
     q->fgprops.check        = LIQUID_CRC_NONE;
     q->fgprops.fec0         = LIQUID_FEC_NONE;
     q->fgprops.fec1         = LIQUID_FEC_NONE;
@@ -435,7 +434,6 @@ void iqpr_txpacket(iqpr _q,
     // configure frame generator
     if (_fgprops != NULL)
         memmove(&_q->fgprops, _fgprops, sizeof(ofdmflexframegenprops_s));
-    _q->fgprops.payload_len = _payload_len;
     ofdmflexframegen_setprops(_q->fg, &_q->fgprops);
 
     // set up the metadta flags
@@ -457,7 +455,7 @@ void iqpr_txpacket(iqpr _q,
 
     // assemble the frame
     ofdmflexframegen_reset(_q->fg);
-    ofdmflexframegen_assemble(_q->fg, _header, _payload);
+    ofdmflexframegen_assemble(_q->fg, _header, _payload, _payload_len);
 
     // generate the frame
     int last_symbol=0;

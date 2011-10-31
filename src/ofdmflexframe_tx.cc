@@ -228,7 +228,6 @@ int main (int argc, char **argv)
     ofdmflexframegenprops_s fgprops;
     ofdmflexframegenprops_init_default(&fgprops);
     fgprops.num_symbols_S0  = num_symbols_S0;
-    fgprops.payload_len     = payload_len;
     fgprops.check           = check;
     fgprops.fec0            = fec0;
     fgprops.fec1            = fec1;
@@ -271,7 +270,7 @@ int main (int argc, char **argv)
             payload[j] = rand() & 0xff;
 
         // assemble frame
-        ofdmflexframegen_assemble(fg, header, payload);
+        ofdmflexframegen_assemble(fg, header, payload, payload_len);
 
         // generate frame
         int last_symbol=0;
