@@ -37,8 +37,8 @@ void usage() {
     printf("  h     : usage/help\n");
     printf("  q/v   : quiet/verbose\n");
     printf("  f     : center frequency [Hz]\n");
-    printf("  b     : symbol rate [Hz] (62.5kHz min, 8MHz max)\n");
-    printf("  g     : software tx gain [dB] (default: -6dB)\n");
+    printf("  b     : symbol rate [Hz] (40kHz min, 8MHz max), default: 160kHz\n");
+    printf("  g     : software tx gain [dB] (default: -10dB)\n");
     printf("  G     : uhd tx gain [dB] (default: 40dB)\n");
     printf("  t     : execute time [s], default: 10\n");
     printf("  m     : modulation scheme (qpsk default)\n");
@@ -51,13 +51,13 @@ int main (int argc, char **argv)
     bool verbose = true;
 
     unsigned long int DAC_RATE = 64e6;
-    double min_bandwidth = 0.25*(DAC_RATE / 512.0);
-    double max_bandwidth = 0.25*(DAC_RATE /   4.0);
+    double min_bandwidth = 40e3f;
+    double max_bandwidth = 8000e3f;
 
     double frequency = 462.0e6;
-    double bandwidth = 80e3f;
+    double bandwidth = 160e3f;
     float num_seconds = 10.0f;      // run time
-    double txgain_dB = -6.0f;       // software tx gain [dB]
+    double txgain_dB = -10.0f;      // software tx gain [dB]
     double uhd_txgain = 40.0;       // uhd (hardware) tx gain
 
     // modulation properties
@@ -134,6 +134,12 @@ int main (int argc, char **argv)
     //        "The hardware does not support the requested TX sample rate"
     while (interp_rate == 240 || interp_rate == 244)
         interp_rate -= 4;
+
+    // force interpolation rate to be in [8,512] (if only this worked...)
+    if (interp_rate > 512) interp_rate = 512;
+    if (interp_rate < 8)   interp_rate = 8;
+    printf("usrp interp rate: %u\n", interp_rate);
+
     // compute usrp sampling rate
     double usrp_tx_rate = DAC_RATE / (double)interp_rate;
     
@@ -143,7 +149,6 @@ int main (int argc, char **argv)
     // get actual tx rate
     usrp_tx_rate = usrp->get_tx_rate();
 
-    //usrp_tx_rate = 262295.081967213;
     // compute arbitrary resampling rate
     double tx_resamp_rate = usrp_tx_rate / tx_rate;
 
@@ -171,17 +176,27 @@ int main (int argc, char **argv)
     interp_crcf mfinterp = interp_crcf_create_rnyquist(ftype, 2, m, beta, 0);
 
     // create arbitrary resampler
+#if 0
     resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, tx_resamp_rate);
+#else
+    msresamp_crcf resamp = msresamp_crcf_create(tx_resamp_rate,60.0f);
+    printf("arbitrary resampling rate: %f\n", tx_resamp_rate);
+#endif
 
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/20.0f);
 
-    // arrays
-    unsigned int num_symbols = 40;          // number of symbols per buffer
+    // buffer lengths
+    unsigned int num_symbols = 40;  // number of symbols per buffer
+    unsigned int resamp_buffer_len = 2*num_symbols*tx_resamp_rate;
+    if (resamp_buffer_len < 2*num_symbols)
+        resamp_buffer_len = 2*num_symbols;
+
+    // buffers
     std::complex<float> buffer[num_symbols];
     std::complex<float> buffer_interp[2*num_symbols];
-    std::complex<float> buffer_resamp[4*num_symbols];
+    std::complex<float> buffer_resamp[resamp_buffer_len];
 
     // set up the metadata flags
     std::vector<std::complex<float> > buff(256);
@@ -210,7 +225,11 @@ int main (int argc, char **argv)
         unsigned int nw;
         unsigned int n=0;
         for (j=0; j<2*num_symbols; j++) {
+#if 0
             resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
+#else
+            msresamp_crcf_execute(resamp, &buffer_interp[j], 1, &buffer_resamp[n], &nw);
+#endif
             n += nw;
         }
 
@@ -251,7 +270,11 @@ int main (int argc, char **argv)
     printf("usrp data transfer complete\n");
 
     // clean it up
+#if 0
     resamp_crcf_destroy(resamp);
+#else
+    msresamp_crcf_destroy(resamp);
+#endif
     modem_destroy(mod);
     interp_crcf_destroy(mfinterp);
     timer_destroy(t0);
