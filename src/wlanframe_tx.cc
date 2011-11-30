@@ -194,7 +194,7 @@ int main (int argc, char **argv)
         // generate frame
         int last_symbol=0;
         unsigned int zero_pad=1;
-        while (!last_symbol || zero_pad > 0) {
+        while (!last_symbol) {
 #if 0
             if (!last_symbol) {
                 // generate symbol
@@ -206,7 +206,6 @@ int main (int argc, char **argv)
             }
 #else
             // generate symbol
-            printf("generating symbol...\n");
             last_symbol = wlanframegen_writesymbol(fg, buffer);
 #endif
 
