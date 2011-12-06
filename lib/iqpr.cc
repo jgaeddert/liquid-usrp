@@ -461,7 +461,7 @@ void iqpr_txpacket(iqpr _q,
     int last_symbol=0;
     unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
     unsigned int num_samples;
-    float g = 0.1f;
+    float g = 0.02f;
 
     unsigned int j;
     unsigned int tx_buffer_samples=0;
