@@ -621,6 +621,8 @@ int iqpr_rxpacket(iqpr _q,
                 // reset status flag
                 _q->rx_packet_found = 0;
 
+                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
+
                 return 1;
             }
 #endif
