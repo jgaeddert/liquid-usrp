@@ -618,6 +618,9 @@ int iqpr_rxpacket(iqpr _q,
                 *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
                 *_payload_valid = _q->rx_payload_valid;
 
+                // return frame stats
+                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
+
                 // reset status flag
                 _q->rx_packet_found = 0;
 
