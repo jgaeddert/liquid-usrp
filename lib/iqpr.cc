@@ -48,7 +48,7 @@ struct iqpr_s {
     unsigned char * p;              // subcarrier allocation
 
     // receiver
-    std::vector<std::complex<float> > rx_buffer;    // rx data buffer
+    std::vector<std::complex<float> > * rx_buffer;    // rx data buffer
     unsigned int rx_vector_index;                   // index of rx buffer vector
     unsigned int rx_vector_length;                  // length of rx buffer vector
     resamp2_crcf rx_decim;          // half-band decimator
@@ -106,7 +106,7 @@ iqpr iqpr_create()
     //
     // common
     //
-    q->M = 64;     // number of subcarriers
+    q->M = 40;      // number of subcarriers
     q->cp_len = 8;  // cyclic prefix length
     q->p = NULL;    // subcarrier allocation (NULL gives default)
     q->p = (unsigned char*)malloc(q->M*sizeof(unsigned char));
@@ -128,7 +128,8 @@ iqpr iqpr_create()
     // receiver objects
     //
     const size_t max_samps_per_packet = q->usrp->get_device()->get_max_recv_samps_per_packet();
-    q->rx_buffer.resize(max_samps_per_packet);
+    q->rx_buffer = new std::vector< std::complex<float> >(max_samps_per_packet);
+    printf("rx buffer size: %u\n", (unsigned int)(q->rx_buffer->size()));
     q->rx_vector_index  = 0;
     q->rx_vector_length = 0;
     q->rx_resamp = resamp_crcf_create(1.0, 7, 0.4, 60.0, 64);
@@ -148,7 +149,6 @@ iqpr iqpr_create()
 
     // create frame generator
     ofdmflexframegenprops_init_default(&q->fgprops);
-    q->fgprops.payload_len  = 0;
     q->fgprops.check        = LIQUID_CRC_NONE;
     q->fgprops.fec0         = LIQUID_FEC_NONE;
     q->fgprops.fec1         = LIQUID_FEC_NONE;
@@ -170,8 +170,8 @@ iqpr iqpr_create()
     //q->tx_buffer.resize(1);
 
     // set hardware transmit/receive gains
-    iqpr_set_tx_gain(q, -40.0f);
-    iqpr_set_rx_gain(q,  40.0f);
+    iqpr_set_tx_gain(q, 40.0f);
+    iqpr_set_rx_gain(q, 40.0f);
 
     // debugging
     q->verbose = 0;
@@ -186,6 +186,9 @@ void iqpr_destroy(iqpr _q)
     //
     if (_q->p != NULL)
         free(_q->p);
+
+    // destroy receiver buffer
+    delete _q->rx_buffer;
 
     // 
     // receiver objects
@@ -252,24 +255,31 @@ void iqpr_set_tx_rate(iqpr _q, float _tx_rate)
     unsigned int interp_rate = (unsigned int)(DAC_RATE / _tx_rate);
     // ensure multiple of 4
     interp_rate = (interp_rate >> 2) << 2;
-    interp_rate += 4; // ensure tx_resamp_rate <= 1.0
+    
+    //
+    while (interp_rate == 240 || interp_rate == 244)
+        interp_rate -= 4;
 
     // compute usrp sampling rate
     double usrp_tx_rate = DAC_RATE / (double)interp_rate;
 
+    // set hardware sampling rate
+    _q->usrp->set_tx_rate(usrp_tx_rate);
+
+    // get actual rate
+    usrp_tx_rate = _q->usrp->get_tx_rate();
+
     // compute arbitrary resampling rate
     double tx_resamp_rate = usrp_tx_rate / _tx_rate;
-    printf("sample rate :   %12.8f kHz = %12.8f / %8.6f (interp %u)\n",
-            _tx_rate * 1e-3f,
-            usrp_tx_rate * 1e-3f,
-            tx_resamp_rate,
-            interp_rate);
-
-    // set hardware sampling rate
-    _q->usrp->set_tx_rate(DAC_RATE / interp_rate);
-
+    
     // set software resampling rate
     resamp_crcf_setrate(_q->tx_resamp, tx_resamp_rate);
+
+    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
+            _tx_rate * 1e-3f,
+            usrp_tx_rate * 1e-3f,
+            1.0f / tx_resamp_rate,
+            interp_rate);
 }
 
 // set transmit/receive sample rate
@@ -287,19 +297,23 @@ void iqpr_set_rx_rate(iqpr _q, float _rx_rate)
     // compute usrp sampling rate
     double usrp_rx_rate = ADC_RATE / decim_rate;
 
+    // set hardware sampling rate
+    _q->usrp->set_rx_rate(usrp_rx_rate);
+
+    // get actual hardware sampling rate
+    usrp_rx_rate = _q->usrp->get_rx_rate();
+
     // compute arbitrary resampling rate
     double rx_resamp_rate = _rx_rate / usrp_rx_rate;
+
+    // set software resampling rate
+    resamp_crcf_setrate(_q->rx_resamp, rx_resamp_rate);
+
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
             _rx_rate * 1e-3f,
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-
-    // set hardware sampling rate
-    _q->usrp->set_rx_rate(ADC_RATE / decim_rate);
-
-    // set software resampling rate
-    resamp_crcf_setrate(_q->rx_resamp, rx_resamp_rate);
 }
 
 // set transmit/receive frequency
@@ -325,6 +339,7 @@ void iqpr_rxconfig(iqpr _q,
 // start data transfer
 void iqpr_rx_start(iqpr _q)
 {
+    printf("issuing stream command...\n");
     _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
     resamp2_crcf_clear(_q->rx_decim);
@@ -349,8 +364,8 @@ void iqpr_rx_start(iqpr _q)
 
             // grab data from port
             _q->rx_vector_length = _q->usrp->get_device()->recv(
-                &_q->rx_buffer.front(),
-                _q->rx_buffer.size(),
+                &_q->rx_buffer->front(),
+                _q->rx_buffer->size(),
                 md,
                 uhd::io_type_t::COMPLEX_FLOAT32,
                 uhd::device::RECV_MODE_ONE_PACKET
@@ -419,7 +434,6 @@ void iqpr_txpacket(iqpr _q,
     // configure frame generator
     if (_fgprops != NULL)
         memmove(&_q->fgprops, _fgprops, sizeof(ofdmflexframegenprops_s));
-    _q->fgprops.payload_len = _payload_len;
     ofdmflexframegen_setprops(_q->fg, &_q->fgprops);
 
     // set up the metadta flags
@@ -441,13 +455,13 @@ void iqpr_txpacket(iqpr _q,
 
     // assemble the frame
     ofdmflexframegen_reset(_q->fg);
-    ofdmflexframegen_assemble(_q->fg, _header, _payload);
+    ofdmflexframegen_assemble(_q->fg, _header, _payload, _payload_len);
 
     // generate the frame
     int last_symbol=0;
     unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
     unsigned int num_samples;
-    float g = 0.1f;
+    float g = 0.02f;
 
     unsigned int j;
     unsigned int tx_buffer_samples=0;
@@ -548,8 +562,8 @@ int iqpr_rxpacket(iqpr _q,
 
             // grab data from port
             _q->rx_vector_length = _q->usrp->get_device()->recv(
-                &_q->rx_buffer.front(),
-                _q->rx_buffer.size(),
+                &_q->rx_buffer->front(),
+                _q->rx_buffer->size(),
                 md,
                 uhd::io_type_t::COMPLEX_FLOAT32,
                 uhd::device::RECV_MODE_ONE_PACKET
@@ -579,7 +593,7 @@ int iqpr_rxpacket(iqpr _q,
         num_accumulated_samples++;
 
         // push 2 samples into buffer
-        rx_buffer_decim[n++] = _q->rx_buffer[_q->rx_vector_index++];
+        rx_buffer_decim[n++] = (*_q->rx_buffer)[_q->rx_vector_index++];
 
         if (n==2) {
             // reset counter
@@ -603,6 +617,9 @@ int iqpr_rxpacket(iqpr _q,
                 *_payload       = _q->rx_payload_valid ? _q->rx_payload     : NULL;
                 *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
                 *_payload_valid = _q->rx_payload_valid;
+
+                // return frame stats
+                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
 
                 // reset status flag
                 _q->rx_packet_found = 0;

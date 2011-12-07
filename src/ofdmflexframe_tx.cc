@@ -47,6 +47,7 @@ void usage() {
     printf("  c     : coding scheme (inner): h74 default\n");
     printf("  k     : coding scheme (outer): none default\n");
     liquid_print_fec_schemes();
+    printf("  z     : number of subcarriers to notch in the center band, default: 0\n");
 }
 
 int main (int argc, char **argv)
@@ -59,26 +60,28 @@ int main (int argc, char **argv)
     double max_bandwidth = 0.25*(DAC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = 100e3f;
+    double bandwidth = 80e3f;
     unsigned int num_frames = 1000;     // number of frames to transmit
     double txgain_dB = -6.0f;           // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
-
-    unsigned int M = 64;                // number of subcarriers
-    unsigned int cp_len = 16;           // cyclic prefix length
+    // ofdm properties
+    unsigned int M = 48;                // number of subcarriers
+    unsigned int cp_len = 8;            // cyclic prefix length
     unsigned int num_symbols_S0 = 3;    // number of S0 symbols
 
-    modulation_scheme ms = LIQUID_MODEM_QAM;     // modulation scheme
-    unsigned int bps = 2;               // modulation depth
-    unsigned int payload_len = 256;     // original data message length
-    crc_scheme check = LIQUID_CRC_32;          // data validity check
-    fec_scheme fec0 = LIQUID_FEC_NONE;         // fec (inner)
-    fec_scheme fec1 = LIQUID_FEC_HAMMING128;   // fec (outer)
+    modulation_scheme ms = LIQUID_MODEM_QAM;// modulation scheme
+    unsigned int bps = 2;                   // modulation depth
+    unsigned int payload_len = 256;         // original data message length
+    crc_scheme check = LIQUID_CRC_32;       // data validity check
+    fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
+    fec_scheme fec1 = LIQUID_FEC_HAMMING128;// fec (outer)
+    
+    unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:c:k:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -115,6 +118,9 @@ int main (int argc, char **argv)
                 exit(1);
             }
             break;
+        case 'z':
+            num_notched = atoi(optarg);
+            break;
         default:
             usage();
             return 0;
@@ -134,10 +140,6 @@ int main (int argc, char **argv)
         exit(1);
     }
 
-    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-
     uhd::device_addr_t dev_addr;
     //dev_addr["addr0"] = "192.168.10.2";
     //dev_addr["addr1"] = "192.168.10.3";
@@ -145,9 +147,7 @@ int main (int argc, char **argv)
 
     // set properties
     double tx_rate = 4.0*bandwidth;
-#if 0
-    usrp->set_tx_rate(tx_rate);
-#else
+
     // NOTE : the sample rate computation MUST be in double precision so
     //        that the UHD can compute its interpolation rate properly
     unsigned int interp_rate = (unsigned int)(DAC_RATE / tx_rate);
@@ -170,14 +170,20 @@ int main (int argc, char **argv)
     //usrp_tx_rate = 262295.081967213;
     // compute arbitrary resampling rate
     double tx_resamp_rate = usrp_tx_rate / tx_rate;
+
+    usrp->set_tx_freq(frequency);
+    usrp->set_tx_gain(uhd_txgain);
+
+    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
+
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
             tx_rate * 1e-3f,
             usrp_tx_rate * 1e-3f,
             1.0 / tx_resamp_rate,
             interp_rate);
-#endif
-    usrp->set_tx_freq(frequency);
-    usrp->set_tx_gain(uhd_txgain);
+
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
@@ -190,8 +196,7 @@ int main (int argc, char **argv)
     resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
 
     // transmitter gain (linear)
-    float g = powf(10.0f, txgain_dB/10.0f);
- 
+    float g = powf(10.0f, txgain_dB/20.0f);
 
     // initialize subcarrier allocation
     unsigned char p[M];
@@ -201,6 +206,8 @@ int main (int argc, char **argv)
     unsigned int i1 = (M/2) + guard;
     for (i=0; i<M; i++) {
         if ( i == 0 || (i > i0 && i < i1) )
+            p[i] = OFDMFRAME_SCTYPE_NULL;
+        else if ( i < num_notched || i > M-num_notched)
             p[i] = OFDMFRAME_SCTYPE_NULL;
         else if ( (i%pilot_spacing)==0 )
             p[i] = OFDMFRAME_SCTYPE_PILOT;
@@ -221,7 +228,6 @@ int main (int argc, char **argv)
     ofdmflexframegenprops_s fgprops;
     ofdmflexframegenprops_init_default(&fgprops);
     fgprops.num_symbols_S0  = num_symbols_S0;
-    fgprops.payload_len     = payload_len;
     fgprops.check           = check;
     fgprops.fec0            = fec0;
     fgprops.fec1            = fec1;
@@ -264,7 +270,7 @@ int main (int argc, char **argv)
             payload[j] = rand() & 0xff;
 
         // assemble frame
-        ofdmflexframegen_assemble(fg, header, payload);
+        ofdmflexframegen_assemble(fg, header, payload, payload_len);
 
         // generate frame
         int last_symbol=0;

@@ -79,10 +79,12 @@ include_headers	:= $(addprefix include/,$(headers))
 # library source files
 library_src :=				\
 	lib/iqpr.cc			\
+	lib/timer.cc			\
 
 # library header files
 library_headers :=			\
 	include/iqpr.h			\
+	include/timer.h			\
 
 # example programs
 example_src :=				\
@@ -92,6 +94,7 @@ example_src :=				\
 	src/narrowband_tx.cc		\
 	src/gmskframe_tx.cc		\
 	src/gmskframe_rx.cc		\
+	src/narrowband_tx.cc		\
 	src/ofdmflexframe_rx.cc		\
 	src/ofdmflexframe_tx.cc		\
 	src/packet_rx.cc		\
@@ -151,11 +154,11 @@ libliquidusrp.a: $(library_objs)
 #
 # gcc -dynamiclib -install_name libliquidusrp.dylib -o libliquidusrp.dylib libmodem.a libutility.a 
 libliquidusrp.dylib: $(library_objs)
-	$(CC) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
+	$(CXX) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
 
 # linux, et al
 libliquidusrp.so: $(library_objs)
-	$(CC) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
+	$(CXX) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
 
 
 ## 
@@ -220,3 +223,14 @@ clean: clean-examples
 	$(RM) $(library_objs)
 	$(RM) libliquidusrp.a
 	$(RM) $(SHARED_LIB)
+
+
+##
+## TARGET : distclean - clean everything but the originally-distributed files
+##
+distclean: clean
+	@echo "cleaning distribution..."
+	$(RM) octave-core *.m
+	$(RM) configure config.h config.h.in config.h.in~ config.log config.status
+	$(RM) -r autom4te.cache
+	$(RM) makefile

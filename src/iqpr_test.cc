@@ -55,12 +55,12 @@ int main (int argc, char **argv)
 
     // set rx parameters
     iqpr_set_rx_gain(q, 20);
-    iqpr_set_rx_rate(q, 100e3);
+    iqpr_set_rx_rate(q, 80e3);
     iqpr_set_rx_freq(q, 462e6f);
 
     // set tx parameters
-    iqpr_set_tx_gain(q, -20);
-    iqpr_set_tx_rate(q, 100e3);
+    iqpr_set_tx_gain(q, 40);
+    iqpr_set_tx_rate(q, 80e3);
     iqpr_set_tx_freq(q, 462e6f);
 
     // other options

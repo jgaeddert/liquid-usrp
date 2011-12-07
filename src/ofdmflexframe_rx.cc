@@ -24,10 +24,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <assert.h>
 #include <liquid/liquid.h>
 
 #include <uhd/usrp/single_usrp.hpp>
  
+#include "timer.h"
+
 static bool verbose;
 
 // data counters
@@ -46,8 +49,10 @@ int callback(unsigned char *  _header,
              void *           _userdata)
 {
     if (verbose) {
-        printf("********* callback invoked, ");
-        printf("rssi=%7.2fdB evm=%7.2fdB, ", _stats.rssi, _stats.evm);
+        // compute true carrier offset
+        double samplerate = *((double*)_userdata);
+        float cfo = _stats.cfo / M_PI * samplerate * 1e-3f;
+        printf("***** rssi=%7.2fdB evm=%7.2fdB, cfo=%7.2fkHz, ", _stats.rssi, _stats.evm, cfo);
 
         if (_header_valid) {
             unsigned int packet_id = (_header[0] << 8 | _header[1]);
@@ -57,6 +62,7 @@ int callback(unsigned char *  _header,
         } else {
             printf("HEADER INVALID\n");
         }
+    } else {
     }
 
     // update global counters
@@ -69,25 +75,6 @@ int callback(unsigned char *  _header,
         num_valid_packets_received++;
         num_valid_bytes_received += _payload_len;
     }
-
-#if 0
-    unsigned int i;
-
-    // print header data to standard output
-    printf("  header rx  :");
-    for (i=0; i<8; i++)
-        printf(" %.2X", _header[i]);
-    printf("\n");
-
-    // print payload data to standard output
-    printf("  payload rx :");
-    for (i=0; i<_payload_len; i++) {
-        printf(" %.2X", _payload[i]);
-        if ( ((i+1)%26)==0 && i !=_payload_len-1 )
-            printf("\n              ");
-    }
-    printf("\n");
-#endif
 
     return 0;
 }
@@ -104,6 +91,7 @@ void usage() {
     printf("  t     :   run time [seconds]\n");
     printf("  m     :   modulation scheme: psk, dpsk, ask, <qam>, apsk\n");
     printf("  p     :   modulation depth [bits/symbol], default: 2\n");
+    printf("  z     : number of subcarriers to notch in the center band, default: 0\n");
 }
 
 int main (int argc, char **argv)
@@ -116,20 +104,22 @@ int main (int argc, char **argv)
     double max_bandwidth = 0.25*(ADC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = 100e3f;
+    double bandwidth = 80e3f;
     double num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 
-    // 
-    unsigned int M = 64;                // number of subcarriers
-    unsigned int cp_len = 16;           // cyclic prefix length
+    // ofdm properties
+    unsigned int M = 48;                // number of subcarriers
+    unsigned int cp_len = 8;            // cyclic prefix length
 
     modulation_scheme ms = LIQUID_MODEM_QAM;
     unsigned int bps = 2;
 
+    unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
+
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:m:p:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:m:p:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -149,6 +139,7 @@ int main (int argc, char **argv)
             }
             break;
         case 'p':   bps = atoi(optarg);             break;
+        case 'z':   num_notched = atoi(optarg);     break;
         default:
             usage();
             return 0;
@@ -175,15 +166,8 @@ int main (int argc, char **argv)
     uhd::device_addr_t dev_addr;
     uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
 
-    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-
     // set properties
     double rx_rate = 4.0f*bandwidth;
-#if 0
-    usrp->set_rx_rate(rx_rate);
-#else
     // NOTE : the sample rate computation MUST be in double precision so
     //        that the UHD can compute its decimation rate properly
     unsigned int decim_rate = (unsigned int)(ADC_RATE / rx_rate);
@@ -200,24 +184,33 @@ int main (int argc, char **argv)
 
     // compute arbitrary resampling rate
     double rx_resamp_rate = rx_rate / usrp_rx_rate;
+
+    usrp->set_rx_freq(frequency);
+    usrp->set_rx_gain(uhd_rxgain);
+
+    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
     printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
             rx_rate * 1e-3f,
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-#endif
-    usrp->set_rx_freq(frequency);
-    usrp->set_rx_gain(uhd_rxgain);
+    if (num_seconds >= 0)
+        printf("run time    :   %f seconds\n", num_seconds);
+    else
+        printf("run time    :   (forever)\n");
 
     // add arbitrary resampling block
     resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
     resamp_crcf_setrate(resamp, rx_resamp_rate);
 
-    const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
-    unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
+    unsigned int block_len = 64;
+    assert( (block_len % 2) == 0);  // ensure block length is even
 
     //allocate recv buffer and metatdata
     uhd::rx_metadata_t md;
+    const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
     std::vector<std::complex<float> > buff(max_samps_per_packet);
 
     // half-band decimator
@@ -232,6 +225,8 @@ int main (int argc, char **argv)
     for (i=0; i<M; i++) {
         if ( i == 0 || (i > i0 && i < i1) )
             p[i] = OFDMFRAME_SCTYPE_NULL;
+        else if ( i < num_notched || i > M-num_notched)
+            p[i] = OFDMFRAME_SCTYPE_NULL;
         else if ( (i%pilot_spacing)==0 )
             p[i] = OFDMFRAME_SCTYPE_PILOT;
         else
@@ -244,16 +239,16 @@ int main (int argc, char **argv)
     ofdmframe_validate_sctype(p,M, &M_null, &M_pilot, &M_data);
 
     // create frame synchronizer
-    ofdmflexframesync fs = ofdmflexframesync_create(M, cp_len, p, callback, NULL);
+    ofdmflexframesync fs = ofdmflexframesync_create(M, cp_len, p, callback, (void*)&bandwidth);
     ofdmflexframesync_print(fs);
 
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    std::complex<float> data_rx[64];
-    std::complex<float> data_decim[32];
-    std::complex<float> data_resamp[64];
+    std::complex<float> data_rx[block_len];
+    std::complex<float> data_decim[block_len/2];
+    std::complex<float> data_resamp[block_len];
  
     // reset counters
     num_frames_detected=0;
@@ -261,8 +256,13 @@ int main (int argc, char **argv)
     num_valid_packets_received=0;
     num_valid_bytes_received=0;
 
+    // run conditions
+    int continue_running = 1;
+    timer t0 = timer_create();
+    timer_tic(t0);
+
     unsigned int n=0;
-    for (i=0; i<num_blocks; i++) {
+    while (continue_running) {
         // grab data from port
         size_t num_rx_samps = usrp->get_device()->recv(
             &buff.front(), buff.size(), md,
@@ -287,20 +287,20 @@ int main (int argc, char **argv)
         unsigned int j;
         unsigned int nw=0;
         for (j=0; j<num_rx_samps; j++) {
-            // push 64 samples into buffer
+            // push samples into buffer
             data_rx[n++] = buff[j];
 
-            if (n==64) {
+            if (n==block_len) {
                 // reset counter
                 n=0;
 
-                // decimate to 32
+                // decimate to block_len/2
                 unsigned int k;
-                for (k=0; k<32; k++)
+                for (k=0; k<block_len/2; k++)
                     resamp2_crcf_decim_execute(decim, &data_rx[2*k], &data_decim[k]);
 
                 // apply resampler
-                for (k=0; k<32; k++) {
+                for (k=0; k<block_len/2; k++) {
                     resamp_crcf_execute(resamp, data_decim[k], &data_resamp[n], &nw);
                     n += nw;
                 }
@@ -311,16 +311,20 @@ int main (int argc, char **argv)
                 // reset counter (again)
                 n = 0;
             }
-
         }
 
+        // check runtime
+        if (timer_toc(t0) >= num_seconds)
+            continue_running = 0;
     }
  
+    // compute actual run-time
+    float runtime = timer_toc(t0);
+
     // stop data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
     printf("\n");
     printf("usrp data transfer complete\n");
-
  
     // print results
     float data_rate = num_valid_bytes_received * 8.0f / num_seconds;
@@ -333,12 +337,15 @@ int main (int argc, char **argv)
     printf("    frames detected     : %6u\n", num_frames_detected);
     printf("    valid headers       : %6u (%6.2f%%)\n", num_valid_headers_received,percent_headers_valid);
     printf("    valid packets       : %6u (%6.2f%%)\n", num_valid_packets_received,percent_packets_valid);
+    printf("    bytes received      : %6u\n", num_valid_bytes_received);
+    printf("    run time            : %f s\n", runtime);
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
     // destroy objects
     resamp_crcf_destroy(resamp);
     resamp2_crcf_destroy(decim);
     ofdmflexframesync_destroy(fs);
+    timer_destroy(t0);
 
     return 0;
 }

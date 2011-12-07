@@ -140,7 +140,7 @@ int main (int argc, char **argv)
     float beta=0.7f;  // excess bandwidth factor
 
     // transmitter gain (linear)
-    float g = powf(10.0f, txgain_dB/10.0f);
+    float g = powf(10.0f, txgain_dB/20.0f);
  
     // set up the metadta flags
     uhd::tx_metadata_t md;

@@ -27,6 +27,8 @@
 
 #include <uhd/usrp/single_usrp.hpp>
 
+#include "timer.h"
+
 void usage() {
     printf("Usage: rssi [OPTION]\n");
     printf("Run receiver, simply printing RSSI to screen periodically\n");
@@ -137,7 +139,6 @@ int main (int argc, char **argv)
 
     //
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
-    unsigned int num_blocks = (unsigned int)((rx_rate*num_seconds)/(max_samps_per_packet));
 
     //allocate recv buffer and metatdata
     uhd::rx_metadata_t md;
@@ -150,12 +151,17 @@ int main (int argc, char **argv)
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    unsigned int i;
     unsigned int k;
     unsigned int n=0;   // sample counter
     std::complex<float> agc_out;
 
-    for (i=0; i<num_blocks; i++) {
+    // run conditions
+    int continue_running = 1;
+    timer t0 = timer_create();
+    timer_tic(t0);
+    float print_runtime = 0.0f;
+
+    while (continue_running) {
         // grab data from port
         size_t num_rx_samps = usrp->get_device()->recv(
             &buff.front(), buff.size(), md,
@@ -210,10 +216,16 @@ int main (int argc, char **argv)
 
         }
 
+        // check runtime
+        float runtime = timer_toc(t0);
+        if (runtime >= num_seconds)
+            continue_running = 0;
+        
         // print rssi to screen
-        if ( (i%10)==0 )
+        if ( (runtime - print_runtime) > 0.1f ) {
+            print_runtime = runtime;
             printf("rssi : %12.8f dB\n", agc_crcf_get_rssi(agc_rx));
-
+        }
     }
  
     // stop data transfer
@@ -224,6 +236,7 @@ int main (int argc, char **argv)
     // clean object allocation
     resamp_crcf_destroy(resamp);
     agc_crcf_destroy(agc_rx);
+    timer_destroy(t0);
 
     // save log file...
     FILE * fid = fopen(filename,"w");
@@ -237,12 +250,13 @@ int main (int argc, char **argv)
     fprintf(fid,"Fs = %e;\n", rx_rate);
     fprintf(fid,"n = %u;\n", log_size);
     fprintf(fid,"rssi = zeros(1,n);\n");
+    unsigned int i;
     for (i=0; i<log_size; i++)
         fprintf(fid,"rssi(%u) = %12.4e;\n", i+1, r[i]);
     fprintf(fid,"\n\n");
     fprintf(fid,"t = [0:(n-1)]/Fs;\n");
     fprintf(fid,"figure;\n");
-    fprintf(fid,"plot(t*1e3,10*log10(rssi));\n");
+    fprintf(fid,"plot(t*1e3,20*log10(rssi));\n");
     fprintf(fid,"xlabel('time [ms]');\n");
     fprintf(fid,"ylabel('RSSI [dB]');\n");
     fprintf(fid,"grid on\n");
