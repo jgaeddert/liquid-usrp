@@ -40,6 +40,8 @@ void usage() {
     printf("  b     : bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
     printf("  g     : software tx gain [dB] (default: -6dB)\n");
     printf("  G     : uhd tx gain [dB] (default: 40dB)\n");
+    printf("  n     : number of data bytes, [1,4095]\n");
+    printf("  r     : rate {6,9,12,18,24,36,48,54} M bits/s\n");
 #if 0
     printf("  N     : number of frames, default: 1000\n");
     printf("  P     : payload length [bytes], default: 256\n");
@@ -58,16 +60,16 @@ int main (int argc, char **argv)
     double frequency = 462.0e6;
     double bandwidth = 200e3f;
     unsigned int num_frames = 1000;     // number of frames to transmit
-    double txgain_dB = -6.0f;           // software tx gain [dB]
+    double txgain_dB = -15.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
     // WLAN properties
-    int rate = WLANFRAME_RATE_36;       // WLAN frame data rate
-    unsigned int payload_len = 100;     // paylaod length
+    int rate = WLANFRAME_RATE_18;       // WLAN frame data rate
+    unsigned int payload_len = 200;     // paylaod length
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:n:r:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -77,6 +79,22 @@ int main (int argc, char **argv)
         case 'b':   bandwidth = atof(optarg);       break;
         case 'g':   txgain_dB = atof(optarg);       break;
         case 'G':   uhd_txgain = atof(optarg);      break;
+        case 'n':   payload_len = atoi(optarg);     break;
+        case 'r':
+            switch ( atoi(optarg) ) {
+            case 6:  rate = WLANFRAME_RATE_6;       break;
+            case 9:  rate = WLANFRAME_RATE_9;       break;
+            case 12: rate = WLANFRAME_RATE_12;      break;
+            case 18: rate = WLANFRAME_RATE_18;      break;
+            case 24: rate = WLANFRAME_RATE_24;      break;
+            case 36: rate = WLANFRAME_RATE_36;      break;
+            case 48: rate = WLANFRAME_RATE_48;      break;
+            case 54: rate = WLANFRAME_RATE_54;      break;
+            default:
+                fprintf(stderr,"error: %s, invalid rate '%s'\n", argv[0], optarg);
+                exit(1);
+            }
+            break;
         default:
             usage();
             return 0;
@@ -88,6 +106,9 @@ int main (int argc, char **argv)
         return 0;
     } else if (bandwidth < min_bandwidth) {
         fprintf(stderr,"error: %s, minimum bandwidth exceeded (%8.4f kHz)\n", argv[0], min_bandwidth*1e-3);
+        exit(1);
+    } else if (payload_len < 1 || payload_len > 4095) {
+        fprintf(stderr,"error: %s, payload length must be in [1,4095]\n", argv[0]);
         exit(1);
     }
 
