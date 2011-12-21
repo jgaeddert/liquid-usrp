@@ -461,7 +461,7 @@ void iqpr_txpacket(iqpr _q,
     int last_symbol=0;
     unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
     unsigned int num_samples;
-    float g = 0.1f;
+    float g = 0.02f;
 
     unsigned int j;
     unsigned int tx_buffer_samples=0;
@@ -617,6 +617,9 @@ int iqpr_rxpacket(iqpr _q,
                 *_payload       = _q->rx_payload_valid ? _q->rx_payload     : NULL;
                 *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
                 *_payload_valid = _q->rx_payload_valid;
+
+                // return frame stats
+                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
 
                 // reset status flag
                 _q->rx_packet_found = 0;
