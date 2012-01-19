@@ -57,9 +57,9 @@ AC_CHECK_LIB([m], [sinf, cosf, expf, cargf, cexpf, crealf, cimagf, sqrtf], [],
 AC_CHECK_LIB([liquid], [modem_create], [],
              [AC_MSG_ERROR(Need liquid-dsp library!)],
              [])
-AC_CHECK_LIB([liquid-wlan], [wlanframegen_create], [],
-             [AC_MSG_ERROR(Need liquid-wlan library!)],
-             [])
+#AC_CHECK_LIB([liquid-wlan], [wlanframegen_create], [],
+#             [AC_MSG_ERROR(Need liquid-wlan library!)],
+#             [])
 AC_CHECK_LIB([uhd], [main], [],
              [AC_MSG_ERROR(Need uhd library!)],
              [])
