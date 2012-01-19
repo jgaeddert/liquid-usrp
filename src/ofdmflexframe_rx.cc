@@ -89,9 +89,7 @@ void usage() {
     printf("  M     :   number of subcarriers, default: 64\n");
     printf("  C     :   cyclic prefix length, default: 16\n");
     printf("  t     :   run time [seconds]\n");
-    printf("  m     :   modulation scheme: psk, dpsk, ask, <qam>, apsk\n");
-    printf("  p     :   modulation depth [bits/symbol], default: 2\n");
-    printf("  z     : number of subcarriers to notch in the center band, default: 0\n");
+    printf("  z     :   number of subcarriers to notch in the center band, default: 0\n");
 }
 
 int main (int argc, char **argv)
