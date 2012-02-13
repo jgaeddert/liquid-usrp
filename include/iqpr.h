@@ -161,35 +161,5 @@ int iqpr_callback(unsigned char *  _rx_header,
                   framesyncstats_s _stats,
                   void *           _userdata);
 
-#if 0
-// iqpr packet header descriptor (14 bytes total space)
-//  length  name        description
-//  2       pid         packet identifier number
-//  2       node_src    source node ID
-//  2       node_dst    destination node ID
-//  1       type        packet type (UDP_PACKET, TCP_PACKET, ACK_PACKET, NACK_PACKET...)
-//  xxx     userdata    remaining data reserved for user
-struct iqprheader_s {
-    unsigned int pid;           // [0,1] packet identifier
-    unsigned int packet_type;   // [2]   packet type (data, ack, etc.)
-
-    unsigned int node_src;      // [3]   source node id
-    unsigned int node_dst;      // [4]   destination node id
-
-    unsigned char userdata[3];  // [5,6,7]  remaining user data
-};
-
-// encode header (structure > array)
-//  _q      :   iqpr heade structure
-//  _header :   8-byte header array [XXX TODO : make 14-byte array]
-void iqprheader_encode(iqprheader_s * _q, unsigned char * _header);
-
-// decode header (array > structure))
-//  _q      :   iqpr heade structure
-//  _header :   8-byte header array [XXX TODO : make 14-byte array]
-void iqprheader_decode(iqprheader_s * _q, unsigned char * _header);
-
-#endif
-
 #endif // __IQPR_H__
 
