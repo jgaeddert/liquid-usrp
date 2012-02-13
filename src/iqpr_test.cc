@@ -70,7 +70,7 @@ int main (int argc, char **argv)
 
 #if 1
     //
-    unsigned int    timespec = 10000;
+    unsigned int    timespec = 100000;  // microseconds to wait before timing out
     unsigned char * rx_header = NULL;
     int             rx_header_valid;
     unsigned char * rx_payload = NULL;
@@ -109,6 +109,8 @@ int main (int argc, char **argv)
             } else {
                 printf("payload crc : FAIL\n");
             }
+        } else {
+            printf("timed out\n");
         }
     }
     iqpr_rx_stop(q);

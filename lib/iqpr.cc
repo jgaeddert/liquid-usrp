@@ -31,6 +31,11 @@
 #include <math.h>
 #include <complex>
 
+#include <unistd.h>
+#include <pthread.h>
+#include <time.h>
+#include <sys/time.h>
+
 #include <liquid/liquid.h>
 #include <uhd/types/stream_cmd.hpp>
 #include <uhd/usrp/single_usrp.hpp>
@@ -70,6 +75,7 @@ struct iqpr_s {
 
     // receiver control (threading)
     int rx_running;                 // receiver running flag
+    int rx_waiting;                 // receiver waiting for packet flag
     pthread_t rx_process;           // receiver thread
     pthread_mutex_t rx_mutex;       // 
     pthread_cond_t rx_cond;         // 
@@ -158,6 +164,7 @@ iqpr iqpr_create()
 
     // initialize threading objects
     q->rx_running = 0;
+    q->rx_waiting = 0;
     pthread_mutex_init(&q->rx_mutex, NULL);
     pthread_cond_init(&q->rx_cond, NULL);
 
@@ -473,27 +480,6 @@ void * iqpr_rx_process(void * _arg)
             // push through synchronizer
             ofdmflexframesync_execute(_q->fs, rx_buffer_resamp, nw);
 
-#if 0
-            // check status flag
-            if (_q->rx_packet_found) {
-                // found packet; set outputs
-                *_header        = _q->rx_header;
-                *_header_valid  = _q->rx_header_valid;
-                *_payload       = _q->rx_payload_valid ? _q->rx_payload     : NULL;
-                *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
-                *_payload_valid = _q->rx_payload_valid;
-
-                // return frame stats
-                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
-
-                // reset status flag
-                _q->rx_packet_found = 0;
-
-                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
-
-                return 1;
-            }
-#endif
         } // resamp
     } // while ( _q->rx_running ) {
 
@@ -625,7 +611,7 @@ void iqpr_txpacket(iqpr _q,
 //  _payload_valid  :   payload valid?
 //  _stats          :   received frame statistics
 int iqpr_rxpacket(iqpr _q,
-                  unsigned int _timespec,
+                  unsigned int     _timespec,
                   unsigned char ** _header,
                   int           *  _header_valid,
                   unsigned char ** _payload,
@@ -633,8 +619,62 @@ int iqpr_rxpacket(iqpr _q,
                   int           *  _payload_valid,
                   framesyncstats_s * _stats)
 {
-    usleep(10000);
+    // get current time (timeval)
+    struct timeval tv_now;
+    gettimeofday(&tv_now, NULL);
+
+    // add offset (timespec)
+    struct timespec ts_timeout;
+    ts_timeout.tv_sec  = tv_now.tv_sec;         // seconds
+    ts_timeout.tv_nsec = (tv_now.tv_usec + _timespec) * 1000; // nanoseconds
+
+    // accumulate nanoseconds into seconds
+    while (ts_timeout.tv_nsec > 1000000000) {
+        ts_timeout.tv_nsec -= 1000000000;
+        ts_timeout.tv_sec++;
+    }
+
+    // set flag specifying that we are waiting for a packet, otherwise
+    // all incoming packets are ignored
+    _q->rx_waiting = 1;
+
+    // lock mutex
+    //printf("locking mutex...\n");
+    pthread_mutex_lock(&_q->rx_mutex);
+    //printf("mutex locked\n");
+
+    // start timed wait
+    int status = pthread_cond_timedwait(&_q->rx_cond, &_q->rx_mutex, &ts_timeout);
+
+    // unlock mutex
+    pthread_mutex_unlock(&_q->rx_mutex);
+
+    // check status flag
+    if (_q->rx_packet_found) {
+        // found packet; set outputs
+        *_header        = _q->rx_header;
+        *_header_valid  = _q->rx_header_valid;
+        *_payload       = _q->rx_payload_valid ? _q->rx_payload     : NULL;
+        *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
+        *_payload_valid = _q->rx_payload_valid;
+
+        // return frame stats
+        memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
+
+        // reset status flag
+        _q->rx_packet_found = 0;
+
+        memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
+
+        return 1;
+    }
+
+    // no packet found (timed out)
     return 0;
+
+    
+
+#if 0
     unsigned long int total_samples = _timespec;
     // TODO : start 'timer'
     unsigned long int num_accumulated_samples = 0;
@@ -734,6 +774,7 @@ int iqpr_rxpacket(iqpr _q,
     // packet was never received
     //printf("  consumed %6lu / %6lu samples\n", num_accumulated_samples, total_samples);
     return 0;
+#endif
 }
 
 
@@ -754,10 +795,15 @@ int iqpr_callback(unsigned char *  _rx_header,
 
 #if IQPR_VERBOSE
     unsigned int pid = (_rx_header[0] << 8) | _rx_header[1];
-    printf("********* callback invoked, pid = %6u\n", pid);
+    printf("********* callback invoked, pid = %6u%s\n", pid, q->rx_waiting ? " ***" : "");
     //printf("********* callback invoked, ");
     // ...
 #endif
+    
+    if (!q->rx_waiting) {
+        // ignore packet
+        return 0;
+    }
 
     // set internal values
     q->rx_packet_found  = 1;
@@ -767,34 +813,24 @@ int iqpr_callback(unsigned char *  _rx_header,
     // copy header (regardless of validity)
     memmove(q->rx_header, _rx_header, 14*sizeof(unsigned char));
 
-    if ( !_rx_header_valid ) {
-        //if (q->verbose) printf("header crc : FAIL\n");
-        return 0;
-    }
-
-    if ( !_rx_payload_valid ) {
-        //if (q->verbose) printf("payload crc : FAIL\n");
-        return 0;
-    }
-
     // save statistics
     memmove(&q->rx_stats, &_stats, sizeof(framesyncstats_s));
 
-    // re-allocate memory arrays if necessary
-    if (q->rx_payload_len != _rx_payload_len) {
-        q->rx_payload_len = _rx_payload_len;
-        q->rx_payload = (unsigned char*) realloc(q->rx_payload, q->rx_payload_len*sizeof(unsigned char));
+    if ( _rx_header_valid && _rx_payload_valid ) {
+        // re-allocate memory arrays if necessary
+        if (q->rx_payload_len != _rx_payload_len) {
+            q->rx_payload_len = _rx_payload_len;
+            q->rx_payload = (unsigned char*) realloc(q->rx_payload, q->rx_payload_len*sizeof(unsigned char));
+        }
     }
 
-    // copy data (regardless of validity)
-    memmove(q->rx_payload, _rx_payload, _rx_payload_len*sizeof(unsigned char));
-
-    if (!_rx_payload_valid) {
-        //if (q->verbose) printf("  <<< payload crc fail >>>\n");
-
-        // payload failed check
-        return 0;
+    if ( _rx_header_valid && !_rx_payload_valid) {
+        // copy data (regardless of validity)
+        memmove(q->rx_payload, _rx_payload, _rx_payload_len*sizeof(unsigned char));
     }
+
+    // signal condition
+    pthread_cond_signal(&q->rx_cond);
 
     return 0;
 }
