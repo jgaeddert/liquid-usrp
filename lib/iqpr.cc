@@ -382,12 +382,10 @@ void iqpr_rx_stop(iqpr _q)
 {
     _q->rx_running = 0;
 
-#if 0
-    // clear buffers
-    //_q->rx_buffer.clear();
-    _q->rx_vector_index  = 0;
-    _q->rx_vector_length = 0;
-#endif
+    // join threads (stop rx running)
+    void * exit_status;
+    printf("waiting for process to finish...\n");
+    pthread_join(_q->rx_process, &exit_status);
 } 
 
 
