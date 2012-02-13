@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2010 Joseph Gaeddert
- * Copyright (c) 2010 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2010, 2011, 2012 Joseph Gaeddert
+ * Copyright (c) 2010, 2011, 2012 Virginia Polytechnic Institute & State University
  *
  * This file is part of liquid.
  *
@@ -37,6 +37,10 @@
 
 #include "iqpr.h"
 
+#define IQPR_VERBOSE 1
+
+void * iqpr_rx_process(void * _arg);
+
 // iqpr data structure
 struct iqpr_s {
     // UHD interface to hardware
@@ -47,7 +51,9 @@ struct iqpr_s {
     unsigned int cp_len;            // cyclic prefix length
     unsigned char * p;              // subcarrier allocation
 
+    // 
     // receiver
+    //
     std::vector<std::complex<float> > * rx_buffer;    // rx data buffer
     unsigned int rx_vector_index;                   // index of rx buffer vector
     unsigned int rx_vector_length;                  // length of rx buffer vector
@@ -62,7 +68,15 @@ struct iqpr_s {
     int rx_payload_valid;           // receiver payload data valid?
     framesyncstats_s rx_stats;      // frame synchronizer stats
 
+    // receiver control (threading)
+    int rx_running;                 // receiver running flag
+    pthread_t rx_process;           // receiver thread
+    pthread_mutex_t rx_mutex;       // 
+    pthread_cond_t rx_cond;         // 
+
+    // 
     // transmitter
+    //
     unsigned char * tx_data;        // transmitted payload data
     unsigned int tx_data_len;       // transmitted payload data length
     ofdmflexframegenprops_s fgprops;    // frame generator properties
@@ -142,6 +156,11 @@ iqpr iqpr_create()
     q->rx_payload_len = 1024;
     q->rx_payload = (unsigned char*) malloc(q->rx_payload_len*sizeof(unsigned char));
 
+    // initialize threading objects
+    q->rx_running = 0;
+    pthread_mutex_init(&q->rx_mutex, NULL);
+    pthread_cond_init(&q->rx_cond, NULL);
+
 
     // 
     // transmitter objects
@@ -191,6 +210,10 @@ void iqpr_destroy(iqpr _q)
     resamp2_crcf_destroy(_q->rx_decim);
     ofdmflexframesync_destroy(_q->fs);
     free(_q->rx_payload);
+    
+    pthread_mutex_destroy(&_q->rx_mutex);
+    pthread_cond_destroy(&_q->rx_cond);
+
 
     // 
     // transmitter objects
@@ -330,27 +353,73 @@ void iqpr_rxconfig(iqpr _q,
 }
 
 
-// start data transfer
+// start receiver thread
 void iqpr_rx_start(iqpr _q)
 {
+    // check if receiver is running
+    if (_q->rx_running) {
+        fprintf(stderr,"warning: iqpr_rx_start() invoked, but receiver is already running\n");
+        return;
+    }
+
+    // create and start thread
+#if IQPR_VERBOSE
+    printf("iqpr_rx_start(), starting thread\n");
+#endif
+    _q->rx_running = 1;
+    pthread_create(&_q->rx_process, NULL, iqpr_rx_process, (void*)_q);
+}
+
+// stop data transfer
+void iqpr_rx_stop(iqpr _q)
+{
+    _q->rx_running = 0;
+
+#if 0
+    // clear buffers
+    //_q->rx_buffer.clear();
+    _q->rx_vector_index  = 0;
+    _q->rx_vector_length = 0;
+#endif
+} 
+
+
+// start data transfer
+void * iqpr_rx_process(void * _arg)
+{
+    // type cast input argument as iqpr object
+    iqpr _q = (iqpr) _arg;
+
     printf("issuing stream command...\n");
     _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
+    // clear object internals
     resamp2_crcf_clear(_q->rx_decim);
     resamp_crcf_reset(_q->rx_resamp);
     ofdmflexframesync_reset(_q->fs);
+    
+    // allocate temporary buffers
+    std::complex<float> rx_buffer_decim[2];
+    std::complex<float> rx_decim_out;
+    std::complex<float> rx_buffer_resamp[4];
+
 
     _q->rx_vector_index  = 0;
     _q->rx_vector_length = 0;
 
     //return;
 
-    unsigned long int total_samples = 50;
-    unsigned long int num_accumulated_samples = 0;
+    // initialize metadata
     uhd::rx_metadata_t md;
 
     // chomp data
-    while ( num_accumulated_samples < total_samples) {
+    //while ( num_accumulated_samples < total_samples) {
+    // read samples from buffer, run through frame synchronizer
+    unsigned int n=0;
+    unsigned int nw=0;
+    while ( _q->rx_running ) {
+        // printf("still running...\n");
+
         // check if we have read entire contents of buffer
         while (_q->rx_vector_index == _q->rx_vector_length) {
             // reset vector index
@@ -384,23 +453,58 @@ void iqpr_rx_start(iqpr _q)
 
         }
 
-        num_accumulated_samples++;
-        _q->rx_vector_index++;
-    }
+        // for now copy vector "buff" to array of complex float
+        // TODO : apply bandwidth-dependent gain
+        //num_accumulated_samples++;
 
-} 
+        // push 2 samples into buffer
+        rx_buffer_decim[n++] = (*_q->rx_buffer)[_q->rx_vector_index++];
 
+        if (n==2) {
+            // reset counter
+            n=0;
 
-// stop data transfer
-void iqpr_rx_stop(iqpr _q)
-{
+            // decimate
+            resamp2_crcf_decim_execute(_q->rx_decim, rx_buffer_decim, &rx_decim_out);
+
+            // apply resampler
+            resamp_crcf_execute(_q->rx_resamp, rx_decim_out, rx_buffer_resamp, &nw);
+
+            // push through synchronizer
+            ofdmflexframesync_execute(_q->fs, rx_buffer_resamp, nw);
+
+#if 0
+            // check status flag
+            if (_q->rx_packet_found) {
+                // found packet; set outputs
+                *_header        = _q->rx_header;
+                *_header_valid  = _q->rx_header_valid;
+                *_payload       = _q->rx_payload_valid ? _q->rx_payload     : NULL;
+                *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
+                *_payload_valid = _q->rx_payload_valid;
+
+                // return frame stats
+                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
+
+                // reset status flag
+                _q->rx_packet_found = 0;
+
+                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
+
+                return 1;
+            }
+#endif
+        } // resamp
+    } // while ( _q->rx_running ) {
+
     _q->usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+#if IQPR_VERBOSE
+    printf("iqpr_rx_process() complete\n");
+#endif
 
-    // clear buffers
-    //_q->rx_buffer.clear();
-    _q->rx_vector_index  = 0;
-    _q->rx_vector_length = 0;
+    pthread_exit(0);
 } 
+
 
 
 // 
@@ -529,6 +633,8 @@ int iqpr_rxpacket(iqpr _q,
                   int           *  _payload_valid,
                   framesyncstats_s * _stats)
 {
+    usleep(10000);
+    return 0;
     unsigned long int total_samples = _timespec;
     // TODO : start 'timer'
     unsigned long int num_accumulated_samples = 0;
@@ -646,12 +752,12 @@ int iqpr_callback(unsigned char *  _rx_header,
 {
     iqpr q = (iqpr) _userdata;
 
-    if (q->verbose) {
-        unsigned int pid = (_rx_header[0] << 8) | _rx_header[1];
-        printf("********* callback invoked, pid = %6u\n", pid);
-        //printf("********* callback invoked, ");
-        // ...
-    }
+#if IQPR_VERBOSE
+    unsigned int pid = (_rx_header[0] << 8) | _rx_header[1];
+    printf("********* callback invoked, pid = %6u\n", pid);
+    //printf("********* callback invoked, ");
+    // ...
+#endif
 
     // set internal values
     q->rx_packet_found  = 1;

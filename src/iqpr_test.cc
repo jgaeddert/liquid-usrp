@@ -114,7 +114,7 @@ int main (int argc, char **argv)
     iqpr_rx_stop(q);
 #endif
 
-#if 1
+#if 0
 
     //
     // transmitter
