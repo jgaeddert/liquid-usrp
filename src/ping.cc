@@ -62,7 +62,6 @@ void usage() {
     printf("  A     :   [master] max. number of tx attempts, default: 100\n");
     printf("  n     :   [master] payload length (bytes), default: 200\n");
     printf("  m     :   [master] mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
-    printf("  p     :   [master] mod. depth: <1>,2,...8\n");
     printf("  c     :   [master] fec coding scheme (inner)\n");
     printf("  k     :   [master] fec coding scheme (outer)\n");
     printf("  v/q   :   set verbose/quiet mode, default: verbose\n");
@@ -82,8 +81,7 @@ int main (int argc, char **argv) {
     crc_scheme check    = LIQUID_CRC_16;        // data validity check
     fec_scheme fec0     = LIQUID_FEC_NONE;      // inner FEC scheme
     fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
-    modulation_scheme mod_scheme = LIQUID_MODEM_QAM;    // modulation scheme
-    unsigned int mod_depth = 2;                         // modulation depth
+    modulation_scheme mod_scheme = LIQUID_MODEM_QPSK;    // modulation scheme
     unsigned int ack_timeout=50000;
 
     //
@@ -100,7 +98,6 @@ int main (int argc, char **argv) {
         case 'S': node_type = PING_NODE_SLAVE;      break;
         case 'n': tx_payload_len = atoi(optarg);    break;
         case 'm': mod_scheme = liquid_getopt_str2mod(optarg);   break;
-        case 'p': mod_depth = atoi(optarg);                     break;
         case 'c': fec0 = liquid_getopt_str2fec(optarg);         break;
         case 'k': fec1 = liquid_getopt_str2fec(optarg);         break;
         case 'v': verbose = 1;                                  break;
@@ -151,7 +148,6 @@ int main (int argc, char **argv) {
     fgprops.fec0         = fec0;
     fgprops.fec1         = fec1;
     fgprops.mod_scheme   = mod_scheme;
-    fgprops.mod_bps      = mod_depth;
 #if 0
     fgprops.rampup_len   = 40;
     fgprops.phasing_len  = 80;
@@ -276,7 +272,6 @@ int main (int argc, char **argv) {
         //
         fgprops.check        = LIQUID_CRC_NONE;
         fgprops.mod_scheme   = LIQUID_MODEM_QPSK;
-        fgprops.mod_bps      = 2;
 
         int packet_found = 0;
         do {

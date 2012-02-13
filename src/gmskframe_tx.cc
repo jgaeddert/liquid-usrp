@@ -41,7 +41,6 @@ void usage() {
     printf("  t     : run time [seconds]\n");
     printf("  n     : payload length (bytes)\n");
     printf("  m     : mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
-    printf("  p     : mod. depth: <1>,2,...8\n");
     printf("  s     : packet spacing <0>\n");
     printf("  r     : ramp up/dn length <64>\n");
     printf("  c     : fec coding scheme (inner)\n");
@@ -68,13 +67,12 @@ int main (int argc, char **argv)
     crc_scheme check    = LIQUID_CRC_16;                // data validity check
     fec_scheme fec0     = LIQUID_FEC_NONE;              // inner FEC scheme
     fec_scheme fec1     = LIQUID_FEC_HAMMING74;         // outer FEC scheme
-    modulation_scheme mod_scheme = LIQUID_MODEM_QAM;    // modulation scheme
-    unsigned int mod_depth = 2;                         // modulation depth
+    modulation_scheme mod_scheme = LIQUID_MODEM_QPSK;   // modulation scheme
     unsigned int ramp_len = 64;                         // phasing ramp up/down length
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:g:G:t:n:m:p:s:r:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:g:G:t:n:m:s:r:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
@@ -85,7 +83,6 @@ int main (int argc, char **argv)
         case 'm':
             mod_scheme = liquid_getopt_str2mod(optarg);
             break;
-        case 'p':   mod_depth = atoi(optarg);       break;
         case 's':   packet_spacing = atoi(optarg);  break;
         case 'r':   ramp_len = atoi(optarg);        break;
         case 'c':   fec0 = liquid_getopt_str2fec(optarg);         break;

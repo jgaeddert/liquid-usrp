@@ -153,7 +153,6 @@ iqpr iqpr_create()
     q->fgprops.fec0         = LIQUID_FEC_NONE;
     q->fgprops.fec1         = LIQUID_FEC_NONE;
     q->fgprops.mod_scheme   = LIQUID_MODEM_QPSK;
-    q->fgprops.mod_bps      = 2;
 #if 0
     q->fgprops.rampup_len   = 16;
     q->fgprops.phasing_len  = 64;

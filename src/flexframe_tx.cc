@@ -67,8 +67,7 @@ int main (int argc, char **argv)
     crc_scheme check    = LIQUID_CRC_16;        // data validity check
     fec_scheme fec0     = LIQUID_FEC_NONE;      // inner FEC scheme
     fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
-    modulation_scheme ms= LIQUID_MODEM_QAM;     // modulation scheme
-    unsigned int bps = 2;                       // modulation depth
+    modulation_scheme ms= LIQUID_MODEM_QPSK;    // modulation scheme
     unsigned int ramp_len = 64;                 // phasing ramp up/down length
 
     //
@@ -84,7 +83,7 @@ int main (int argc, char **argv)
         case 's':   packet_spacing = atoi(optarg);  break;
         case 'r':   ramp_len = atoi(optarg);        break;
         case 'm':
-            liquid_getopt_str2modbps(optarg, &ms, &bps);
+            ms = liquid_getopt_str2mod(optarg);
             if (ms == LIQUID_MODEM_UNKNOWN) {
                 fprintf(stderr,"error: %s, unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
                 exit(-1);
@@ -177,7 +176,6 @@ int main (int argc, char **argv)
     fgprops.fec1        = fec1;     // outer FEC scheme
     fgprops.payload_len = payload_len;
     fgprops.mod_scheme  = ms;
-    fgprops.mod_bps     = bps;
     fgprops.rampdn_len  = ramp_len;
 
     flexframegen fg = flexframegen_create(&fgprops);

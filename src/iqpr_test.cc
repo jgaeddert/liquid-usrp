@@ -125,8 +125,7 @@ int main (int argc, char **argv)
     fgprops.check        = LIQUID_CRC_32;
     fgprops.fec0         = LIQUID_FEC_NONE;
     fgprops.fec1         = LIQUID_FEC_NONE;
-    fgprops.mod_scheme   = LIQUID_MODEM_QAM;
-    fgprops.mod_bps      = 2;
+    fgprops.mod_scheme   = LIQUID_MODEM_QAM4;
 #if 0
     fgprops.rampup_len   = 40;
     fgprops.phasing_len  = 40;

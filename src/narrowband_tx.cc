@@ -61,8 +61,7 @@ int main (int argc, char **argv)
     double uhd_txgain = 40.0;       // uhd (hardware) tx gain
 
     // modulation properties
-    modulation_scheme ms = LIQUID_MODEM_QAM;// modulation scheme
-    unsigned int bps = 2;                   // modulation depth
+    modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
     
     // transmit filter properties
     liquid_rnyquist_type ftype = LIQUID_RNYQUIST_RRC;
@@ -82,7 +81,7 @@ int main (int argc, char **argv)
         case 'G':   uhd_txgain = atof(optarg);      break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'm':
-            liquid_getopt_str2modbps(optarg, &ms, &bps);
+            ms = liquid_getopt_str2mod(optarg);
             if (ms == LIQUID_MODEM_UNKNOWN) {
                 fprintf(stderr,"error: %s, unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
                 exit(-1);
@@ -169,7 +168,7 @@ int main (int argc, char **argv)
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
     // create modem object
-    modem mod = modem_create(ms,bps);
+    modem mod = modem_create(ms);
     unsigned int M = 1 << modem_get_bps(mod);
 
     // create matched filter interpolator

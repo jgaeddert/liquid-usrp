@@ -110,14 +110,11 @@ int main (int argc, char **argv)
     unsigned int M = 48;                // number of subcarriers
     unsigned int cp_len = 8;            // cyclic prefix length
 
-    modulation_scheme ms = LIQUID_MODEM_QAM;
-    unsigned int bps = 2;
-
     unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:m:p:z:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -129,14 +126,6 @@ int main (int argc, char **argv)
         case 'M':   M = atoi(optarg);               break;
         case 'C':   cp_len = atoi(optarg);          break;
         case 't':   num_seconds = atof(optarg);     break;
-        case 'm':
-            ms = liquid_getopt_str2mod(optarg);
-            if (ms == LIQUID_MODEM_UNKNOWN) {
-                fprintf(stderr, "error: %s unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
-                ms = LIQUID_MODEM_UNKNOWN;
-            }
-            break;
-        case 'p':   bps = atoi(optarg);             break;
         case 'z':   num_notched = atoi(optarg);     break;
         default:
             usage();
