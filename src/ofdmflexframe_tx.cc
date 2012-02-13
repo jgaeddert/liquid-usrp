@@ -62,7 +62,7 @@ int main (int argc, char **argv)
     double frequency = 462.0e6;
     double bandwidth = 80e3f;
     unsigned int num_frames = 1000;     // number of frames to transmit
-    double txgain_dB = -6.0f;           // software tx gain [dB]
+    double txgain_dB = -12.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
     // ofdm properties
