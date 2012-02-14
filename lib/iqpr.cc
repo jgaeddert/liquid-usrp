@@ -70,6 +70,7 @@ struct iqpr_s {
     int rx_header_valid;            // receiver frame header valid?
     unsigned char * rx_payload;        // received payload data
     unsigned int rx_payload_len;       // received payload data length
+    unsigned int rx_payload_numalloc;  // received payload data length (num allocated)
     int rx_payload_valid;           // receiver payload data valid?
     framesyncstats_s rx_stats;      // frame synchronizer stats
 
@@ -126,7 +127,7 @@ iqpr iqpr_create()
     //
     // common
     //
-    q->M = 40;      // number of subcarriers
+    q->M = 64;      // number of subcarriers
     q->cp_len = 8;  // cyclic prefix length
     q->p = NULL;    // subcarrier allocation (NULL gives default)
     q->p = (unsigned char*)malloc(q->M*sizeof(unsigned char));
@@ -159,8 +160,9 @@ iqpr iqpr_create()
     q->fs = ofdmflexframesync_create(q->M, q->cp_len, q->p, iqpr_callback, (void*)q);
 
     // allocate memory for received data
-    q->rx_payload_len = 1024;
-    q->rx_payload = (unsigned char*) malloc(q->rx_payload_len*sizeof(unsigned char));
+    q->rx_payload_len      = 1024;
+    q->rx_payload_numalloc = q->rx_payload_len;
+    q->rx_payload = (unsigned char*) malloc(q->rx_payload_numalloc*sizeof(unsigned char));
 
     // initialize threading objects
     q->rx_running = 0;
@@ -715,20 +717,26 @@ int iqpr_callback(unsigned char *  _rx_header,
     // save statistics
     memmove(&q->rx_stats, &_stats, sizeof(framesyncstats_s));
 
-    if ( _rx_header_valid && _rx_payload_valid ) {
-        // re-allocate memory arrays if necessary
-        if (q->rx_payload_len < _rx_payload_len) {
-            q->rx_payload_len = _rx_payload_len;
-            unsigned char * tmp = (unsigned char*) realloc(q->rx_payload, q->rx_payload_len*sizeof(unsigned char));
-            if (tmp != NULL) {
-                q->rx_payload = tmp;
-            } else {
-                fprintf(stderr,"error: iqpr_callback(), could not allocate payload buffer\n");
-                exit(1);
-            }
+    // re-allocate memory arrays if necessary
+    if ( _rx_header_valid &&
+         _rx_payload_valid &&
+         _rx_payload_len > q->rx_payload_numalloc)
+    {
+        // header and payload are valid, but we don't have enough
+        // space to make the copy. Increase the size of the internal
+        // buffer to accommodate the payload.
+        q->rx_payload_numalloc = _rx_payload_len;
+        unsigned char * tmp = (unsigned char*) realloc(q->rx_payload, q->rx_payload_numalloc*sizeof(unsigned char));
+
+        // check the re-allocation
+        if (tmp == NULL) {
+            fprintf(stderr,"error: iqpr_callback(), could not allocate payload buffer\n");
+            exit(1);
         }
+        q->rx_payload = tmp;
     }
 
+    q->rx_payload_len = _rx_payload_len;
     if ( _rx_header_valid && !_rx_payload_valid) {
         // copy data (regardless of validity)
         memmove(q->rx_payload, _rx_payload, _rx_payload_len*sizeof(unsigned char));
