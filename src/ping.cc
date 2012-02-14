@@ -54,26 +54,28 @@
 
 void usage() {
     printf("ping usage:\n");
-    printf("  u,h   :   usage/help\n");
-    printf("  f     :   frequency [Hz], default: 462 MHz\n");
-    printf("  b     :   bandwidth [Hz], default: 100 kHz\n");
-    printf("  M/S   :   designate node as master/slave, default: slave\n");
-    printf("  N     :   number of packets, default: 1000\n");
-    printf("  A     :   [master] max. number of tx attempts, default: 100\n");
-    printf("  n     :   [master] payload length (bytes), default: 200\n");
-    printf("  m     :   [master] mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
-    printf("  c     :   [master] fec coding scheme (inner)\n");
-    printf("  k     :   [master] fec coding scheme (outer)\n");
-    printf("  v/q   :   set verbose/quiet mode, default: verbose\n");
+    printf("  u,h   : usage/help\n");
+    printf("  f     : frequency [Hz], default: 462 MHz\n");
+    printf("  b     : bandwidth [Hz], default: 200 kHz\n");
+    printf("  M/S   : designate node as master/slave, default: slave\n");
+    printf("  N     : number of packets, default: 100\n");
+    printf("  A     : [master] max. number of tx attempts, default: 500\n");
+    printf("  n     : [master] payload length (bytes), default: 200\n");
+    printf("  m     : [master] mod. scheme, default: qpsk\n");
+    liquid_print_modulation_schemes();
+    printf("  c     : [master] fec coding scheme (inner), default: h74\n");
+    printf("  k     : [master] fec coding scheme (outer), default: none\n");
+    liquid_print_fec_schemes();
+    printf("  v/q   : set verbose/quiet mode, default: verbose\n");
 }
 
 int main (int argc, char **argv) {
-    // options
-    float frequency = 462e6f;
-    float symbolrate = 200e3f;
-    unsigned int num_packets = 100;
-    unsigned int node_type = PING_NODE_SLAVE;
-    int verbose = 0;
+    // common options
+    float frequency = 462e6f;                   // carrier frequency [Hz]
+    float bandwidth = 200e3f;                   // bandwidth [Hz]
+    unsigned int num_packets = 100;             // number of packets to send
+    unsigned int node_type = PING_NODE_SLAVE;   // mode: master/slave
+    int verbose = 1;                            // verbose output?
 
     // master node options
     unsigned int tx_payload_len=200;            // payload length (bytes)
@@ -92,17 +94,17 @@ int main (int argc, char **argv) {
         case 'u':
         case 'h': usage();                          return 0;
         case 'f': frequency = atof(optarg);         break;
-        case 'b': symbolrate = atof(optarg);        break;
+        case 'b': bandwidth = atof(optarg);         break;
         case 'N': num_packets = atoi(optarg);       break;
         case 'A': max_num_attempts = atoi(optarg);  break;
         case 'M': node_type = PING_NODE_MASTER;     break;
         case 'S': node_type = PING_NODE_SLAVE;      break;
         case 'n': tx_payload_len = atoi(optarg);    break;
         case 'm': ms = liquid_getopt_str2mod(optarg);   break;
-        case 'c': fec0 = liquid_getopt_str2fec(optarg);         break;
-        case 'k': fec1 = liquid_getopt_str2fec(optarg);         break;
-        case 'v': verbose = 1;                                  break;
-        case 'q': verbose = 0;                                  break;
+        case 'c': fec0 = liquid_getopt_str2fec(optarg); break;
+        case 'k': fec1 = liquid_getopt_str2fec(optarg); break;
+        case 'v': verbose = 1;                          break;
+        case 'q': verbose = 0;                          break;
         default:
             fprintf(stderr,"error: %s, unsupported option\n", argv[0]);
             exit(1);
@@ -114,12 +116,12 @@ int main (int argc, char **argv) {
 
     // set rx parameters
     iqpr_set_rx_gain(q, 40);
-    iqpr_set_rx_rate(q, symbolrate);
+    iqpr_set_rx_rate(q, bandwidth);
     iqpr_set_rx_freq(q, frequency);
 
     // set tx parameters
     iqpr_set_tx_gain(q, 40);
-    iqpr_set_tx_rate(q, symbolrate);
+    iqpr_set_tx_rate(q, bandwidth);
     iqpr_set_tx_freq(q, frequency);
 
     // other options
@@ -176,9 +178,9 @@ int main (int argc, char **argv) {
         for (tx_pid=0; tx_pid<num_packets; tx_pid++) {
 
             // initialize header
-            tx_header[0] = (tx_pid >> 8) & 0xff;
-            tx_header[1] = (tx_pid     ) & 0xff;
-            tx_header[2] = PING_PACKET_DATA;
+            tx_header[0] = (tx_pid >> 8) & 0xff;    // packet id
+            tx_header[1] = (tx_pid     ) & 0xff;    // packet id
+            tx_header[2] = PING_PACKET_DATA;        // packet type: data
             for (n=3; n<8; n++)
                 tx_header[n] = rand() & 0xff;
 
@@ -186,6 +188,7 @@ int main (int argc, char **argv) {
             for (n=0; n<tx_payload_len; n++)
                 tx_payload[n] = rand() % 256;
 
+            // reset flags/counters
             ack_received = 0;
             num_attempts = 0;
             do {
@@ -198,16 +201,16 @@ int main (int argc, char **argv) {
                             num_attempts > 1 ? '*' : ' ');
                 }
 
+                // sleep before transmitting to give hardware time to settle
                 usleep(tx_sleep_timer);
-                //iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
+
+                // transmit the packet
                 iqpr_txpacket(q, tx_header, tx_payload, tx_payload_len, &fgprops);
                 
-                //usleep(4000);
-
                 // wait for acknowledgement
                 unsigned int timer=0;
                 ack_received=0;
-                // TODO : estimate ack_timeout based on frame size...
+                // 
                 while (!ack_received && timer < ack_timeout) {
                     int packet_received =
                     iqpr_rxpacket(q, timespec,
@@ -219,6 +222,7 @@ int main (int argc, char **argv) {
                                   &stats);
                     timer += timespec;
 
+                    // check the received packet's credentials
                     if (packet_received) {
                         rx_pid = (rx_header[0] << 8) | rx_header[1];
 
@@ -244,18 +248,14 @@ int main (int argc, char **argv) {
                     }
                 }
 
-                //ack_received = packet_received && rx_pid == tx_pid && rx_header[2] == PING_PACKET_ACK;
-
                 if (ack_received) {
-                    //printf("ACK RECEIVED [%4u]!\n", rx_pid);
-                    //usleep(10);
+                    // proper acknowledgement received
                     num_bytes_received += tx_payload_len;
                     break;
                 } else {
+                    // no acknowledgement received (timeout)
                     if (verbose) ;
                     else         fprintf(stdout,"T");
-                    //printf("TIMEOUT\n");
-                    //goto end;
                 }
             } while (!ack_received && (num_attempts < max_num_attempts) );
 
@@ -298,10 +298,11 @@ int main (int argc, char **argv) {
                 continue;
             }
             
+            // strip out packet ID
             rx_pid = (rx_header[0] << 8) | rx_header[1];
-            //if (rx_pid == 1) break;
 
             if (!rx_payload_valid) {
+                // payload is invalid
                 if (verbose) printf("  payload crc : FAIL [%4u]\n", rx_pid);
                 else         fprintf(stdout,"X");
                 fflush(stdout);
@@ -325,17 +326,21 @@ int main (int argc, char **argv) {
             //if (verbose) framesyncstats_print(&stats);
 
             // transmit acknowledgement
-            tx_header[0] = rx_header[0];
-            tx_header[1] = rx_header[1];
-            tx_header[2] = PING_PACKET_ACK;  // ACK code
+            tx_header[0] = rx_header[0];        // packet ID
+            tx_header[1] = rx_header[1];        // packet IT
+            tx_header[2] = PING_PACKET_ACK;     // packet type: ACK
             for (n=3; n<8; n++)
                 tx_header[n] = rand() & 0xff;
 
+            // initialize some dummy payload
             unsigned char ack_payload[10];
             for (n=0; n<10; n++)
                 ack_payload[n] = rand() & 0xff;
 
+            // sleep before transmitting to give hardware time to settle
             usleep(tx_sleep_timer);
+                
+            // transmit the acknowledgement
             iqpr_txpacket(q, tx_header, ack_payload, 10, &fgprops);
 
         } while (rx_pid != num_packets-1);
@@ -344,6 +349,7 @@ int main (int argc, char **argv) {
     // stop timer
     gettimeofday(&timer1, NULL);
 
+    // stop receiver
     iqpr_rx_stop(q);
     fflush(stdout);
     printf("\ndone.\n");
@@ -354,7 +360,7 @@ int main (int argc, char **argv) {
     float runtime = (float)(timer1.tv_sec  - timer0.tv_sec) +
                     (float)(timer1.tv_usec - timer0.tv_usec)*1e-6f;
     float data_rate = 8.0f * (float)(num_bytes_received) / runtime;
-    float spectral_efficiency = data_rate / symbolrate;
+    float spectral_efficiency = data_rate / bandwidth;
     printf("    execution time      : %12.8f s\n", runtime);
     printf("    data rate           : %12.8f kbps\n", data_rate*1e-3f);
     printf("    spectral efficiency : %12.8f b/s/Hz\n", spectral_efficiency);
