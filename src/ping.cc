@@ -71,17 +71,17 @@ int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
     float symbolrate = 200e3f;
-    unsigned int num_packets = 1000;
+    unsigned int num_packets = 100;
     unsigned int node_type = PING_NODE_SLAVE;
     int verbose = 0;
 
     // master node options
     unsigned int tx_payload_len=200;            // payload length (bytes)
     unsigned int max_num_attempts = 500;        // maximum number of tx attempts
-    crc_scheme check    = LIQUID_CRC_16;        // data validity check
-    fec_scheme fec0     = LIQUID_FEC_NONE;      // inner FEC scheme
-    fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
-    modulation_scheme mod_scheme = LIQUID_MODEM_QPSK;    // modulation scheme
+    crc_scheme check     = LIQUID_CRC_32;       // data validity check
+    fec_scheme fec0      = LIQUID_FEC_NONE;     // inner FEC scheme
+    fec_scheme fec1      = LIQUID_FEC_HAMMING74;// outer FEC scheme
+    modulation_scheme ms = LIQUID_MODEM_QPSK;   // modulation scheme
     unsigned int ack_timeout    = 240000;       // time before re-transmission [us]
     unsigned int tx_sleep_timer =  80000;       // sleep time before transmitting [us]
 
@@ -98,7 +98,7 @@ int main (int argc, char **argv) {
         case 'M': node_type = PING_NODE_MASTER;     break;
         case 'S': node_type = PING_NODE_SLAVE;      break;
         case 'n': tx_payload_len = atoi(optarg);    break;
-        case 'm': mod_scheme = liquid_getopt_str2mod(optarg);   break;
+        case 'm': ms = liquid_getopt_str2mod(optarg);   break;
         case 'c': fec0 = liquid_getopt_str2fec(optarg);         break;
         case 'k': fec1 = liquid_getopt_str2fec(optarg);         break;
         case 'v': verbose = 1;                                  break;
@@ -148,14 +148,9 @@ int main (int argc, char **argv) {
     fgprops.check        = check;
     fgprops.fec0         = fec0;
     fgprops.fec1         = fec1;
-    fgprops.mod_scheme   = mod_scheme;
-#if 0
-    fgprops.rampup_len   = 40;
-    fgprops.phasing_len  = 80;
-    fgprops.rampdn_len   = 40;
-#endif
+    fgprops.mod_scheme   = ms;
     unsigned int tx_pid;
-    unsigned char tx_header[14];
+    unsigned char tx_header[8];
     unsigned char tx_payload[tx_payload_len];
 
     // timers and statistics
@@ -184,7 +179,7 @@ int main (int argc, char **argv) {
             tx_header[0] = (tx_pid >> 8) & 0xff;
             tx_header[1] = (tx_pid     ) & 0xff;
             tx_header[2] = PING_PACKET_DATA;
-            for (n=3; n<14; n++)
+            for (n=3; n<8; n++)
                 tx_header[n] = rand() & 0xff;
 
             // initialize payload to random data
@@ -333,7 +328,7 @@ int main (int argc, char **argv) {
             tx_header[0] = rx_header[0];
             tx_header[1] = rx_header[1];
             tx_header[2] = PING_PACKET_ACK;  // ACK code
-            for (n=3; n<14; n++)
+            for (n=3; n<8; n++)
                 tx_header[n] = rand() & 0xff;
 
             unsigned char ack_payload[10];

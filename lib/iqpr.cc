@@ -66,7 +66,7 @@ struct iqpr_s {
     resamp_crcf rx_resamp;          // arbitrary resampler
     ofdmflexframesync fs;               // frame synchronizer
     int rx_packet_found;            // receiver packet found flag
-    unsigned char rx_header[14];    // received frame header
+    unsigned char rx_header[8];    // received frame header
     int rx_header_valid;            // receiver frame header valid?
     unsigned char * rx_payload;        // received payload data
     unsigned int rx_payload_len;       // received payload data length
@@ -497,7 +497,7 @@ void * iqpr_rx_process(void * _arg)
 
 // transmit packet (generic)
 //  _q              :   iqpr object
-//  _header         :   header data [14 bytes]
+//  _header         :   header data [8 bytes]
 //  _payload        :   payload data
 //  _payload_len    :   number of bytes in payload
 //  _fgprops        :   frame generator properties (internal 'payload_len' ignored)
@@ -710,7 +710,7 @@ int iqpr_callback(unsigned char *  _rx_header,
     q->rx_payload_valid = _rx_payload_valid;
 
     // copy header (regardless of validity)
-    memmove(q->rx_header, _rx_header, 14*sizeof(unsigned char));
+    memmove(q->rx_header, _rx_header, 8*sizeof(unsigned char));
 
     // save statistics
     memmove(&q->rx_stats, &_stats, sizeof(framesyncstats_s));
