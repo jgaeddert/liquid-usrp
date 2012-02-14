@@ -42,7 +42,7 @@
 
 #include "iqpr.h"
 
-#define IQPR_VERBOSE 1
+#define IQPR_VERBOSE 0
 
 void * iqpr_rx_process(void * _arg);
 
@@ -543,7 +543,7 @@ void iqpr_txpacket(iqpr _q,
     int last_symbol=0;
     unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
     unsigned int num_samples;
-    float g = 0.02f;
+    float g = 0.1f;
 
     unsigned int j;
     unsigned int tx_buffer_samples=0;
@@ -637,15 +637,12 @@ int iqpr_rxpacket(iqpr _q,
     _q->rx_waiting = 1;
 
     // lock mutex
-    //printf("locking mutex...\n");
     pthread_mutex_lock(&_q->rx_mutex);
-    //printf("mutex locked\n");
 
     // start timed wait
     int status = pthread_cond_timedwait(&_q->rx_cond, &_q->rx_mutex, &ts_timeout);
 
-    // unlock mutex
-    pthread_mutex_unlock(&_q->rx_mutex);
+    status = _q->rx_packet_found;
 
     // check status flag
     if (_q->rx_packet_found) {
@@ -663,116 +660,16 @@ int iqpr_rxpacket(iqpr _q,
         _q->rx_packet_found = 0;
 
         memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
-
-        return 1;
     }
-
-    // no packet found (timed out)
-    return 0;
-
     
+    // unlock mutex
+    pthread_mutex_unlock(&_q->rx_mutex);
 
-#if 0
-    unsigned long int total_samples = _timespec;
-    // TODO : start 'timer'
-    unsigned long int num_accumulated_samples = 0;
+    // packet found?
+    // NOTE: because internal rx_packet_found is reset, we need to
+    //       return this status variable
+    return status;
 
-    //
-    if (total_samples < 2) total_samples = 2;   // set minimum
-    if (total_samples % 2) total_samples++;     // must be even
-
-    uhd::rx_metadata_t md;
-
-    // buffers
-    std::complex<float> rx_buffer_decim[2];
-    std::complex<float> rx_decim_out;
-    std::complex<float> rx_buffer_resamp[4];
-
-    // read samples from buffer, run through frame synchronizer
-    unsigned int n=0;
-    unsigned int nw=0;
-    while ( num_accumulated_samples < total_samples) {
-
-        // check if we have read entire contents of buffer
-        while (_q->rx_vector_index == _q->rx_vector_length) {
-            // reset vector index
-            _q->rx_vector_index = 0;
-
-            // grab data from port
-            _q->rx_vector_length = _q->usrp->get_device()->recv(
-                &_q->rx_buffer->front(),
-                _q->rx_buffer->size(),
-                md,
-                uhd::io_type_t::COMPLEX_FLOAT32,
-                uhd::device::RECV_MODE_ONE_PACKET
-            );
-            //printf("reading data from usrp : rx vector length : %u\n", _q->rx_vector_length);
-
-            //handle the error codes
-            switch(md.error_code){
-            case uhd::rx_metadata_t::ERROR_CODE_NONE:
-            case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
-                break;
-            default:
-                std::cerr << "Error code: " << md.error_code << std::endl;
-                std::cerr << "Unexpected error on recv, exit test..." << std::endl;
-                exit(1);
-            }
-
-            if (_q->rx_vector_length == 0) {
-                printf("WARNING: vector length is zero!!!\n");
-                usleep(10000);
-            }
-
-        }
-
-        // for now copy vector "buff" to array of complex float
-        // TODO : apply bandwidth-dependent gain
-        num_accumulated_samples++;
-
-        // push 2 samples into buffer
-        rx_buffer_decim[n++] = (*_q->rx_buffer)[_q->rx_vector_index++];
-
-        if (n==2) {
-            // reset counter
-            n=0;
-
-            // decimate
-            resamp2_crcf_decim_execute(_q->rx_decim, rx_buffer_decim, &rx_decim_out);
-
-            // apply resampler
-            resamp_crcf_execute(_q->rx_resamp, rx_decim_out, rx_buffer_resamp, &nw);
-
-            // push through synchronizer
-            ofdmflexframesync_execute(_q->fs, rx_buffer_resamp, nw);
-
-#if 1
-            // check status flag
-            if (_q->rx_packet_found) {
-                // found packet; set outputs
-                *_header        = _q->rx_header;
-                *_header_valid  = _q->rx_header_valid;
-                *_payload       = _q->rx_payload_valid ? _q->rx_payload     : NULL;
-                *_payload_len   = _q->rx_payload_valid ? _q->rx_payload_len : 0;
-                *_payload_valid = _q->rx_payload_valid;
-
-                // return frame stats
-                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
-
-                // reset status flag
-                _q->rx_packet_found = 0;
-
-                memmove(_stats, &_q->rx_stats, sizeof(framesyncstats_s));
-
-                return 1;
-            }
-#endif
-        } // resamp
-    }
-    // packet was never received
-    //printf("  consumed %6lu / %6lu samples\n", num_accumulated_samples, total_samples);
-    return 0;
-#endif
 }
 
 
@@ -793,7 +690,11 @@ int iqpr_callback(unsigned char *  _rx_header,
 
 #if IQPR_VERBOSE
     unsigned int pid = (_rx_header[0] << 8) | _rx_header[1];
-    printf("********* callback invoked, pid = %6u%s\n", pid, q->rx_waiting ? " ***" : "");
+    printf("********* callback invoked, h[%c], p[%c], pid = %6u%s\n",
+            _rx_header_valid  ? ' ' : 'x',
+            _rx_payload_valid ? ' ' : 'x',
+            pid,
+            q->rx_waiting ? " ***" : "");
     //printf("********* callback invoked, ");
     // ...
 #endif
@@ -816,9 +717,15 @@ int iqpr_callback(unsigned char *  _rx_header,
 
     if ( _rx_header_valid && _rx_payload_valid ) {
         // re-allocate memory arrays if necessary
-        if (q->rx_payload_len != _rx_payload_len) {
+        if (q->rx_payload_len < _rx_payload_len) {
             q->rx_payload_len = _rx_payload_len;
-            q->rx_payload = (unsigned char*) realloc(q->rx_payload, q->rx_payload_len*sizeof(unsigned char));
+            unsigned char * tmp = (unsigned char*) realloc(q->rx_payload, q->rx_payload_len*sizeof(unsigned char));
+            if (tmp != NULL) {
+                q->rx_payload = tmp;
+            } else {
+                fprintf(stderr,"error: iqpr_callback(), could not allocate payload buffer\n");
+                exit(1);
+            }
         }
     }
 

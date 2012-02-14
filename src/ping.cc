@@ -70,19 +70,20 @@ void usage() {
 int main (int argc, char **argv) {
     // options
     float frequency = 462e6f;
-    float symbolrate = 80e3f;
+    float symbolrate = 200e3f;
     unsigned int num_packets = 1000;
     unsigned int node_type = PING_NODE_SLAVE;
     int verbose = 0;
 
     // master node options
     unsigned int tx_payload_len=200;            // payload length (bytes)
-    unsigned int max_num_attempts = 100;        // maximum number of tx attempts
+    unsigned int max_num_attempts = 500;        // maximum number of tx attempts
     crc_scheme check    = LIQUID_CRC_16;        // data validity check
     fec_scheme fec0     = LIQUID_FEC_NONE;      // inner FEC scheme
     fec_scheme fec1     = LIQUID_FEC_HAMMING74; // outer FEC scheme
     modulation_scheme mod_scheme = LIQUID_MODEM_QPSK;    // modulation scheme
-    unsigned int ack_timeout=50000;
+    unsigned int ack_timeout    = 240000;       // time before re-transmission [us]
+    unsigned int tx_sleep_timer =  80000;       // sleep time before transmitting [us]
 
     //
     int d;
@@ -130,7 +131,7 @@ int main (int argc, char **argv) {
     // 
     // receiver properties
     //
-    unsigned int    timespec = 500;
+    unsigned int    timespec = 1000;
     unsigned char * rx_header = NULL;
     int             rx_header_valid;
     unsigned char * rx_payload = NULL;
@@ -202,9 +203,10 @@ int main (int argc, char **argv) {
                             num_attempts > 1 ? '*' : ' ');
                 }
 
+                usleep(tx_sleep_timer);
                 //iqpr_txpacket(q,&tx_header,payload,payload_len,ms,bps,fec0,fec1);
                 iqpr_txpacket(q, tx_header, tx_payload, tx_payload_len, &fgprops);
-
+                
                 //usleep(4000);
 
                 // wait for acknowledgement
@@ -231,6 +233,7 @@ int main (int argc, char **argv) {
                         } else if (rx_header[2] != PING_PACKET_ACK) {
                             // effectively ignore our own transmitted signal
                             //printf("  wrong packet type (got %u, expected %u)\n", rx_header[2], PING_PACKET_ACK);
+                            //printf("  (ignoring packet)\n");
                         } else if (!rx_payload_valid) {
                             if (verbose) printf("  rx payload invalid!\n");
                             else         fprintf(stdout,"X");
@@ -270,7 +273,7 @@ int main (int argc, char **argv) {
         // 
         // SLAVE NODE
         //
-        fgprops.check        = LIQUID_CRC_NONE;
+        fgprops.check        = LIQUID_CRC_32;
         fgprops.mod_scheme   = LIQUID_MODEM_QPSK;
 
         int packet_found = 0;
@@ -313,10 +316,11 @@ int main (int argc, char **argv) {
             num_bytes_received += rx_payload_len;
 
             if (verbose) {
-                printf("  ping received %4u data bytes on packet [%4u] rssi : %12.4f dB\n",
+                printf("  ping received %4u data bytes on packet [%4u] rssi: %5.1fdB, snr: %5.1fdB\n",
                         rx_payload_len,
                         rx_pid,
-                        stats.rssi);
+                        stats.rssi,
+                        -stats.evm);
             } else {
                 fprintf(stdout,".");
                 fflush(stdout);
@@ -335,6 +339,8 @@ int main (int argc, char **argv) {
             unsigned char ack_payload[10];
             for (n=0; n<10; n++)
                 ack_payload[n] = rand() & 0xff;
+
+            usleep(tx_sleep_timer);
             iqpr_txpacket(q, tx_header, ack_payload, 10, &fgprops);
 
         } while (rx_pid != num_packets-1);
