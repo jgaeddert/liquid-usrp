@@ -737,7 +737,7 @@ int iqpr_callback(unsigned char *  _rx_header,
     }
 
     q->rx_payload_len = _rx_payload_len;
-    if ( _rx_header_valid && !_rx_payload_valid) {
+    if ( _rx_header_valid && _rx_payload_valid) {
         // copy data (regardless of validity)
         memmove(q->rx_payload, _rx_payload, _rx_payload_len*sizeof(unsigned char));
     }
