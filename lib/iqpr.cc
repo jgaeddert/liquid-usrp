@@ -545,7 +545,7 @@ void iqpr_txpacket(iqpr _q,
     int last_symbol=0;
     unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
     unsigned int num_samples;
-    float g = 0.1f;
+    float g0 = 0.07f;
 
     unsigned int j;
     unsigned int tx_buffer_samples=0;
@@ -574,7 +574,7 @@ void iqpr_txpacket(iqpr _q,
 
         // push samples into buffer
         for (j=0; j<n; j++) {
-            buff[tx_buffer_samples++] = g*buffer_resamp[j];
+            buff[tx_buffer_samples++] = g0*buffer_resamp[j];
 
             if (tx_buffer_samples==256) {
                 // reset counter
