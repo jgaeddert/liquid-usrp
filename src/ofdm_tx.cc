@@ -170,9 +170,6 @@ int main (int argc, char **argv)
     std::complex<float> buffer_resamp[frame_len];
     std::complex<float> X[M];
 
-    // frame length: number of data symbols + 3
-    unsigned int num_symbols = 3 + num_data_symbols;
-
     // set up the metadta flags
     std::vector<std::complex<float> > buff(256);
     unsigned int tx_buffer_samples;
@@ -180,6 +177,14 @@ int main (int argc, char **argv)
     md.start_of_burst = false;  // never SOB when continuous
     md.end_of_burst   = false;  // 
     md.has_time_spec  = false;  // set to false to send immediately
+
+    // frame length: number of data symbols + 3 (for preamble)
+    unsigned int num_symbols = 3 + num_data_symbols;
+
+    // pilot symbols
+    float pilots[8] = {  1.0f, -1.0f, -1.0f, 1.0f,
+                        -1.0f,  1.0f, -1.0f, 1.0f };
+    unsigned int pilot_index = 0;
 
     unsigned int pid;
     unsigned int j;
@@ -190,6 +195,7 @@ int main (int argc, char **argv)
         ofdmframegen_reset(fg); // reset frame generator (resets pilot generator, etc.)
         modem_reset(mod);       // modulator
         msequence_reset(seq);   // pseudo-random number generator
+        pilot_index = 0;        // reset the pilot index to start at zero
 
         if (verbose)
             printf("tx packet id: %6u\n", pid);
@@ -208,6 +214,11 @@ int main (int argc, char **argv)
                         // modulate onto subcarrier
                         unsigned int sym = msequence_generate_symbol(seq, bps);
                         modem_modulate(mod, sym, &X[j]);
+
+                        // DG: add your pilot precoder here
+                        std::complex<float> pilot = pilots[pilot_index];
+                        X[j] = 0.9f*X[j] + 0.1f*pilot;
+                        pilot_index = (pilot_index + 1) % 8;
                     } else {
                         // pilot or NULL subcarrier (ignore)
                         X[j] = 0.0f;

@@ -32,14 +32,37 @@
 #include "timer.h"
 
 // global options and parameters
-static bool verbose;            // verbose output?
-unsigned int num_symbols=50;    // number of symbols per frame
-modem demod = NULL;             // demodulator
-msequence seq = NULL;           // pseudo-random number generator
+const unsigned int M = 64;              // number of subcarriers
+unsigned int cp_len = 8;                // cyclic prefix length
+unsigned int taper_len = 0;             // taper length
+static bool verbose;                    // verbose output?
+const unsigned int num_data_symbols=50; // number of data symbols per frame
+modulation_scheme ms = LIQUID_MODEM_QPSK;   // modulation scheme
+unsigned char p[M];                     // subcarrier allocation
 
 // global counters
 unsigned int num_frames_detected=0;
 unsigned int num_symbols_received=0;
+
+// received OFDM symbols
+std::complex<float> received_symbols[num_data_symbols][M];
+
+// channel estimate
+std::complex<float> H_est[M];
+
+void estimate_channel_and_equalize();
+void smooth_channel_estimate();
+void demodulate_symbols();
+
+void usage() {
+    printf("ofdm_rx -- receive OFDM packets\n");
+    printf("  u,h   :   usage/help\n");
+    printf("  q/v   :   quiet/verbose\n");
+    printf("  f     :   center frequency [Hz]\n");
+    printf("  b     :   bandwidth [Hz]\n");
+    printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
+    printf("  t     :   run time [seconds]\n");
+}
 
 // callback function
 int callback(std::complex<float> * _X,
@@ -55,45 +78,32 @@ int callback(std::complex<float> * _X,
             printf("**** frame detected!\n");
     }
 
-#if 0
     // 
     // DG: add code here for equalization
     //
-#else
-    // demodulate symbol and count errors
-    unsigned int bps = modem_get_bps(demod);
 
-    unsigned int num_bit_errors = 0;
-    unsigned int total_bits     = 0;
+    // save the OFDM symbols to a giant buffer and process
+    // after entire frame has been received
     unsigned int i;
-    for (i=0; i<_M; i++) {
-        if (_p[i] == OFDMFRAME_SCTYPE_DATA) {
-            // data subcarrier: generate pseudo-random number and
-            // compare to demodulated symbol
-            unsigned int sym_tx = msequence_generate_symbol(seq, bps);
-            unsigned int sym_rx = 0;    // demodulated symbol
-            modem_demodulate(demod, _X[i], &sym_rx);
-
-            // count errors
-            num_bit_errors += count_bit_errors(sym_tx, sym_rx);
-            total_bits     += bps;
-        }
-    }
-    
-    // print results
-    printf("  OFDM symbol %6u / %6u, bit errors: %6u / %6u\n",
-        num_symbols_received, num_symbols,
-        num_bit_errors, total_bits);
-#endif
+    for (i=0; i<_M; i++)
+        received_symbols[num_symbols_received][i] = _X[i];
 
     // increment symbol counter
     num_symbols_received++;
 
     // reset frame synchronizer if this is the last symbol
     // in the frame
-    if (num_symbols_received == num_symbols) {
-        modem_reset(demod);         // reset modem
-        msequence_reset(seq);       // reset pseudo-random number generator
+    if (num_symbols_received == num_data_symbols) {
+        // estimate channel now
+        estimate_channel_and_equalize();
+
+        // ...
+        smooth_channel_estimate();
+
+        // demodulate symbols
+        demodulate_symbols();
+
+        // reste everything here
         num_symbols_received = 0;   // reset symbol counter
         return 1;                   // reset the frame synchronizer
     }
@@ -102,17 +112,89 @@ int callback(std::complex<float> * _X,
     return 0;
 }
 
-void usage() {
-    printf("ofdm_rx -- receive OFDM packets\n");
-    printf("  u,h   :   usage/help\n");
-    printf("  q/v   :   quiet/verbose\n");
-    printf("  f     :   center frequency [Hz]\n");
-    printf("  b     :   bandwidth [Hz]\n");
-    printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
-    printf("  M     :   number of subcarriers, default: 64\n");
-    printf("  C     :   cyclic prefix length, default: 16\n");
-    printf("  T     :   taper length, default: 0\n");
-    printf("  t     :   run time [seconds]\n");
+// estimate channel and equalize
+void estimate_channel_and_equalize()
+{
+    // pilot symbols
+    float pilots[8] = {  1.0f, -1.0f, -1.0f, 1.0f,
+                        -1.0f,  1.0f, -1.0f, 1.0f };
+    unsigned int pilot_index = 0;
+
+    // reset channel estimate
+    unsigned int i;
+    for (i=0; i<M; i++)
+        H_est[i] = 0.0f;
+
+    //
+    unsigned int j;
+    for (i=0; i<num_data_symbols; i++) {
+        for (j=0; j<M; j++) {
+            // pilot precoder
+            std::complex<float> pilot = pilots[pilot_index];
+            pilot_index = (pilot_index + 1) % 8;
+
+            // DG: insert actual code to estimate channel here
+            H_est[j] += pilot * received_symbols[i][j];
+        }
+    }
+
+    // now that we have H_est, equalize
+    pilot_index = 0;    // reset pilot index
+    for (i=0; i<num_data_symbols; i++) {
+        for (j=0; j<M; j++) {
+            // pilot precoder
+            std::complex<float> pilot = pilots[pilot_index];
+            pilot_index = (pilot_index + 1) % 8;
+
+            // DG: insert actual code to equalize symbols
+            received_symbols[i][j] = (received_symbols[i][j] - pilot) / H_est[j];
+        }
+    }
+}
+
+void smooth_channel_estimate()
+{
+    // TODO : copy code to smooth channel estimate
+}
+
+// demodulate symbols
+void demodulate_symbols()
+{
+    // create demodulator and pseudo-random number generator
+    modem demod = modem_create(ms);
+    msequence seq = msequence_create_default(8);
+
+    // demodulate symbol and count errors
+    unsigned int bps = modem_get_bps(demod);
+
+    unsigned int num_bit_errors = 0;
+    unsigned int total_bits     = 0;
+    unsigned int i;
+    unsigned int j;
+    for (i=0; i<num_data_symbols; i++) {
+        for (j=0; j<M; j++) {
+            if (p[j] == OFDMFRAME_SCTYPE_DATA) {
+                // data subcarrier: generate pseudo-random number and
+                // compare to demodulated symbol
+                unsigned int sym_tx = msequence_generate_symbol(seq, bps);
+                unsigned int sym_rx = 0;    // demodulated symbol
+
+                // demodulate symbols (assuming we have equalized)
+                modem_demodulate(demod, received_symbols[i][j], &sym_rx);
+
+                // count errors
+                num_bit_errors += count_bit_errors(sym_tx, sym_rx);
+                total_bits     += bps;
+            }
+        }
+    }
+    
+    // print results
+    printf("  OFDM frame bit errors: %6u / %6u\n",
+        num_bit_errors, total_bits);
+
+    modem_destroy(demod);
+    msequence_destroy(seq);
 }
 
 int main (int argc, char **argv)
@@ -129,17 +211,9 @@ int main (int argc, char **argv)
     double num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 
-    // ofdm properties
-    unsigned int M = 64;                // number of subcarriers
-    unsigned int cp_len = 8;            // cyclic prefix length
-    unsigned int taper_len = 0;         // taper length
-
-    // modulation scheme
-    modulation_scheme ms = LIQUID_MODEM_QPSK;
-
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:T:t:z:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:t:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -148,9 +222,6 @@ int main (int argc, char **argv)
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 'G':   uhd_rxgain = atof(optarg);      break;
-        case 'M':   M = atoi(optarg);               break;
-        case 'C':   cp_len = atoi(optarg);          break;
-        case 'T':   taper_len = atoi(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         default:
             usage();
@@ -227,7 +298,6 @@ int main (int argc, char **argv)
     resamp2_crcf decim = resamp2_crcf_create(7,0.0f,40.0f);
 
     // initialize subcarrier allocation
-    unsigned char p[M];
     ofdmframe_init_default_sctype(M, p);
 
     // create frame synchronizer
@@ -238,10 +308,6 @@ int main (int argc, char **argv)
                                             callback,
                                             NULL);
     ofdmframesync_print(fs);
-
-    // create demodulator and pseudo-random number generator
-    demod = modem_create(ms);
-    seq = msequence_create_default(8);
 
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
@@ -330,8 +396,6 @@ int main (int argc, char **argv)
     resamp2_crcf_destroy(decim);
     ofdmframesync_destroy(fs);
     timer_destroy(t0);
-    modem_destroy(demod);
-    msequence_destroy(seq);
 
     return 0;
 }
