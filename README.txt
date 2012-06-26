@@ -20,13 +20,13 @@ http://gnuradio.org/.
 
 Build dependencies
 
-1.  liquid-dsp version 1.1.0
+1.  liquid-dsp version 1.2.0
         liquid digital signal processing library, available from github at
         http://github.com/jgaeddert/liquid-dsp
     
     $ git clone git://github.com/jgaeddert/liquid-dsp.git
     $ cd liquid-dsp
-    $ git checkout v1.1.0       # make sure to checkout the proper version
+    $ git checkout v1.2.0       # make sure to checkout the proper version
     $ ./reconf
     $ ./configure
     $ make
@@ -34,11 +34,11 @@ Build dependencies
 
      -- OR -- 
      
-    download the 1.1.0 tarball...
+    download the 1.2.0 tarball...
 
-    $ wget http://ganymede.ece.vt.edu/downloads/liquid-dsp-1.1.0.tar.gz
-    $ tar -xvf liquid-dsp-1.1.0.tar.gz
-    $ cd liquid-dsp-1.1.0
+    $ wget http://ganymede.ece.vt.edu/downloads/liquid-dsp-1.2.0.tar.gz
+    $ tar -xvf liquid-dsp-1.2.0.tar.gz
+    $ cd liquid-dsp-1.2.0
     $ ./reconf
     $ ./configure
     $ make
