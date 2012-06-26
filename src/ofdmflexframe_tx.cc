@@ -41,6 +41,7 @@ void usage() {
     printf("  N     : number of frames, default: 1000\n");
     printf("  M     : number of subcarriers, default: 64\n");
     printf("  C     : cyclic prefix length, default: 16\n");
+    printf("  T     : taper length, default: 0\n");
     printf("  P     : payload length [bytes], default: 256\n");
     printf("  m     : modulation scheme (qpsk default)\n");
     liquid_print_modulation_schemes();
@@ -68,7 +69,7 @@ int main (int argc, char **argv)
     // ofdm properties
     unsigned int M = 48;                // number of subcarriers
     unsigned int cp_len = 8;            // cyclic prefix length
-    unsigned int num_symbols_S0 = 3;    // number of S0 symbols
+    unsigned int taper_len = 0;         // cyclic prefix length
 
     modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
     unsigned int payload_len = 256;         // original data message length
@@ -80,19 +81,20 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:P:m:c:k:z:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:T:P:m:c:k:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
-        case 'q':   verbose = false;                break;
-        case 'v':   verbose = true;                 break;
-        case 'f':   frequency = atof(optarg);       break;
-        case 'b':   bandwidth = atof(optarg);       break;
-        case 'g':   txgain_dB = atof(optarg);       break;
-        case 'G':   uhd_txgain = atof(optarg);      break;
-        case 'N':   num_frames = atoi(optarg);      break;
-        case 'M':   M = atoi(optarg);               break;
-        case 'C':   cp_len = atoi(optarg);          break;
+        case 'q':   verbose     = false;            break;
+        case 'v':   verbose     = true;             break;
+        case 'f':   frequency   = atof(optarg);     break;
+        case 'b':   bandwidth   = atof(optarg);     break;
+        case 'g':   txgain_dB   = atof(optarg);     break;
+        case 'G':   uhd_txgain  = atof(optarg);     break;
+        case 'N':   num_frames  = atoi(optarg);     break;
+        case 'M':   M           = atoi(optarg);     break;
+        case 'C':   cp_len      = atoi(optarg);     break;
+        case 'T':   taper_len   = atoi(optarg);     break;
         case 'P':   payload_len = atoi(optarg);     break;
         case 'm':
             ms = liquid_getopt_str2mod(optarg);
@@ -226,18 +228,18 @@ int main (int argc, char **argv)
     // create frame generator
     ofdmflexframegenprops_s fgprops;
     ofdmflexframegenprops_init_default(&fgprops);
-    fgprops.num_symbols_S0  = num_symbols_S0;
     fgprops.check           = check;
     fgprops.fec0            = fec0;
     fgprops.fec1            = fec1;
     fgprops.mod_scheme      = ms;
-    ofdmflexframegen fg = ofdmflexframegen_create(M, cp_len, p, &fgprops);
+    ofdmflexframegen fg = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
     ofdmflexframegen_print(fg);
 
     // arrays
-    std::complex<float> buffer[M+cp_len];    // output time series
-    std::complex<float> buffer_interp[2*(M+cp_len)];
-    std::complex<float> buffer_resamp[3*(M+cp_len)];
+    unsigned int frame_len = M + cp_len;
+    std::complex<float> buffer[frame_len];  // output time series
+    std::complex<float> buffer_interp[frame_len];
+    std::complex<float> buffer_resamp[frame_len];
 
     // set up the metadta flags
     std::vector<std::complex<float> > buff(256);
@@ -273,26 +275,24 @@ int main (int argc, char **argv)
         // generate frame
         int last_symbol=0;
         unsigned int zero_pad=1;
-        unsigned int num_samples;
         while (!last_symbol || zero_pad > 0) {
             if (!last_symbol) {
                 // generate symbol
-                last_symbol = ofdmflexframegen_writesymbol(fg, buffer, &num_samples);
+                last_symbol = ofdmflexframegen_writesymbol(fg, buffer);
             } else {
                 zero_pad--;
-                num_samples = M+cp_len;
-                for (j=0; j<num_samples; j++)
+                for (j=0; j<frame_len; j++)
                     buffer[j] = 0.0f;
             }
 
             // interpolate by 2
-            for (j=0; j<num_samples; j++)
+            for (j=0; j<frame_len; j++)
                 resamp2_crcf_interp_execute(interp, buffer[j], &buffer_interp[2*j]);
             
             // resample
             unsigned int nw;
             unsigned int n=0;
-            for (j=0; j<2*num_samples; j++) {
+            for (j=0; j<2*frame_len; j++) {
                 resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
                 n += nw;
             }

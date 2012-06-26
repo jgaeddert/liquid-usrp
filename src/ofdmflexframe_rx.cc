@@ -88,6 +88,7 @@ void usage() {
     printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
     printf("  M     :   number of subcarriers, default: 64\n");
     printf("  C     :   cyclic prefix length, default: 16\n");
+    printf("  T     :   taper length, default: 0\n");
     printf("  t     :   run time [seconds]\n");
     printf("  z     :   number of subcarriers to notch in the center band, default: 0\n");
 }
@@ -109,12 +110,13 @@ int main (int argc, char **argv)
     // ofdm properties
     unsigned int M = 48;                // number of subcarriers
     unsigned int cp_len = 8;            // cyclic prefix length
+    unsigned int taper_len = 0;         // taper length
 
     unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:t:z:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:T:t:z:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -125,6 +127,7 @@ int main (int argc, char **argv)
         case 'G':   uhd_rxgain = atof(optarg);      break;
         case 'M':   M = atoi(optarg);               break;
         case 'C':   cp_len = atoi(optarg);          break;
+        case 'T':   taper_len = atoi(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'z':   num_notched = atoi(optarg);     break;
         default:
@@ -226,7 +229,12 @@ int main (int argc, char **argv)
     ofdmframe_validate_sctype(p,M, &M_null, &M_pilot, &M_data);
 
     // create frame synchronizer
-    ofdmflexframesync fs = ofdmflexframesync_create(M, cp_len, p, callback, (void*)&bandwidth);
+    ofdmflexframesync fs = ofdmflexframesync_create(M,
+                                                    cp_len,
+                                                    taper_len,
+                                                    p,
+                                                    callback,
+                                                    (void*)&bandwidth);
     ofdmflexframesync_print(fs);
 
     // start data transfer

@@ -54,6 +54,7 @@ struct iqpr_s {
     //
     unsigned int M;                 // number of subcarriers
     unsigned int cp_len;            // cyclic prefix length
+    unsigned int taper_len;         // taper length
     unsigned char * p;              // subcarrier allocation
 
     // 
@@ -127,9 +128,10 @@ iqpr iqpr_create()
     //
     // common
     //
-    q->M = 64;      // number of subcarriers
-    q->cp_len = 8;  // cyclic prefix length
-    q->p = NULL;    // subcarrier allocation (NULL gives default)
+    q->M = 64;          // number of subcarriers
+    q->cp_len = 8;      // cyclic prefix length
+    q->taper_len = 4;   // taper length
+    q->p = NULL;        // subcarrier allocation (NULL gives default)
     q->p = (unsigned char*)malloc(q->M*sizeof(unsigned char));
     unsigned int guard = q->M / 6;
     unsigned int pilot_spacing = 8;
@@ -157,7 +159,12 @@ iqpr iqpr_create()
     q->rx_decim = resamp2_crcf_create(7, 0.0, 40.0);
 
     // create frame synchronizer
-    q->fs = ofdmflexframesync_create(q->M, q->cp_len, q->p, iqpr_callback, (void*)q);
+    q->fs = ofdmflexframesync_create(q->M,
+                                     q->cp_len,
+                                     q->taper_len,
+                                     q->p,
+                                     iqpr_callback,
+                                     (void*)q);
 
     // allocate memory for received data
     q->rx_payload_len      = 1024;
@@ -181,7 +188,11 @@ iqpr iqpr_create()
     q->fgprops.fec0         = LIQUID_FEC_NONE;
     q->fgprops.fec1         = LIQUID_FEC_NONE;
     q->fgprops.mod_scheme   = LIQUID_MODEM_QPSK;
-    q->fg = ofdmflexframegen_create(q->M, q->cp_len, q->p, &q->fgprops);
+    q->fg = ofdmflexframegen_create(q->M,
+                                    q->cp_len,
+                                    q->taper_len,
+                                    q->p,
+                                    &q->fgprops);
     ofdmflexframegen_print(q->fg);
 
     // create interpolator
@@ -544,7 +555,6 @@ void iqpr_txpacket(iqpr _q,
     // generate the frame
     int last_symbol=0;
     unsigned int zero_pad = (512/frame_len) < 1 ? 1 : (512/frame_len);
-    unsigned int num_samples;
     float g0 = 0.07f;
 
     unsigned int j;
@@ -552,22 +562,21 @@ void iqpr_txpacket(iqpr _q,
     while (!last_symbol || zero_pad > 0) {
         if (!last_symbol) {
             // generate symbol
-            last_symbol = ofdmflexframegen_writesymbol(_q->fg, buffer, &num_samples);
+            last_symbol = ofdmflexframegen_writesymbol(_q->fg, buffer);
         } else {
             zero_pad--;
-            num_samples = frame_len;
-            for (j=0; j<num_samples; j++)
+            for (j=0; j<frame_len; j++)
                 buffer[j] = 0.0f;
         }
 
         // interpolate by 2
-        for (j=0; j<num_samples; j++)
+        for (j=0; j<frame_len; j++)
             resamp2_crcf_interp_execute(_q->tx_interp, buffer[j], &buffer_interp[2*j]);
         
         // resample
         unsigned int nw;
         unsigned int n=0;
-        for (j=0; j<2*num_samples; j++) {
+        for (j=0; j<2*frame_len; j++) {
             resamp_crcf_execute(_q->tx_resamp, buffer_interp[j], &buffer_resamp[n], &nw);
             n += nw;
         }
