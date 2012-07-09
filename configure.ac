@@ -66,7 +66,7 @@ AC_CHECK_LIB([uhd], [main], [],
 
 # Check for necessary header files
 AC_LANG_PUSH([C++])
-AC_CHECK_HEADERS([uhd/usrp/single_usrp.hpp],
+AC_CHECK_HEADERS([uhd/usrp/multi_usrp.hpp],
                   [],
                   [AC_MSG_ERROR(missing headers)])
 if test -z "$HAVE_stdio.h"

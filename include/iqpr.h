@@ -28,7 +28,7 @@
 #define __IQPR_H__
 
 #include <liquid/liquid.h>
-#include <uhd/usrp/single_usrp.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
 
 // 
 // iqpr object interface declarations

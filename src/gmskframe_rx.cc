@@ -25,7 +25,7 @@
 #include <sys/resource.h>
 #include <liquid/liquid.h>
 
-#include <uhd/usrp/single_usrp.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
  
 #include "timer.h"
 
@@ -139,7 +139,7 @@ int main (int argc, char **argv)
     stream_cmd.stream_now = true;
 
     uhd::device_addr_t dev_addr;
-    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
+    uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
     // set properties
     float rx_rate = 4.0f*bandwidth;
