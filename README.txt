@@ -47,23 +47,9 @@ Build dependencies
 2.  uhd
         universal hardware driver from Ettus research, available from
         http://www.ettus.com
-    
-    install dependencies using apt-get: cmake python-cheetah libusb-1.0-0-dev
-                                        libboost-1.37-dev
-                                        libboost-math1.37-dev
 
-    install dependencies using port: cmake py-cheetah (py26-cheetah)
-
-    $ git clone git://code.ettus.com/ettus/uhd.git
-    $ cd uhd
-    $ git checkout release_003_000_001
-    $ cd host
-    $ mkdir build
-    $ cd build
-    $ cmake ../
-    $ make
-    $ sudo make install
-
+    Install using guide:
+        http://code.ettus.com/redmine/ettus/projects/uhd/wiki
 
 Build all the liquid-usrp example programs
     $ ./reconf
