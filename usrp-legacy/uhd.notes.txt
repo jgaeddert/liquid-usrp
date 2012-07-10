@@ -1,4 +1,13 @@
 
+Note: use improved UHD install guide:
+http://code.ettus.com/redmine/ettus/projects/uhd/wiki
+
+Easy install using apt-get (Debian and derivatives) for stable release
+(from http://code.ettus.com/redmine/ettus/projects/uhd/wiki/UHD_Linux):
+  $ sudo bash -c 'echo "deb http://files.ettus.com/binaries/uhd_stable/repo/uhd/ubuntu/`lsb_release -cs` `lsb_release -cs` main" > /etc/apt/sources.list.d/ettus.list'
+  $ sudo apt-get update
+  $ sudo apt-get install uhd
+
 Built UHD from source, but when running uhd_find_devices I got a "No UHD
 Devices Found" error.
 Upon closer inspection of running the UHD cmake I didn't have libusb-1.0
