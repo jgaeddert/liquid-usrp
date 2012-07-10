@@ -25,6 +25,9 @@
 AC_INIT([liquid-usrp],[0.1.0],[liquid@vt.edu])
 #AC_CONFIG_SRCDIR([libliquidusrp.c])
 
+# permit auxiliary scripts directory (e.g. config.sub, config.guess, install-sh)
+AC_CONFIG_AUX_DIR(scripts/)
+
 # Autoheader
 AC_CONFIG_HEADER(config.h)
 AH_TOP([
