@@ -20,50 +20,24 @@ http://gnuradio.org/.
 
 Build dependencies
 
-1.  liquid-dsp version 1.1.0
+1.  liquid-dsp (HEAD revision)
         liquid digital signal processing library, available from github at
         http://github.com/jgaeddert/liquid-dsp
     
     $ git clone git://github.com/jgaeddert/liquid-dsp.git
     $ cd liquid-dsp
-    $ git checkout v1.1.0       # make sure to checkout the proper version
     $ ./reconf
     $ ./configure
     $ make
-    $ sudo make install
-
-     -- OR -- 
-     
-    download the 1.1.0 tarball...
-
-    $ wget http://ganymede.ece.vt.edu/downloads/liquid-dsp-1.1.0.tar.gz
-    $ tar -xvf liquid-dsp-1.1.0.tar.gz
-    $ cd liquid-dsp-1.1.0
-    $ ./reconf
-    $ ./configure
-    $ make
+    $ make check                    # run optional tests
     $ sudo make install
 
 2.  uhd
         universal hardware driver from Ettus research, available from
         http://www.ettus.com
-    
-    install dependencies using apt-get: cmake python-cheetah libusb-1.0-0-dev
-                                        libboost-1.37-dev
-                                        libboost-math1.37-dev
 
-    install dependencies using port: cmake py-cheetah (py26-cheetah)
-
-    $ git clone git://code.ettus.com/ettus/uhd.git
-    $ cd uhd
-    $ git checkout release_003_000_001
-    $ cd host
-    $ mkdir build
-    $ cd build
-    $ cmake ../
-    $ make
-    $ sudo make install
-
+    Follow the official install guide:
+        http://code.ettus.com/redmine/ettus/projects/uhd/wiki
 
 Build all the liquid-usrp example programs
     $ ./reconf

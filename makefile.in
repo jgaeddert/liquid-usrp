@@ -158,11 +158,11 @@ libliquidusrp.a: $(library_objs)
 #
 # gcc -dynamiclib -install_name libliquidusrp.dylib -o libliquidusrp.dylib libmodem.a libutility.a 
 libliquidusrp.dylib: $(library_objs)
-	$(CXX) $(LDFLAGS) -dynamiclib -install_name $@ -o $@ $^
+	$(CXX) -dynamiclib -install_name $@ -o $@ $^ $(LDFLAGS)
 
 # linux, et al
 libliquidusrp.so: $(library_objs)
-	$(CXX) $(LDFLAGS) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive
+	$(CXX) -shared -Xlinker -soname=$@ -o $@ -Wl,-whole-archive $^ -Wl,-no-whole-archive $(LDFLAGS)
 
 
 ## 
@@ -212,7 +212,7 @@ $(example_objs) : %.o : %.cc
 	$(CXX) $(CPPFLAGS) -c $< -o $@
 
 $(example_progs) : % : %.o libliquidusrp.a
-	$(CXX) $(CPPFLAGS) $(LDFLAGS) $^ -o $@
+	$(CXX) $(CPPFLAGS) $^ -o $@ $(LDFLAGS)
 
 examples: $(example_progs)
 

@@ -38,7 +38,7 @@
 
 #include <liquid/liquid.h>
 #include <uhd/types/stream_cmd.hpp>
-#include <uhd/usrp/single_usrp.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
 
 #include "iqpr.h"
 
@@ -49,7 +49,7 @@ void * iqpr_rx_process(void * _arg);
 // iqpr data structure
 struct iqpr_s {
     // UHD interface to hardware
-    uhd::usrp::single_usrp::sptr usrp;
+    uhd::usrp::multi_usrp::sptr usrp;
 
     //
     unsigned int M;                 // number of subcarriers
@@ -116,7 +116,7 @@ iqpr iqpr_create()
     // TODO : create USRP object
     uhd::device_addr_t dev_addr;
     // TODO : set up address as necessary
-    q->usrp = uhd::usrp::single_usrp::make(dev_addr);
+    q->usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
     // set some properties
     q->usrp->set_rx_antenna("TX/RX");
