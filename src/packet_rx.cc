@@ -63,9 +63,9 @@ static int callback(unsigned char * _header,  int _header_valid,
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz]\n");
-    printf("  b     :   bandwidth [Hz]\n");
-    printf("  t     :   run time [seconds]\n");
-    printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
+    printf("  b     :   bandwidth [Hz], default: 300 kHz\n");
+    printf("  t     :   run time [seconds], default: 5\n");
+    printf("  G     :   uhd rx gain [dB], default: 20dB\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -81,7 +81,7 @@ int main (int argc, char **argv)
     float max_bandwidth = 0.25f*(ADC_RATE /   4.0);
 
     float frequency = 462.0e6;
-    float bandwidth = min_bandwidth;
+    float bandwidth = 300e3;
     float num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 

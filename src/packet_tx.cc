@@ -32,11 +32,11 @@
 void usage() {
     printf("packet_tx:\n");
     printf("  f     :   center frequency [Hz] (default: 462 MHz)\n");
-    printf("  b     :   bandwidth [Hz], [62.5kHz, 8MHz] (default: 62.5kHz)\n");
-    printf("  p     :   packet spacing (default: 1)\n");
-    printf("  g     :   software transmit power gain [dB] (default: -3dB)\n");
-    printf("  G     :   uhd tx gain [dB] (default: -40dB)\n");
-    printf("  t     :   run time [seconds] (default: 5.0)\n");
+    printf("  b     :   bandwidth [Hz], [62.5kHz, 8MHz] (default: 300kHz)\n");
+    printf("  p     :   packet spacing (default: 0)\n");
+    printf("  g     :   software transmit power gain [dB] (default: -6dB)\n");
+    printf("  G     :   uhd tx gain [dB] (default: 40dB)\n");
+    printf("  t     :   run time [seconds] (default: 20.0)\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -45,19 +45,19 @@ void usage() {
 int main (int argc, char **argv)
 {
     // command-line options
-    bool verbose = true;
+    bool verbose = false;
 
     unsigned long int DAC_RATE = 64e6;
     double min_bandwidth = 0.25*(DAC_RATE / 512.0);
     double max_bandwidth = 0.25*(DAC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = min_bandwidth;
-    double num_seconds = 5.0f;
-    double txgain_dB = -3.0f;
-    double uhd_txgain = -40.0;
+    double bandwidth = 300e3f;
+    double num_seconds = 20.0f;
+    double txgain_dB = -6.0f;
+    double uhd_txgain = 40.0;
 
-    unsigned int packet_spacing=1;
+    unsigned int packet_spacing=0;
 
     //
     int d;
