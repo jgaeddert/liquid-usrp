@@ -134,11 +134,6 @@ int main (int argc, char **argv)
     // half-band resampler
     resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
 
-    // framegen parameters
-    //unsigned int k=2; // samples per symbol
-    unsigned int m=3; // filter delay
-    float beta=0.7f;  // excess bandwidth factor
-
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/20.0f);
  
@@ -149,15 +144,14 @@ int main (int argc, char **argv)
     md.has_time_spec  = false;  // set to false to send immediately
 
     // buffers
-    unsigned int frame_len = 1280;
+    unsigned int frame_len = 1244;
     std::vector<std::complex<float> > buff(2*frame_len);
     std::complex<float> frame[frame_len];
     std::complex<float> buffer_interp[2*frame_len];
     std::complex<float> buffer_resamp[3*frame_len];
-    framegen64 framegen = framegen64_create(m,beta);
+    framegen64 framegen = framegen64_create();
 
     // data buffers
-    unsigned char header[24];
     unsigned char payload[64];
 
     unsigned int j, pid=0;
@@ -173,15 +167,15 @@ int main (int argc, char **argv)
         // generate the frame / transmit silence
         if ((i%(packet_spacing+1))==0) {
             // generate random data
-            for (j=0; j<24; j++)    header[j]  = rand() % 256;
-            for (j=0; j<64; j++)    payload[j] = rand() % 256;
-            header[0] = (pid >> 8) & 0x00ff;
-            header[1] = (pid     ) & 0x00ff;
+            for (j=0; j<64; j++)
+                payload[j] = rand() % 256;
+            payload[0] = (pid >> 8) & 0x00ff;
+            payload[1] = (pid     ) & 0x00ff;
             if (verbose)
                 printf("packet id: %u\n", pid);
             pid = (pid+1) & 0xffff;
 
-            framegen64_execute(framegen, header, payload, frame);
+            framegen64_execute(framegen, payload, frame);
 
         } else {
             // fill buffer with zeros

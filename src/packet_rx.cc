@@ -48,13 +48,11 @@ static int callback(unsigned char * _header,  int _header_valid,
         printf("rssi=%5.1fdB, ", _stats.rssi);
     }
 
-    if ( !_header_valid ) {
-        if (verbose) printf("header crc : FAIL\n");
-    } else if ( !_payload_valid ) {
+    if ( !_payload_valid ) {
         if (verbose) printf("payload crc : FAIL\n");
     } else {
         if (verbose) {
-            unsigned int pid = (_header[0] << 8) | _header[1];
+            unsigned int pid = (_payload[0] << 8) | _payload[1];
             printf("packet id: %u\n", pid);
         }
         num_valid_packets_received++;
@@ -68,7 +66,6 @@ void usage() {
     printf("  b     :   bandwidth [Hz]\n");
     printf("  t     :   run time [seconds]\n");
     printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
-    printf("  S     :   squelch threshold [dB] (default: -37dB)\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -87,17 +84,15 @@ int main (int argc, char **argv)
     float bandwidth = min_bandwidth;
     float num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
-    float squelch_threshold = -37.0f;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:G:S:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:t:G:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'G':   uhd_rxgain = atof(optarg);      break;
-        case 'S':   squelch_threshold = atof(optarg);   break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
         case 'u':
@@ -170,24 +165,7 @@ int main (int argc, char **argv)
     std::vector<std::complex<float> > buff(max_samps_per_packet);
 
     // framing
-    framesyncprops_s props;
-    framesyncprops_init_default(&props);
-#if 0
-    props.agc_bw0           = 1e-3f;
-    props.agc_bw1           = 1e-5f;
-    props.sym_bw0           = 0.08f;
-    props.sym_bw1           = 0.05f;
-    props.pll_bw0           = 0.020f;
-    props.pll_bw1           = 0.005f;
-    props.eq_len            = 0;
-    props.eqrls_lambda      = 0.999f;
-    props.autosquelch_enabled = 0;
-#endif
-    props.agc_gmin          = 1e-3f;
-    props.agc_gmax          = 1e5f;
-    props.squelch_enabled   = 1;
-    props.squelch_threshold = squelch_threshold;
-    framesync64 framesync = framesync64_create(&props,callback,NULL);
+    framesync64 framesync = framesync64_create(callback,NULL);
 
     std::complex<float> data_rx[64];
     std::complex<float> data_decim[32];
