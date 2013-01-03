@@ -28,7 +28,7 @@
 #include <liquid/liquid.h>
 #include <liquid/liquid-wlan.h>
 
-#include <uhd/usrp/single_usrp.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
 
 void usage() {
     printf("ofdmflexframe_tx [OPTION]\n");
@@ -115,7 +115,7 @@ int main (int argc, char **argv)
     uhd::device_addr_t dev_addr;
     //dev_addr["addr0"] = "192.168.10.2";
     //dev_addr["addr1"] = "192.168.10.3";
-    uhd::usrp::single_usrp::sptr usrp = uhd::usrp::single_usrp::make(dev_addr);
+    uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
     // set properties
     double tx_rate = 4.0*bandwidth;
