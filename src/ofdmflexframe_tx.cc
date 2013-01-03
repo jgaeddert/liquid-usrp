@@ -188,13 +188,9 @@ int main (int argc, char **argv)
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
-
     // add arbitrary resampling component
-    resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,64);
-    resamp_crcf_setrate(resamp, tx_resamp_rate);
-
-    // half-band resampler
-    resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
+    // TODO : check that resampling rate does indeed correspond to proper bandwidth
+    msresamp_crcf resamp = msresamp_crcf_create(2.0*tx_resamp_rate, 60.0f);
 
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/20.0f);
@@ -235,15 +231,18 @@ int main (int argc, char **argv)
     ofdmflexframegen fg = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
     ofdmflexframegen_print(fg);
 
-    // arrays
-    unsigned int frame_len = M + cp_len;
-    std::complex<float> buffer[frame_len];  // output time series
-    std::complex<float> buffer_interp[frame_len];
-    std::complex<float> buffer_resamp[frame_len];
+    // allocate array to hold each OFDM symbol
+    unsigned int symbol_len = M + cp_len;   // ofdm symbol length (samples)
+    std::complex<float> ofdm_symbol[symbol_len]; // output time series of each symbol
+
+    // create buffer for arbitrary resamper output
+    std::complex<float> buffer_resamp[(int)(2*tx_resamp_rate) + 64];
+
+    // vector buffer to send data to USRP
+    std::vector<std::complex<float> > usrp_buffer(256);
+    unsigned int usrp_sample_counter = 0;
 
     // set up the metadta flags
-    std::vector<std::complex<float> > buff(256);
-    unsigned int tx_buffer_samples;
     uhd::tx_metadata_t md;
     md.start_of_burst = false;  // never SOB when continuous
     md.end_of_burst   = false;  // 
@@ -251,7 +250,6 @@ int main (int argc, char **argv)
 
     unsigned int j;
     unsigned int pid;
-    tx_buffer_samples=0;
     for (pid=0; pid<num_frames; pid++) {
         // reset frame generator (resets pilot generator, etc.)
         ofdmflexframegen_reset(fg);
@@ -272,56 +270,52 @@ int main (int argc, char **argv)
         // assemble frame
         ofdmflexframegen_assemble(fg, header, payload, payload_len);
 
-        // generate frame
+        // generate a single OFDM frame
         int last_symbol=0;
         unsigned int zero_pad=1;
         while (!last_symbol || zero_pad > 0) {
+
+            // generate OFDM symbol
             if (!last_symbol) {
                 // generate symbol
-                last_symbol = ofdmflexframegen_writesymbol(fg, buffer);
+                last_symbol = ofdmflexframegen_writesymbol(fg, ofdm_symbol);
             } else {
                 zero_pad--;
-                for (j=0; j<frame_len; j++)
-                    buffer[j] = 0.0f;
+                for (j=0; j<symbol_len; j++)
+                    ofdm_symbol[j] = 0.0f;
             }
 
-            // interpolate by 2
-            for (j=0; j<frame_len; j++)
-                resamp2_crcf_interp_execute(interp, buffer[j], &buffer_interp[2*j]);
-            
-            // resample
-            unsigned int nw;
-            unsigned int n=0;
-            for (j=0; j<2*frame_len; j++) {
-                resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
-                n += nw;
-            }
+            // resample OFDM symbol and push resulting samples to USRP
+            for (j=0; j<symbol_len; j++) {
+                // resample OFDM symbol one sample at a time
+                unsigned int nw;    // number of samples output from resampler
+                msresamp_crcf_execute(resamp, &ofdm_symbol[j], 1, buffer_resamp, &nw);
 
-            // push samples into buffer
-            for (j=0; j<n; j++) {
-                buff[tx_buffer_samples++] = g*buffer_resamp[j];
+                // for each output sample, stuff into USRP buffer
+                unsigned int n;
+                for (n=0; n<nw; n++) {
+                    // append to USRP buffer, scaling by software
+                    usrp_buffer[usrp_sample_counter++] = g*buffer_resamp[n];
 
-                if (tx_buffer_samples==256) {
-                    // reset counter
-                    tx_buffer_samples=0;
+                    // once USRP buffer is full, reset counter and send to device
+                    if (usrp_sample_counter==256) {
+                        // reset counter
+                        usrp_sample_counter=0;
 
-                    //send the entire contents of the buffer
-                    usrp->get_device()->send(
-                        &buff.front(), buff.size(), md,
-                        uhd::io_type_t::COMPLEX_FLOAT32,
-                        uhd::device::SEND_MODE_FULL_BUFF
-                    );
+                        // send the result to the USRP
+                        usrp->get_device()->send(
+                            &usrp_buffer.front(), usrp_buffer.size(), md,
+                            uhd::io_type_t::COMPLEX_FLOAT32,
+                            uhd::device::SEND_MODE_FULL_BUFF
+                        );
+                    }
                 }
             }
-        }
+
+        } // while loop
 
 
-#if 0
-        // pad remaining samples with zeros
-        for (j=num_samples; j<frame_len; j++)
-            frame[j] = 0.0f;
-#endif
-    }
+    } // packet loop
  
     // send a mini EOB packet
     md.start_of_burst = false;
@@ -338,10 +332,9 @@ int main (int argc, char **argv)
     //finished
     printf("usrp data transfer complete\n");
 
-    // clean it up
+    // delete allocated objects
     ofdmflexframegen_destroy(fg);
-    resamp2_crcf_destroy(interp);
-    resamp_crcf_destroy(resamp);
+    msresamp_crcf_destroy(resamp);
 
     return 0;
 }
