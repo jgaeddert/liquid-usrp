@@ -191,9 +191,9 @@ int main (int argc, char **argv)
     else
         printf("run time    :   (forever)\n");
 
-    // add arbitrary resampling block
-    resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
-    resamp_crcf_setrate(resamp, rx_resamp_rate);
+    // add arbitrary resampling component
+    // TODO : check that resampling rate does indeed correspond to proper bandwidth
+    msresamp_crcf resamp = msresamp_crcf_create(0.5*rx_resamp_rate, 60.0f);
 
     unsigned int block_len = 64;
     assert( (block_len % 2) == 0);  // ensure block length is even
@@ -202,9 +202,6 @@ int main (int argc, char **argv)
     uhd::rx_metadata_t md;
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
     std::vector<std::complex<float> > buff(max_samps_per_packet);
-
-    // half-band decimator
-    resamp2_crcf decim = resamp2_crcf_create(7,0.0f,40.0f);
 
     // initialize subcarrier allocation
     unsigned char p[M];
@@ -241,9 +238,8 @@ int main (int argc, char **argv)
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    std::complex<float> data_rx[block_len];
-    std::complex<float> data_decim[block_len/2];
-    std::complex<float> data_resamp[block_len];
+    // create buffer for arbitrary resamper output
+    std::complex<float> buffer_resamp[(int)(2*rx_resamp_rate) + 64];
  
     // reset counters
     num_frames_detected=0;
@@ -256,16 +252,15 @@ int main (int argc, char **argv)
     timer t0 = timer_create();
     timer_tic(t0);
 
-    unsigned int n=0;
     while (continue_running) {
-        // grab data from port
+        // grab data from device
         size_t num_rx_samps = usrp->get_device()->recv(
             &buff.front(), buff.size(), md,
             uhd::io_type_t::COMPLEX_FLOAT32,
             uhd::device::RECV_MODE_ONE_PACKET
         );
 
-        //handle the error codes
+        // 'handle' the error codes
         switch(md.error_code){
         case uhd::rx_metadata_t::ERROR_CODE_NONE:
         case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
@@ -277,35 +272,19 @@ int main (int argc, char **argv)
             return 1;
         }
 
-        // for now copy vector "buff" to array of complex float
+        // push data through arbitrary resampler and give to frame synchronizer
         // TODO : apply bandwidth-dependent gain
         unsigned int j;
-        unsigned int nw=0;
         for (j=0; j<num_rx_samps; j++) {
-            // push samples into buffer
-            data_rx[n++] = buff[j];
+            // grab sample from usrp buffer
+            std::complex<float> usrp_sample = buff[j];
 
-            if (n==block_len) {
-                // reset counter
-                n=0;
+            // push through resampler (one at a time)
+            unsigned int nw;
+            msresamp_crcf_execute(resamp, &usrp_sample, 1, buffer_resamp, &nw);
 
-                // decimate to block_len/2
-                unsigned int k;
-                for (k=0; k<block_len/2; k++)
-                    resamp2_crcf_decim_execute(decim, &data_rx[2*k], &data_decim[k]);
-
-                // apply resampler
-                for (k=0; k<block_len/2; k++) {
-                    resamp_crcf_execute(resamp, data_decim[k], &data_resamp[n], &nw);
-                    n += nw;
-                }
-
-                // push through synchronizer
-                ofdmflexframesync_execute(fs, data_resamp, n);
-
-                // reset counter (again)
-                n = 0;
-            }
+            // push resulting samples through synchronizer
+            ofdmflexframesync_execute(fs, buffer_resamp, nw);
         }
 
         // check runtime
@@ -337,8 +316,7 @@ int main (int argc, char **argv)
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
     // destroy objects
-    resamp_crcf_destroy(resamp);
-    resamp2_crcf_destroy(decim);
+    msresamp_crcf_destroy(resamp);
     ofdmflexframesync_destroy(fs);
     timer_destroy(t0);
 
