@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2011 Joseph Gaeddert
- * Copyright (c) 2011 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2011, 2013 Joseph Gaeddert
  *
  * This file is part of liquid.
  *
@@ -83,8 +82,8 @@ void usage() {
     printf("ofdmflexframe_rx -- receive OFDM packets\n");
     printf("  u,h   :   usage/help\n");
     printf("  q/v   :   quiet/verbose\n");
-    printf("  f     :   center frequency [Hz]\n");
-    printf("  b     :   bandwidth [Hz]\n");
+    printf("  f     :   center frequency [Hz], default: 462 MHz\n");
+    printf("  b     :   bandwidth [Hz], default: 250 kHz\n");
     printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
     printf("  M     :   number of subcarriers, default: 64\n");
     printf("  C     :   cyclic prefix length, default: 16\n");
@@ -96,14 +95,14 @@ void usage() {
 int main (int argc, char **argv)
 {
     // command-line options
-    verbose = false;
+    verbose = true;
     unsigned long int ADC_RATE = 64e6;
 
     double min_bandwidth = 0.25*(ADC_RATE / 512.0);
     double max_bandwidth = 0.25*(ADC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = 80e3f;
+    double bandwidth = 250e3f;
     double num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 

@@ -32,11 +32,11 @@ void usage() {
     printf("\n");
     printf("  u,h   : usage/help\n");
     printf("  q/v   : quiet/verbose\n");
-    printf("  f     : center frequency [Hz]\n");
-    printf("  b     : bandwidth [Hz] (62.5kHz min, 8MHz max)\n");
+    printf("  f     : center frequency [Hz], default: 462 MHz\n");
+    printf("  b     : bandwidth [Hz] (62.5kHz min, 8MHz max), default: 250 kHz\n");
     printf("  g     : software tx gain [dB] (default: -6dB)\n");
     printf("  G     : uhd tx gain [dB] (default: 40dB)\n");
-    printf("  N     : number of frames, default: 1000\n");
+    printf("  N     : number of frames, default: 2000\n");
 }
 
 int main (int argc, char **argv)
@@ -49,8 +49,8 @@ int main (int argc, char **argv)
     double max_bandwidth = 0.25*(DAC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = 80e3f;
-    unsigned int num_frames = 1000;     // number of frames to transmit
+    double bandwidth = 250e3f;
+    unsigned int num_frames = 2000;     // number of frames to transmit
     double txgain_dB = -12.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
