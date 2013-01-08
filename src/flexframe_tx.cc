@@ -110,8 +110,6 @@ int main (int argc, char **argv)
         }
     }
 
-    unsigned int i;
-
     if (bandwidth > max_bandwidth) {
         fprintf(stderr,"error: %s, maximum bandwidth exceeded (%8.4f MHz)\n", argv[0], max_bandwidth*1e-6);
         return 0;
