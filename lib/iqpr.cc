@@ -365,14 +365,6 @@ void iqpr_set_rx_freq(iqpr _q, float _rx_freq)
     _q->usrp->set_rx_freq(_rx_freq);
 }
 
-// set ofdmflexframesync properties (receiver)
-void iqpr_rxconfig(iqpr _q,
-                   framesyncprops_s * _fsprops)
-{
-    //flexframesync_setprops(_q->fs, _fsprops);
-}
-
-
 // start receiver thread
 void iqpr_rx_start(iqpr _q)
 {

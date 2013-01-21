@@ -71,9 +71,6 @@ void iqpr_set_rx_rate(iqpr _q, float _rx_rate);
 void iqpr_set_tx_freq(iqpr _q, float _tx_freq);
 void iqpr_set_rx_freq(iqpr _q, float _rx_freq);
 
-// set flexframesync properties (receiver)
-void iqpr_rxconfig(iqpr _q, framesyncprops_s * _fsprops);
-
 // start/stop receiver streaming
 void iqpr_rx_start(iqpr _q);
 void iqpr_rx_stop(iqpr _q);
