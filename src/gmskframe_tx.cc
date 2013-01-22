@@ -41,8 +41,6 @@ void usage() {
     printf("  t     : run time [seconds]\n");
     printf("  n     : payload length (bytes)\n");
     printf("  m     : mod. scheme: <psk>, dpsk, ask, qam, apsk...\n");
-    printf("  s     : packet spacing <0>\n");
-    printf("  r     : ramp up/dn length <64>\n");
     printf("  c     : fec coding scheme (inner)\n");
     printf("  k     : fec coding scheme (outer)\n");
     liquid_print_fec_schemes();
@@ -62,17 +60,15 @@ int main (int argc, char **argv)
     float txgain_dB = -3.0f;
     double uhd_txgain = -40.0;
 
-    unsigned int packet_spacing=0;                      // spacing b/w frames
     unsigned int payload_len=200;                       // payload length (bytes)
     crc_scheme check    = LIQUID_CRC_16;                // data validity check
     fec_scheme fec0     = LIQUID_FEC_NONE;              // inner FEC scheme
     fec_scheme fec1     = LIQUID_FEC_HAMMING74;         // outer FEC scheme
     modulation_scheme mod_scheme = LIQUID_MODEM_QPSK;   // modulation scheme
-    unsigned int ramp_len = 64;                         // phasing ramp up/down length
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:g:G:t:n:m:s:r:c:k:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:g:G:t:n:m:c:k:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
@@ -83,8 +79,6 @@ int main (int argc, char **argv)
         case 'm':
             mod_scheme = liquid_getopt_str2mod(optarg);
             break;
-        case 's':   packet_spacing = atoi(optarg);  break;
-        case 'r':   ramp_len = atoi(optarg);        break;
         case 'c':   fec0 = liquid_getopt_str2fec(optarg);         break;
         case 'k':   fec1 = liquid_getopt_str2fec(optarg);         break;
         case 'q':   verbose = false;                break;
@@ -166,10 +160,7 @@ int main (int argc, char **argv)
     resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
 
     // create gmskframegen object
-    unsigned int k = 2;
-    unsigned int m = 4;
-    float BT = 0.5f;
-    gmskframegen fg = gmskframegen_create(k,m,BT);
+    gmskframegen fg = gmskframegen_create();
     gmskframegen_print(fg);
 
     // set up the metadta flags
@@ -179,6 +170,7 @@ int main (int argc, char **argv)
     md.has_time_spec  = false;  // set to false to send immediately
 
     // framing buffers
+    unsigned int k = 2;
     std::complex<float> buffer[k];
     std::complex<float> buffer_interp[2*k];
     std::complex<float> buffer_resamp[8*k]; // resampler

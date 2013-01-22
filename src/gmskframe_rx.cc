@@ -82,7 +82,6 @@ void usage() {
     printf("  b     :   bandwidth [Hz]\n");
     printf("  t     :   run time [seconds]\n");
     printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
-    printf("  S     :   squelch threshold [dB] (default: -37dB)\n");
     printf("  q     :   quiet\n");
     printf("  v     :   verbose\n");
     printf("  u,h   :   usage/help\n");
@@ -101,17 +100,15 @@ int main (int argc, char **argv)
     float bandwidth = 100e3;
     float num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
-    float squelch_threshold = -37.0f;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:G:S:qvuh")) != EOF) {
+    while ((d = getopt(argc,argv,"f:b:t:G:qvuh")) != EOF) {
         switch (d) {
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'G':   uhd_rxgain = atof(optarg);      break;
-        case 'S':   squelch_threshold = atof(optarg);   break;
         case 'q':   verbose = false;                break;
         case 'v':   verbose = true;                 break;
         case 'u':
@@ -191,10 +188,7 @@ int main (int argc, char **argv)
     SNRdB_av = 0.0f;
 
     // create frame synchronizer
-    unsigned int k = 2;
-    unsigned int m = 4;
-    float BT = 0.5f;
-    gmskframesync fs = gmskframesync_create(k,m,BT,callback,NULL);
+    gmskframesync fs = gmskframesync_create(callback,NULL);
 
     std::complex<float> data_rx[64];
     std::complex<float> data_decim[32];
