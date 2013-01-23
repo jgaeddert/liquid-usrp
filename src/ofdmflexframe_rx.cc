@@ -50,8 +50,8 @@ int callback(unsigned char *  _header,
     if (verbose) {
         // compute true carrier offset
         double samplerate = *((double*)_userdata);
-        float cfo = _stats.cfo / M_PI * samplerate * 1e-3f;
-        printf("***** rssi=%7.2fdB evm=%7.2fdB, cfo=%7.2fkHz, ", _stats.rssi, _stats.evm, cfo);
+        float cfo = _stats.cfo * samplerate / (2*M_PI);
+        printf("***** rssi=%7.2fdB evm=%7.2fdB, cfo=%7.3f kHz, ", _stats.rssi, _stats.evm, cfo*1e-3f);
 
         if (_header_valid) {
             unsigned int packet_id = (_header[0] << 8 | _header[1]);
@@ -96,13 +96,9 @@ int main (int argc, char **argv)
 {
     // command-line options
     verbose = true;
-    unsigned long int ADC_RATE = 64e6;
-
-    double min_bandwidth = 0.25*(ADC_RATE / 512.0);
-    double max_bandwidth = 0.25*(ADC_RATE /   4.0);
 
     double frequency = 462.0e6;
-    double bandwidth = 250e3f;
+    double bandwidth = 400e3f;
     double num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 
@@ -137,13 +133,7 @@ int main (int argc, char **argv)
 
     unsigned int i;
 
-    if (bandwidth > max_bandwidth) {
-        fprintf(stderr,"error: %s, maximum symbol rate exceeded (%8.4f MHz)\n", argv[0], max_bandwidth*1e-6);
-        exit(1);
-    } else if (bandwidth < min_bandwidth) {
-        fprintf(stderr,"error: %s, minimum symbol rate exceeded (%8.4f kHz)\n", argv[0], min_bandwidth*1e-3);
-        exit(1);
-    } else if (cp_len == 0 || cp_len > M) {
+    if (cp_len == 0 || cp_len > M) {
         fprintf(stderr,"error: %s, cyclic prefix must be in (0,M]\n", argv[0]);
         exit(1);
     }
@@ -155,44 +145,34 @@ int main (int argc, char **argv)
     uhd::device_addr_t dev_addr;
     uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
-    // set properties
-    double rx_rate = 4.0f*bandwidth;
-    // NOTE : the sample rate computation MUST be in double precision so
-    //        that the UHD can compute its decimation rate properly
-    unsigned int decim_rate = (unsigned int)(ADC_RATE / rx_rate);
-    // ensure multiple of 2
-    decim_rate = (decim_rate >> 1) << 1;
-    // compute usrp sampling rate
-    double usrp_rx_rate = ADC_RATE / (float)decim_rate;
-    
     // try to set rx rate
-    usrp->set_rx_rate(ADC_RATE / decim_rate);
+    usrp->set_rx_rate(2.0f * bandwidth);
 
     // get actual rx rate
-    usrp_rx_rate = usrp->get_rx_rate();
+    double usrp_rx_rate = usrp->get_rx_rate();
 
-    // compute arbitrary resampling rate
-    double rx_resamp_rate = rx_rate / usrp_rx_rate;
+    // compute arbitrary resampling rate (make up the difference in software)
+    double rx_resamp_rate = bandwidth / usrp_rx_rate;
 
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(uhd_rxgain);
 
-    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
-            rx_rate * 1e-3f,
+    printf("frequency       :   %10.4f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity       :   %s\n", (verbose?"enabled":"disabled"));
+    printf("usrp sample rate:   %10.4f kHz = %10.4f kHz * %8.6f\n",
             usrp_rx_rate * 1e-3f,
-            rx_resamp_rate,
-            decim_rate);
+            bandwidth    * 1e-3f,
+            1.0f / rx_resamp_rate);
+
+
     if (num_seconds >= 0)
         printf("run time    :   %f seconds\n", num_seconds);
     else
         printf("run time    :   (forever)\n");
 
     // add arbitrary resampling component
-    // TODO : check that resampling rate does indeed correspond to proper bandwidth
-    msresamp_crcf resamp = msresamp_crcf_create(0.5*rx_resamp_rate, 60.0f);
+    msresamp_crcf resamp = msresamp_crcf_create(rx_resamp_rate, 60.0f);
 
     unsigned int block_len = 64;
     assert( (block_len % 2) == 0);  // ensure block length is even
@@ -202,33 +182,11 @@ int main (int argc, char **argv)
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
     std::vector<std::complex<float> > buff(max_samps_per_packet);
 
-    // initialize subcarrier allocation
-    unsigned char p[M];
-    unsigned int guard = M / 6;
-    unsigned int pilot_spacing = 8;
-    unsigned int i0 = (M/2) - guard;
-    unsigned int i1 = (M/2) + guard;
-    for (i=0; i<M; i++) {
-        if ( i == 0 || (i > i0 && i < i1) )
-            p[i] = OFDMFRAME_SCTYPE_NULL;
-        else if ( i < num_notched || i > M-num_notched)
-            p[i] = OFDMFRAME_SCTYPE_NULL;
-        else if ( (i%pilot_spacing)==0 )
-            p[i] = OFDMFRAME_SCTYPE_PILOT;
-        else
-            p[i] = OFDMFRAME_SCTYPE_DATA;
-    }
-
-    unsigned int M_null=0;
-    unsigned int M_pilot=0;
-    unsigned int M_data=0;
-    ofdmframe_validate_sctype(p,M, &M_null, &M_pilot, &M_data);
-
-    // create frame synchronizer
+    // create frame synchronizer (default subcarrier allocation)
     ofdmflexframesync fs = ofdmflexframesync_create(M,
                                                     cp_len,
                                                     taper_len,
-                                                    p,
+                                                    NULL,
                                                     callback,
                                                     (void*)&bandwidth);
     ofdmflexframesync_print(fs);

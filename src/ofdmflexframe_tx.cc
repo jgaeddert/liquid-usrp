@@ -41,7 +41,7 @@ void usage() {
     printf("  M     : number of subcarriers, default: 64\n");
     printf("  C     : cyclic prefix length, default: 16\n");
     printf("  T     : taper length, default: 0\n");
-    printf("  P     : payload length [bytes], default: 256\n");
+    printf("  P     : payload length [bytes], default: 800\n");
     printf("  m     : modulation scheme (qpsk default)\n");
     liquid_print_modulation_schemes();
     printf("  c     : coding scheme (inner): h74 default\n");
@@ -55,12 +55,8 @@ int main (int argc, char **argv)
     // command-line options
     bool verbose = true;
 
-    unsigned long int DAC_RATE = 64e6;
-    double min_bandwidth = 0.25*(DAC_RATE / 512.0);
-    double max_bandwidth = 0.25*(DAC_RATE /   4.0);
-
     double frequency = 462.0e6;
-    double bandwidth = 250e3f;
+    double bandwidth = 400e3f;
     unsigned int num_frames = 1000;     // number of frames to transmit
     double txgain_dB = -12.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
@@ -71,7 +67,7 @@ int main (int argc, char **argv)
     unsigned int taper_len = 0;         // cyclic prefix length
 
     modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
-    unsigned int payload_len = 256;         // original data message length
+    unsigned int payload_len = 800;         // original data message length
     crc_scheme check = LIQUID_CRC_32;       // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_HAMMING128;// fec (outer)
@@ -129,13 +125,7 @@ int main (int argc, char **argv)
 
     unsigned int i;
 
-    if (bandwidth > max_bandwidth) {
-        fprintf(stderr,"error: %s, maximum bandwidth exceeded (%8.4f MHz)\n", argv[0], max_bandwidth*1e-6);
-        return 0;
-    } else if (bandwidth < min_bandwidth) {
-        fprintf(stderr,"error: %s, minimum bandwidth exceeded (%8.4f kHz)\n", argv[0], min_bandwidth*1e-3);
-        exit(1);
-    } else if (cp_len == 0 || cp_len > M) {
+    if (cp_len == 0 || cp_len > M) {
         fprintf(stderr,"error: %s, cyclic prefix must be in (0,M]\n", argv[0]);
         exit(1);
     }
@@ -145,89 +135,47 @@ int main (int argc, char **argv)
     //dev_addr["addr1"] = "192.168.10.3";
     uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
-    // set properties
-    double tx_rate = 4.0*bandwidth;
-
-    // NOTE : the sample rate computation MUST be in double precision so
-    //        that the UHD can compute its interpolation rate properly
-    unsigned int interp_rate = (unsigned int)(DAC_RATE / tx_rate);
-    // ensure multiple of 4
-    interp_rate = (interp_rate >> 2) << 2;
-    // NOTE : there seems to be a bug where if the interp rate is equal to
-    //        240 or 244 we get some weird warning saying that
-    //        "The hardware does not support the requested TX sample rate"
-    while (interp_rate == 240 || interp_rate == 244)
-        interp_rate -= 4;
-    // compute usrp sampling rate
-    double usrp_tx_rate = DAC_RATE / (double)interp_rate;
-    
-    // try to set tx rate
-    usrp->set_tx_rate(DAC_RATE / interp_rate);
+    // try to set tx rate of the USRP
+    usrp->set_tx_rate(2.0f * bandwidth);
 
     // get actual tx rate
-    usrp_tx_rate = usrp->get_tx_rate();
+    double usrp_tx_rate = usrp->get_tx_rate();
 
-    //usrp_tx_rate = 262295.081967213;
-    // compute arbitrary resampling rate
-    double tx_resamp_rate = usrp_tx_rate / tx_rate;
+    // compute arbitrary resampling rate (make up the difference in software)
+    double tx_resamp_rate = usrp_tx_rate / bandwidth;
 
     usrp->set_tx_freq(frequency);
     usrp->set_tx_gain(uhd_txgain);
 
-    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-
-    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
-            tx_rate * 1e-3f,
+    printf("frequency       :   %10.4f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity       :   %s\n", (verbose?"enabled":"disabled"));
+    printf("usrp sample rate:   %10.4f kHz = %10.4f kHz * %8.6f\n",
             usrp_tx_rate * 1e-3f,
-            1.0 / tx_resamp_rate,
-            interp_rate);
+            bandwidth    * 1e-3f,
+            tx_resamp_rate);
 
     // set the IF filter bandwidth
-    //usrp->set_tx_bandwidth(2.0f*tx_rate);
+    //usrp->set_tx_bandwidth(2.0f*bandwidth);
 
     // add arbitrary resampling component
-    // TODO : check that resampling rate does indeed correspond to proper bandwidth
-    msresamp_crcf resamp = msresamp_crcf_create(2.0*tx_resamp_rate, 60.0f);
+    msresamp_crcf resamp = msresamp_crcf_create(tx_resamp_rate, 60.0f);
 
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/20.0f);
-
-    // initialize subcarrier allocation
-    unsigned char p[M];
-    unsigned int guard = M / 6;
-    unsigned int pilot_spacing = 8;
-    unsigned int i0 = (M/2) - guard;
-    unsigned int i1 = (M/2) + guard;
-    for (i=0; i<M; i++) {
-        if ( i == 0 || (i > i0 && i < i1) )
-            p[i] = OFDMFRAME_SCTYPE_NULL;
-        else if ( i < num_notched || i > M-num_notched)
-            p[i] = OFDMFRAME_SCTYPE_NULL;
-        else if ( (i%pilot_spacing)==0 )
-            p[i] = OFDMFRAME_SCTYPE_PILOT;
-        else
-            p[i] = OFDMFRAME_SCTYPE_DATA;
-    }
-
-    unsigned int M_null=0;
-    unsigned int M_pilot=0;
-    unsigned int M_data=0;
-    ofdmframe_validate_sctype(p,M, &M_null, &M_pilot, &M_data);
 
     // data arrays
     unsigned char header[8];
     unsigned char payload[payload_len];
     
-    // create frame generator
+    // create frame generator (default subcarrier allocation)
     ofdmflexframegenprops_s fgprops;
     ofdmflexframegenprops_init_default(&fgprops);
     fgprops.check           = check;
     fgprops.fec0            = fec0;
     fgprops.fec1            = fec1;
     fgprops.mod_scheme      = ms;
-    ofdmflexframegen fg = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
+    ofdmflexframegen fg = ofdmflexframegen_create(M, cp_len, taper_len, NULL, &fgprops);
     ofdmflexframegen_print(fg);
 
     // allocate array to hold each OFDM symbol
