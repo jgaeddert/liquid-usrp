@@ -88,6 +88,7 @@ library_headers :=			\
 
 # example programs
 example_src :=				\
+	src/asgram_rx.cc		\
 	src/iqpr_test.cc		\
 	src/flexframe_tx.cc		\
 	src/flexframe_rx.cc		\
