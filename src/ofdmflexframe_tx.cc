@@ -47,7 +47,6 @@ void usage() {
     printf("  c     : coding scheme (inner): h74 default\n");
     printf("  k     : coding scheme (outer): none default\n");
     liquid_print_fec_schemes();
-    printf("  z     : number of subcarriers to notch in the center band, default: 0\n");
 }
 
 int main (int argc, char **argv)
@@ -55,28 +54,26 @@ int main (int argc, char **argv)
     // command-line options
     bool verbose = true;
 
-    double frequency = 462.0e6;
-    double bandwidth = 400e3f;
+    double frequency = 462.0e6;         // carrier frequency
+    double bandwidth = 600e3f;          // bandwidth
     unsigned int num_frames = 1000;     // number of frames to transmit
     double txgain_dB = -12.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
     // ofdm properties
     unsigned int M = 48;                // number of subcarriers
-    unsigned int cp_len = 8;            // cyclic prefix length
-    unsigned int taper_len = 0;         // cyclic prefix length
+    unsigned int cp_len = 6;            // cyclic prefix length
+    unsigned int taper_len = 4;         // taper length
 
     modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
     unsigned int payload_len = 800;         // original data message length
     crc_scheme check = LIQUID_CRC_32;       // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
-    fec_scheme fec1 = LIQUID_FEC_HAMMING128;// fec (outer)
+    fec_scheme fec1 = LIQUID_FEC_GOLAY2412; // fec (outer)
     
-    unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
-
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:T:P:m:c:k:z:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:T:P:m:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -91,35 +88,10 @@ int main (int argc, char **argv)
         case 'C':   cp_len      = atoi(optarg);     break;
         case 'T':   taper_len   = atoi(optarg);     break;
         case 'P':   payload_len = atoi(optarg);     break;
-        case 'm':
-            ms = liquid_getopt_str2mod(optarg);
-            if (ms == LIQUID_MODEM_UNKNOWN) {
-                fprintf(stderr,"error: %s, unknown/unsupported mod. scheme: %s\n", argv[0], optarg);
-                exit(-1);
-            }
-            break;
-        case 'c':
-            // inner FEC scheme
-            fec0 = liquid_getopt_str2fec(optarg);
-            if (fec0 == LIQUID_FEC_UNKNOWN) {
-                fprintf(stderr,"error: unknown/unsupported inner FEC scheme \"%s\"\n\n",optarg);
-                exit(1);
-            }
-            break;
-        case 'k':
-            // outer FEC scheme
-            fec1 = liquid_getopt_str2fec(optarg);
-            if (fec1 == LIQUID_FEC_UNKNOWN) {
-                fprintf(stderr,"error: unknown/unsupported outer FEC scheme \"%s\"\n\n",optarg);
-                exit(1);
-            }
-            break;
-        case 'z':
-            num_notched = atoi(optarg);
-            break;
-        default:
-            usage();
-            return 0;
+        case 'm':   ms          = liquid_getopt_str2mod(optarg);    break;
+        case 'c':   fec0        = liquid_getopt_str2fec(optarg);    break;
+        case 'k':   fec1        = liquid_getopt_str2fec(optarg);    break;
+        default:    usage();                        return 0;
         }
     }
 
@@ -128,6 +100,9 @@ int main (int argc, char **argv)
     if (cp_len == 0 || cp_len > M) {
         fprintf(stderr,"error: %s, cyclic prefix must be in (0,M]\n", argv[0]);
         exit(1);
+    } else if (ms == LIQUID_MODEM_UNKNOWN) {
+        fprintf(stderr,"error: %s, unknown/unsupported mod. scheme\n", argv[0]);
+        exit(-1);
     }
 
     uhd::device_addr_t dev_addr;
@@ -135,8 +110,8 @@ int main (int argc, char **argv)
     //dev_addr["addr1"] = "192.168.10.3";
     uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
-    // try to set tx rate of the USRP
-    usrp->set_tx_rate(2.0f * bandwidth);
+    // try to set tx rate (oversampled to compensate for CIC filter)
+    usrp->set_tx_rate(3.0f * bandwidth);
 
     // get actual tx rate
     double usrp_tx_rate = usrp->get_tx_rate();

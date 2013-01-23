@@ -89,7 +89,7 @@ void usage() {
     printf("  C     :   cyclic prefix length, default: 16\n");
     printf("  T     :   taper length, default: 0\n");
     printf("  t     :   run time [seconds]\n");
-    printf("  z     :   number of subcarriers to notch in the center band, default: 0\n");
+    printf("  d     :   enable debugging mode\n");
 }
 
 int main (int argc, char **argv)
@@ -98,20 +98,20 @@ int main (int argc, char **argv)
     verbose = true;
 
     double frequency = 462.0e6;
-    double bandwidth = 400e3f;
+    double bandwidth = 600e3f;
     double num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 
     // ofdm properties
     unsigned int M = 48;                // number of subcarriers
-    unsigned int cp_len = 8;            // cyclic prefix length
-    unsigned int taper_len = 0;         // taper length
+    unsigned int cp_len = 6;            // cyclic prefix length
+    unsigned int taper_len = 4;         // taper length
 
-    unsigned int num_notched = 0;       // number of subcarrier in the center band to notch
+    int debug_enabled =  0;             // enable debugging?
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:T:t:z:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:T:t:d")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -124,7 +124,7 @@ int main (int argc, char **argv)
         case 'C':   cp_len = atoi(optarg);          break;
         case 'T':   taper_len = atoi(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
-        case 'z':   num_notched = atoi(optarg);     break;
+        case 'd':   debug_enabled = 1;              break;
         default:
             usage();
             return 0;
@@ -145,8 +145,8 @@ int main (int argc, char **argv)
     uhd::device_addr_t dev_addr;
     uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
-    // try to set rx rate
-    usrp->set_rx_rate(2.0f * bandwidth);
+    // try to set rx rate (oversampled to compensate for CIC filter)
+    usrp->set_rx_rate(3.0f * bandwidth);
 
     // get actual rx rate
     double usrp_rx_rate = usrp->get_rx_rate();
@@ -183,12 +183,9 @@ int main (int argc, char **argv)
     std::vector<std::complex<float> > buff(max_samps_per_packet);
 
     // create frame synchronizer (default subcarrier allocation)
-    ofdmflexframesync fs = ofdmflexframesync_create(M,
-                                                    cp_len,
-                                                    taper_len,
-                                                    NULL,
-                                                    callback,
-                                                    (void*)&bandwidth);
+    ofdmflexframesync fs = ofdmflexframesync_create(M,cp_len,taper_len,NULL,callback,(void*)&bandwidth);
+    if (debug_enabled)
+        ofdmflexframesync_debug_enable(fs);
     ofdmflexframesync_print(fs);
 
     // start data transfer
@@ -196,7 +193,7 @@ int main (int argc, char **argv)
     printf("usrp data transfer started\n");
  
     // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2*rx_resamp_rate) + 64];
+    std::complex<float> buffer_resamp[(int)(2.0f/rx_resamp_rate) + 64];
  
     // reset counters
     num_frames_detected=0;
@@ -271,6 +268,10 @@ int main (int argc, char **argv)
     printf("    bytes received      : %6u\n", num_valid_bytes_received);
     printf("    run time            : %f s\n", runtime);
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
+
+    // export debugging file
+    if (debug_enabled)
+        ofdmflexframesync_debug_print(fs, "ofdmflexframesync_debug.m");
 
     // destroy objects
     msresamp_crcf_destroy(resamp);
