@@ -48,7 +48,7 @@ int main (int argc, char **argv)
 
     float frequency      = 462.0e6;
     float bandwidth      = 800e3f;
-    float num_seconds    = 30.0f;
+    float runtime        = 30.0f;
     double uhd_rxgain    = 20.0;
     unsigned int nfft    = 64;
     unsigned int msdelay = 100;
@@ -60,7 +60,7 @@ int main (int argc, char **argv)
         case 'h':   usage();                    return 0;
         case 'f':   frequency   = atof(optarg); break;
         case 'b':   bandwidth   = atof(optarg); break;
-        case 't':   num_seconds = atof(optarg); break;
+        case 't':   runtime     = atof(optarg); break;
         case 'G':   uhd_rxgain  = atof(optarg); break;
         default:    usage();                    return 1;
         }
@@ -94,8 +94,8 @@ int main (int argc, char **argv)
             1.0f / rx_resamp_rate);
 
 
-    if (num_seconds >= 0)
-        printf("run time    :   %f seconds\n", num_seconds);
+    if (runtime >= 0)
+        printf("run time    :   %f seconds\n", runtime);
     else
         printf("run time    :   (forever)\n");
 
@@ -112,6 +112,12 @@ int main (int argc, char **argv)
     asgram q = asgram_create(x,nfft);
     asgram_set_scale(q,15);
     asgram_set_offset(q,0);
+    
+    // create/initialize Hamming window
+    float w[nfft];
+    unsigned int i;
+    for (i=0; i<nfft; i++)
+        w[i] = hamming(i,nfft);
 
     unsigned int block_len = 64;
     assert( (block_len % 2) == 0);  // ensure block length is even
@@ -158,10 +164,9 @@ int main (int argc, char **argv)
 
         // push data through arbitrary resampler and give to frame synchronizer
         // TODO : apply bandwidth-dependent gain
-        unsigned int j;
-        for (j=0; j<num_rx_samps; j++) {
+        for (i=0; i<num_rx_samps; i++) {
             // grab sample from usrp buffer
-            std::complex<float> usrp_sample = buff[j];
+            std::complex<float> usrp_sample = buff[i];
 
             // push through resampler (one at a time)
             unsigned int nw;
@@ -175,10 +180,11 @@ int main (int argc, char **argv)
             // reset timer
             timer_tic(t1);
 
-            // run asgram
+            // apply window and run asgram
             std::complex<float> * rc;
             windowcf_read(buffer, &rc);
-            memmove(x, rc, nfft*sizeof(std::complex<float>));
+            for (i=0; i<nfft; i++)
+                x[i] = rc[i] * w[i];
             asgram_execute(q, ascii, &maxval, &maxfreq);
             
             // print the spectrogram
@@ -186,13 +192,10 @@ int main (int argc, char **argv)
         }
 
         // check runtime
-        if (timer_toc(t0) >= num_seconds)
+        if (timer_toc(t0) >= runtime)
             continue_running = 0;
     }
  
-    // compute actual run-time
-    float runtime = timer_toc(t0);
-
     // stop data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
     printf("\n");
