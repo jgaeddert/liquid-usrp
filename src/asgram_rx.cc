@@ -55,13 +55,14 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"hf:b:t:G:")) != EOF) {
+    while ((d = getopt(argc,argv,"hf:b:t:G:n:")) != EOF) {
         switch (d) {
         case 'h':   usage();                    return 0;
         case 'f':   frequency   = atof(optarg); break;
         case 'b':   bandwidth   = atof(optarg); break;
         case 't':   runtime     = atof(optarg); break;
         case 'G':   uhd_rxgain  = atof(optarg); break;
+        case 'n':   nfft        = atoi(optarg); break;
         default:    usage();                    return 1;
         }
     }
