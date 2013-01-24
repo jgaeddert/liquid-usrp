@@ -94,6 +94,7 @@ int main (int argc, char **argv)
             bandwidth    * 1e-3f,
             1.0f / rx_resamp_rate);
 
+    unsigned int i;
 
     if (runtime >= 0)
         printf("run time    :   %f seconds\n", runtime);
@@ -113,10 +114,19 @@ int main (int argc, char **argv)
     asgram q = asgram_create(x,nfft);
     asgram_set_scale(q,15);
     asgram_set_offset(q,0);
+
+    // assemble footer
+    unsigned int footer_len = nfft + 16;
+    char footer[footer_len+1];
+    for (i=0; i<footer_len; i++)
+        footer[i] = ' ';
+    footer[1] = '[';
+    footer[nfft/2 + 3] = '+';
+    footer[nfft + 4] = ']';
+    sprintf(&footer[nfft+6], "%8.3f MHz", frequency*1e-6f);
     
     // create/initialize Hamming window
     float w[nfft];
-    unsigned int i;
     for (i=0; i<nfft; i++)
         w[i] = hamming(i,nfft);
 
@@ -190,6 +200,8 @@ int main (int argc, char **argv)
             
             // print the spectrogram
             printf(" > %s < pk%5.1fdB [%5.2f]\n", ascii, maxval, maxfreq);
+            printf("%s\r", footer);
+            fflush(stdout);
         }
 
         // check runtime
