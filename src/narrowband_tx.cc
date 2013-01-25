@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2011 Joseph Gaeddert
- * Copyright (c) 2011 Virginia Polytechnic Institute & State University
+ * Copyright (c) 2011, 2013 Joseph Gaeddert
  *
  * This file is part of liquid.
  *
@@ -42,17 +41,16 @@ void usage() {
     printf("  G     : uhd tx gain [dB] (default: 40dB)\n");
     printf("  t     : execute time [s], default: 10\n");
     printf("  m     : modulation scheme (qpsk default)\n");
-    printf("  F     : filter type: [rrcos], rkaiser, arkaiser, hM3, gmsk, fexp, fsech, farcsech\n");
+    printf("  F     : matched filter type: [rrcos], rkaiser, arkaiser, hM3, gmsk, fexp, fsech, farcsech\n");
+    printf("  K     : matched filter samples/symbol,  default: 2\n");
+    printf("  M     : matched filter semi-length,     default: 9\n");
+    printf("  B     : matchedfilter excess bandwidth, default: 0.2\n");
 }
 
 int main (int argc, char **argv)
 {
     // command-line options
     bool verbose = true;
-
-    unsigned long int DAC_RATE = 64e6;
-    double min_bandwidth = 40e3f;
-    double max_bandwidth = 8000e3f;
 
     double frequency = 462.0e6;
     double bandwidth = 160e3f;
@@ -65,12 +63,13 @@ int main (int argc, char **argv)
     
     // transmit filter properties
     liquid_rnyquist_type ftype = LIQUID_RNYQUIST_RRC;
-    unsigned int m = 3;         // matched-filter semi-length
-    float beta = 0.3f;          // excess bandwidth factor
+    unsigned int k = 2;         // matched-filter samples/symbol
+    unsigned int m = 9;         // matched-filter semi-length
+    float beta     = 0.2f;      // excess bandwidth factor
 
     //
     int d;
-    while ((d = getopt(argc,argv,"hqvf:b:g:G:t:m:F:")) != EOF) {
+    while ((d = getopt(argc,argv,"hqvf:b:g:G:t:m:F:K:M:B:")) != EOF) {
         switch (d) {
         case 'h':   usage();                        return 0;
         case 'q':   verbose = false;                break;
@@ -101,17 +100,23 @@ int main (int argc, char **argv)
                 exit(1);
             }
             break;
+        case 'K':   k    = atoi(optarg);    break;
+        case 'M':   m    = atoi(optarg);    break;
+        case 'B':   beta = atof(optarg);    break;
         default:
             usage();
             return 0;
         }
     }
 
-    if (bandwidth > max_bandwidth) {
-        fprintf(stderr,"error: %s, maximum bandwidth exceeded (%8.4f MHz)\n", argv[0], max_bandwidth*1e-6);
-        return 0;
-    } else if (bandwidth < min_bandwidth) {
-        fprintf(stderr,"error: %s, minimum bandwidth exceeded (%8.4f kHz)\n", argv[0], min_bandwidth*1e-3);
+    if (k < 2) {
+        fprintf(stderr,"error: %s, filter samples/symbol must be at least 2\n", argv[0]);
+        exit(1);
+    } else if (m < 1) {
+        fprintf(stderr,"error: %s, filter semi-length must be at least 1\n", argv[0]);
+        exit(1);
+    } else if (beta <= 0.0f || beta > 1.0f) {
+        fprintf(stderr,"error: %s, filter excess bandwidth must be in (0, 1]\n", argv[0]);
         exit(1);
     }
 
@@ -120,49 +125,26 @@ int main (int argc, char **argv)
     //dev_addr["addr1"] = "192.168.10.3";
     uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
-    // set properties
-    double tx_rate = 2.0*bandwidth;
-
-    // NOTE : the sample rate computation MUST be in double precision so
-    //        that the UHD can compute its interpolation rate properly
-    unsigned int interp_rate = (unsigned int)(DAC_RATE / tx_rate);
-    // ensure multiple of 4
-    interp_rate = (interp_rate >> 2) << 2;
-    // NOTE : there seems to be a bug where if the interp rate is equal to
-    //        240 or 244 we get some weird warning saying that
-    //        "The hardware does not support the requested TX sample rate"
-    while (interp_rate == 240 || interp_rate == 244)
-        interp_rate -= 4;
-
-    // force interpolation rate to be in [8,512] (if only this worked...)
-    if (interp_rate > 512) interp_rate = 512;
-    if (interp_rate < 8)   interp_rate = 8;
-    printf("usrp interp rate: %u\n", interp_rate);
-
-    // compute usrp sampling rate
-    double usrp_tx_rate = DAC_RATE / (double)interp_rate;
-    
-    // try to set tx rate
-    usrp->set_tx_rate(DAC_RATE / interp_rate);
+    // try to set tx rate (oversampled to compensate for CIC filter)
+    usrp->set_tx_rate(2.0f * k * bandwidth);
 
     // get actual tx rate
-    usrp_tx_rate = usrp->get_tx_rate();
+    double usrp_tx_rate = usrp->get_tx_rate();
 
-    // compute arbitrary resampling rate
-    double tx_resamp_rate = usrp_tx_rate / tx_rate;
+    // compute arbitrary resampling rate (make up the difference in software)
+    double tx_resamp_rate = usrp_tx_rate / (k * bandwidth);
 
     usrp->set_tx_freq(frequency);
     usrp->set_tx_gain(uhd_txgain);
 
-    printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
-
-    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (interp %u)\n",
-            tx_rate * 1e-3f,
+    printf("frequency       :   %10.4f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity       :   %s\n", (verbose?"enabled":"disabled"));
+    printf("usrp sample rate:   %.4f kHz = %.4f kHz * %u samp/sym * %.4f resamp rate\n",
             usrp_tx_rate * 1e-3f,
-            1.0 / tx_resamp_rate,
-            interp_rate);
+            bandwidth    * 1e-3f,
+            k,
+            tx_resamp_rate);
 
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
@@ -172,29 +154,23 @@ int main (int argc, char **argv)
     unsigned int M = 1 << modem_get_bps(mod);
 
     // create matched filter interpolator
-    interp_crcf mfinterp = interp_crcf_create_rnyquist(ftype, 2, m, beta, 0);
+    interp_crcf mfinterp = interp_crcf_create_rnyquist(ftype, k, m, beta, 0);
 
     // create arbitrary resampler
-#if 0
-    resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,64);
-    resamp_crcf_setrate(resamp, tx_resamp_rate);
-#else
     msresamp_crcf resamp = msresamp_crcf_create(tx_resamp_rate,60.0f);
-    printf("arbitrary resampling rate: %f\n", tx_resamp_rate);
-#endif
 
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/20.0f);
 
     // buffer lengths
     unsigned int num_symbols = 40;  // number of symbols per buffer
-    unsigned int resamp_buffer_len = 2*num_symbols*tx_resamp_rate;
-    if (resamp_buffer_len < 2*num_symbols)
-        resamp_buffer_len = 2*num_symbols;
+    unsigned int resamp_buffer_len = k*num_symbols*tx_resamp_rate;
+    if (resamp_buffer_len < k*num_symbols)
+        resamp_buffer_len = k*num_symbols;
 
     // buffers
     std::complex<float> buffer[num_symbols];
-    std::complex<float> buffer_interp[2*num_symbols];
+    std::complex<float> buffer_interp[k*num_symbols];
     std::complex<float> buffer_resamp[resamp_buffer_len];
 
     // set up the metadata flags
@@ -216,19 +192,15 @@ int main (int argc, char **argv)
         for (j=0; j<num_symbols; j++)
             modem_modulate(mod, rand()%M, &buffer[j]);
 
-        // interpolate by 2
+        // interpolate by k
         for (j=0; j<num_symbols; j++)
-            interp_crcf_execute(mfinterp, buffer[j], &buffer_interp[2*j]);
+            interp_crcf_execute(mfinterp, buffer[j], &buffer_interp[k*j]);
         
         // resample
         unsigned int nw;
         unsigned int n=0;
-        for (j=0; j<2*num_symbols; j++) {
-#if 0
-            resamp_crcf_execute(resamp, buffer_interp[j], &buffer_resamp[n], &nw);
-#else
+        for (j=0; j<k*num_symbols; j++) {
             msresamp_crcf_execute(resamp, &buffer_interp[j], 1, &buffer_resamp[n], &nw);
-#endif
             n += nw;
         }
 
