@@ -48,7 +48,7 @@ int main (int argc, char **argv)
 
     float frequency      = 462.0e6;
     float bandwidth      = 800e3f;
-    float runtime        = 30.0f;
+    float num_seconds    = 30.0f;
     double uhd_rxgain    = 20.0;
     unsigned int nfft    = 64;
     unsigned int msdelay = 100;
@@ -60,7 +60,7 @@ int main (int argc, char **argv)
         case 'h':   usage();                    return 0;
         case 'f':   frequency   = atof(optarg); break;
         case 'b':   bandwidth   = atof(optarg); break;
-        case 't':   runtime     = atof(optarg); break;
+        case 't':   num_seconds = atof(optarg); break;
         case 'G':   uhd_rxgain  = atof(optarg); break;
         case 'n':   nfft        = atoi(optarg); break;
         default:    usage();                    return 1;
@@ -208,7 +208,7 @@ int main (int argc, char **argv)
         }
 
         // check runtime
-        if (timer_toc(t0) >= runtime)
+        if (timer_toc(t0) >= num_seconds)
             continue_running = 0;
     }
  
