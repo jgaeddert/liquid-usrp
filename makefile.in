@@ -97,8 +97,6 @@ example_src :=				\
 	src/narrowband_tx.cc		\
 	src/ofdmflexframe_rx.cc		\
 	src/ofdmflexframe_tx.cc		\
-	src/ofdm_rx.cc			\
-	src/ofdm_tx.cc			\
 	src/packet_rx.cc		\
 	src/packet_tx.cc		\
 	src/ping.cc			\
@@ -129,6 +127,8 @@ example_src :=				\
 #	src/ofdmoqamframe64_tx.cc
 #	src/ofdmoqamframe64_rx.cc
 #	src/gr_usrp_tx_test.cc
+#	src/ofdm_rx.cc
+#	src/ofdm_tx.cc
 
 
 ##
