@@ -96,10 +96,13 @@ int main (int argc, char **argv)
 
     unsigned int i;
 
-    if (runtime >= 0)
-        printf("run time    :   %f seconds\n", runtime);
-    else
-        printf("run time    :   (forever)\n");
+    // set run time appropriately
+    if (num_seconds < 0) {
+        num_seconds = 1e32; // set to really, really large number
+        printf("run time        :   (forever)\n");
+    } else {
+        printf("run time        :   %f seconds\n", num_seconds);
+    }
 
     // add arbitrary resampling component
     msresamp_crcf resamp = msresamp_crcf_create(rx_resamp_rate, 60.0f);

@@ -166,10 +166,13 @@ int main (int argc, char **argv)
             usrp_rx_rate * 1e-3f,
             rx_resamp_rate,
             decim_rate);
-    if (num_seconds >= 0)
-        printf("run time    :   %f seconds\n", num_seconds);
-    else
-        printf("run time    :   (forever)\n");
+    // set run time appropriately
+    if (num_seconds < 0) {
+        num_seconds = 1e32; // set to really, really large number
+        printf("run time        :   (forever)\n");
+    } else {
+        printf("run time        :   %f seconds\n", num_seconds);
+    }
 
     // add arbitrary resampling component
     // TODO : check that resampling rate does indeed correspond to proper bandwidth
