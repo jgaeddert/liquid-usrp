@@ -36,9 +36,11 @@ void usage() {
     printf("  h     : help\n");
     printf("  f     : center frequency [Hz], default: 462 MHz\n");
     printf("  b     : bandwidth [Hz],        default: 800 kHz\n");
-    printf("  t     : run time [seconds], default: 30\n");
-    printf("  G     : uhd rx gain [dB], default: 20 dB\n");
-    printf("  n     : FFT size,         default: 64\n");
+    printf("  t     : run time [seconds],    default:  30 s\n");
+    printf("  G     : uhd rx gain [dB],      default:  20 dB\n");
+    printf("  n     : FFT size,              default:  64\n");
+    printf("  o     : offset                 default: -65 dB\n");
+    printf("  s     : scale                  default:   5 dB\n");
 }
 
 int main (int argc, char **argv)
@@ -52,10 +54,12 @@ int main (int argc, char **argv)
     double uhd_rxgain    = 20.0;
     unsigned int nfft    = 64;
     unsigned int msdelay = 100;
+    float offset         = -65.0f;
+    float scale          = 5.0f;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"hf:b:t:G:n:")) != EOF) {
+    while ((d = getopt(argc,argv,"hf:b:t:G:n:s:o:")) != EOF) {
         switch (d) {
         case 'h':   usage();                    return 0;
         case 'f':   frequency   = atof(optarg); break;
@@ -63,6 +67,8 @@ int main (int argc, char **argv)
         case 't':   num_seconds = atof(optarg); break;
         case 'G':   uhd_rxgain  = atof(optarg); break;
         case 'n':   nfft        = atoi(optarg); break;
+        case 'o':   offset      = atof(optarg); break;
+        case 's':   scale       = atof(optarg); break;
         default:    usage();                    return 1;
         }
     }
@@ -108,15 +114,12 @@ int main (int argc, char **argv)
     msresamp_crcf resamp = msresamp_crcf_create(rx_resamp_rate, 60.0f);
 
     // create ASCII spectrogram object
-    std::complex<float> x[nfft];
-    windowcf buffer = windowcf_create(nfft);
     float maxval;
     float maxfreq;
     char ascii[nfft+1];
     ascii[nfft] = '\0'; // append null character to end of string
-    asgram q = asgram_create(x,nfft);
-    asgram_set_scale(q,15);
-    asgram_set_offset(q,0);
+    asgram q = asgram_create(nfft);
+    asgram_set_scale(q, offset, scale);
 
     // assemble footer
     unsigned int footer_len = nfft + 16;
@@ -186,19 +189,15 @@ int main (int argc, char **argv)
             unsigned int nw;
             msresamp_crcf_execute(resamp, &usrp_sample, 1, buffer_resamp, &nw);
 
-            // push resulting samples into buffer
-            windowcf_write(buffer, buffer_resamp, nw);
+            // push resulting samples into asgram object
+            asgram_push(q, buffer_resamp, nw);
         }
 
         if (timer_toc(t1) > msdelay*1e-3f) {
             // reset timer
             timer_tic(t1);
 
-            // apply window and run asgram
-            std::complex<float> * rc;
-            windowcf_read(buffer, &rc);
-            for (i=0; i<nfft; i++)
-                x[i] = rc[i] * w[i];
+            // run the spectrogram
             asgram_execute(q, ascii, &maxval, &maxfreq);
             
             // print the spectrogram
@@ -220,7 +219,6 @@ int main (int argc, char **argv)
     // destroy objects
     msresamp_crcf_destroy(resamp);
     asgram_destroy(q);
-    windowcf_destroy(buffer);
     timer_destroy(t0);
     timer_destroy(t1);
 
