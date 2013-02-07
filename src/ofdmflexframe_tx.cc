@@ -95,8 +95,6 @@ int main (int argc, char **argv)
         }
     }
 
-    unsigned int i;
-
     if (cp_len == 0 || cp_len > M) {
         fprintf(stderr,"error: %s, cyclic prefix must be in (0,M]\n", argv[0]);
         exit(1);
