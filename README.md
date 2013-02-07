@@ -24,7 +24,7 @@ Build Guide
         
         $ git clone git://github.com/jgaeddert/liquid-dsp.git
         $ cd liquid-dsp
-        $ ./reconf
+        $ ./bootstrap.sh
         $ ./configure
         $ make
         $ make check                    # run optional tests
