@@ -21,11 +21,15 @@ makefile
 octave-core
 
 # ignore all programs
+src/asgram_rx
 src/flexframe_rx
 src/flexframe_tx
 src/gmskframe_rx
 src/gmskframe_tx
 src/iqpr_test
+src/multichannel_rx
+src/multichannel_tx
+src/narrowband_tx
 src/ofdmflexframe_rx
 src/ofdmflexframe_tx
 src/packet_rx
