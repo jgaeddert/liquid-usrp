@@ -96,6 +96,7 @@ example_src :=				\
 	src/iqpr_test.cc		\
 	src/flexframe_tx.cc		\
 	src/flexframe_rx.cc		\
+	src/fullduplex_txrx.cc		\
 	src/gmskframe_tx.cc		\
 	src/gmskframe_rx.cc		\
 	src/multichannel_rx.cc		\
