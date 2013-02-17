@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013 Joseph Gaeddert
+ * Copyright (c) 2013 Joseph Gaeddert
  *
  * This file is part of liquid.
  *
@@ -36,8 +36,9 @@ void usage() {
     printf("\n");
     printf("  h     : usage/help\n");
     printf("  v/q   : verbose/quiet\n");
-    printf("  f     : downlink frequency [Hz],  default:  462 MHz\n");
-    printf("  o     : uplink freq. offset [Hz], default: +1.2 MHz\n");
+    printf("  f     : tx frequency [Hz],        default:  462 MHz\n");
+    printf("  o     : rx frequency offset [Hz], default:  +40 MHz\n");
+    printf("  R     : reverse tx/rx frequencies,default: false\n");
     printf("  b     : bandwidth [Hz],           default:  400 kHz\n");
     printf("  g     : software tx gain [dB],    default:  -12 dB\n");
     printf("  G     : uhd tx gain [dB],         default:   40 dB\n");
@@ -60,8 +61,9 @@ void * rx_worker(void * _userdata);
 // command-line options
 bool verbose = true;
 
-double frequency        = 462.0e6;  // downlink frequency
-double offset           = 2000e3f;  // uplink frequency offset
+double frequency        = 462.0e6;  // tx frequency
+double offset           =   40e6f;  // rx frequency offset
+int reverse_txrx        = 0;        // reverse tx/rx frequencies
 double bandwidth        = 800e3f;   // bandwidth
 unsigned int num_frames = 1000;     // number of frames to transmit
 double txgain_dB        = -12.0f;   // software tx gain [dB]
@@ -98,13 +100,14 @@ int main (int argc, char **argv)
 {
     //
     int d;
-    while ((d = getopt(argc,argv,"hvqf:o:b:g:G:N:M:C:T:P:m:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"hvqf:o:Rb:g:G:N:M:C:T:P:m:c:k:")) != EOF) {
         switch (d) {
         case 'h':   usage();                        return 0;
         case 'v':   verbose     = true;             break;
         case 'q':   verbose     = false;            break;
         case 'f':   frequency   = atof(optarg);     break;
         case 'o':   offset      = atof(optarg);     break;
+        case 'R':   reverse_txrx= 1;                break;
         case 'b':   bandwidth   = atof(optarg);     break;
         case 'g':   txgain_dB   = atof(optarg);     break;
         case 'G':   uhd_txgain  = atof(optarg);     break;
@@ -165,7 +168,7 @@ int main (int argc, char **argv)
 void * tx_worker(void * _args)
 {
     // options
-    double tx_frequency = frequency;
+    double tx_frequency = reverse_txrx ? frequency + offset : frequency;
 
     uhd::device_addr_t dev_addr;
     //dev_addr["addr0"] = "192.168.10.2";
@@ -183,6 +186,7 @@ void * tx_worker(void * _args)
 
     usrp->set_tx_freq(tx_frequency);
     usrp->set_tx_gain(uhd_txgain);
+    usrp->set_tx_antenna("TX/RX");
 
     printf("tx frequency    :   %10.4f [MHz]\n", tx_frequency*1e-6f);
     printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
@@ -231,6 +235,7 @@ void * tx_worker(void * _args)
     md.start_of_burst = false;  // never SOB when continuous
     md.end_of_burst   = false;  // 
     md.has_time_spec  = false;  // set to false to send immediately
+    //md.time_spec = uhd::time_spec_t(0.1);
 
     unsigned int j;
     unsigned int pid;
@@ -330,7 +335,7 @@ void * rx_worker(void * _args)
     double uhd_rxgain = 20.0f;
     double num_seconds = 600.0f;
     int debug_enabled = 0;
-    double rx_frequency = frequency + offset;
+    double rx_frequency = reverse_txrx ? frequency : frequency + offset;
 
     uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
 
@@ -348,8 +353,9 @@ void * rx_worker(void * _args)
     // compute arbitrary resampling rate (make up the difference in software)
     double rx_resamp_rate = bandwidth / usrp_rx_rate;
 
-    usrp->set_rx_freq(frequency + offset);
+    usrp->set_rx_freq(rx_frequency);
     usrp->set_rx_gain(uhd_rxgain);
+    usrp->set_rx_antenna("RX2");
 
     printf("rx frequency    :   %10.4f [MHz]\n", rx_frequency*1e-6f);
     printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
