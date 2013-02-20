@@ -35,6 +35,10 @@ void usage() {
     printf("  q/v   : quiet/verbose\n");
     printf("  f     : center frequency [Hz],  default: 462 MHz\n");
     printf("  b     : channel bandwidth [Hz], default: 200 kHz\n");
+    printf("  M     : number of subcarriers,  default:  48\n");
+    printf("  C     : cyclic prefix length,   default:   6\n");
+    printf("  T     : taper length,           default:   4\n");
+    printf("  P     : payload length [bytes], default: 1200 bytes\n");
     printf("  n     : number of channels,     default: 1\n");
     printf("  g     : software tx gain [dB],  default: -10 dB\n");
     printf("  G     : uhd tx gain [dB],       default: 40 dB\n");
@@ -51,13 +55,14 @@ int main (int argc, char **argv)
     double txgain_dB = -10.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
-    unsigned int payload_len = 256;     // original data message length
-#if 0
-    // ofdm properties
-    unsigned int M = 48;                // number of subcarriers
-    unsigned int cp_len = 8;            // cyclic prefix length
-    unsigned int taper_len = 0;         // cyclic prefix length
+    unsigned int payload_len = 1200;    // original data message length
 
+    // ofdm properties
+    unsigned int M          = 48;       // number of subcarriers
+    unsigned int cp_len     =  6;       // cyclic prefix length
+    unsigned int taper_len  =  4;       // cyclic prefix length
+
+#if 0
     modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
     crc_scheme check = LIQUID_CRC_32;       // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
@@ -66,7 +71,7 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"hqvf:b:n:g:G:")) != EOF) {
+    while ((d = getopt(argc,argv,"hqvf:b:M:C:T:P:n:g:G:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -74,6 +79,10 @@ int main (int argc, char **argv)
         case 'v':   verbose     = true;             break;
         case 'f':   frequency   = atof(optarg);     break;
         case 'b':   bandwidth   = atof(optarg);     break;
+        case 'M':   M           = atoi(optarg);     break;
+        case 'C':   cp_len      = atoi(optarg);     break;
+        case 'T':   taper_len   = atoi(optarg);     break;
+        case 'P':   payload_len = atoi(optarg);     break;
         case 'n':   num_channels= atoi(optarg);     break;
         case 'g':   txgain_dB   = atof(optarg);     break;
         case 'G':   uhd_txgain  = atof(optarg);     break;
@@ -130,8 +139,8 @@ int main (int argc, char **argv)
     for (i=0; i<num_channels; i++)
         pid[i] = 0;
     
-    // create multichannel transmitter object...
-    multichanneltx mctx(num_channels);
+    // create multichannel transmitter object
+    multichanneltx mctx(num_channels, M, cp_len, taper_len);
     
     // allocate array to hold samples
     unsigned int mctx_buffer_len = 2*num_channels;

@@ -68,11 +68,14 @@ void usage() {
     printf("ofdmflexframe_rx -- receive OFDM packets\n");
     printf("  u,h   : usage/help\n");
     printf("  q/v   : quiet/verbose\n");
-    printf("  f     : center frequency [Hz],default: 462 MHz\n");
-    printf("  b     : bandwidth [Hz],       default: 250 kHz\n");
-    printf("  n     : number of channels,   default: 1\n");
-    printf("  G     : uhd rx gain [dB],     default: 20 dB\n");
-    printf("  t     : run time [seconds],   default: 10\n");
+    printf("  f     : center frequency [Hz], default: 462 MHz\n");
+    printf("  b     : bandwidth [Hz],        default: 250 kHz\n");
+    printf("  M     : number of subcarriers, default:  48\n");
+    printf("  C     : cyclic prefix length,  default:   6\n");
+    printf("  T     : taper length,          default:   4\n");
+    printf("  n     : number of channels,    default: 1\n");
+    printf("  G     : uhd rx gain [dB],      default: 20 dB\n");
+    printf("  t     : run time [seconds],    default: 10\n");
 }
 
 int main (int argc, char **argv)
@@ -86,9 +89,14 @@ int main (int argc, char **argv)
     double num_seconds = 10.0f;         // run time
     double uhd_rxgain = 20.0;           // uhd (hardware) rx gain
 
+    // ofdm properties
+    unsigned int M          = 48;       // number of subcarriers
+    unsigned int cp_len     =  6;       // cyclic prefix length
+    unsigned int taper_len  =  4;       // cyclic prefix length
+
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:n:G:t:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:M:C:T:n:G:t:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -96,6 +104,9 @@ int main (int argc, char **argv)
         case 'v':   verbose     = true;             break;
         case 'f':   frequency   = atof(optarg);     break;
         case 'b':   bandwidth   = atof(optarg);     break;
+        case 'M':   M           = atoi(optarg);     break;
+        case 'C':   cp_len      = atoi(optarg);     break;
+        case 'T':   taper_len   = atoi(optarg);     break;
         case 'n':   num_channels= atoi(optarg);     break;
         case 'G':   uhd_rxgain  = atof(optarg);     break;
         case 't':   num_seconds = atof(optarg);     break;
@@ -161,7 +172,7 @@ int main (int argc, char **argv)
         userdata[i] = NULL;
         callbacks[i] = callback;
     }
-    multichannelrx mcrx(num_channels, userdata, callbacks);
+    multichannelrx mcrx(num_channels, M, cp_len, taper_len, userdata, callbacks);
     
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);

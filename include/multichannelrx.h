@@ -30,7 +30,15 @@ class multichannelrx {
 public:
     // default constructor
     //  _num_channels   :   number of channels
+    //  _M              :   OFDM: number of subcarriers
+    //  _cp_len         :   OFDM: cyclic prefix length
+    //  _taper_len      :   OFDM: taper prefix length
+    //  _userdata       :   user-defined data structure array
+    //  _callback       :   user-defined callback function
     multichannelrx(unsigned int         _num_channels,
+                   unsigned int         _M,
+                   unsigned int         _cp_len,
+                   unsigned int         _taper_len,
                    void **              _userdata,
                    framesync_callback * _callback);
 
@@ -53,6 +61,11 @@ private:
 
     // properties
     unsigned int num_channels;      // number of downlink channels
+
+    // OFDM properties
+    unsigned int M;                 // number of subcarriers
+    unsigned int cp_len;            // cyclic prefix length
+    unsigned int taper_len;         // taper length
 
     // finite impulse response polyphase filterbank channelizer
     firpfbch_crcf channelizer;      // channelizer size is 2*num_channels

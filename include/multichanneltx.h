@@ -30,7 +30,13 @@ class multichanneltx {
 public:
     // default constructor
     //  _num_channels   :   number of channels
-    multichanneltx(unsigned int _num_channels);
+    //  _M              :   OFDM: number of subcarriers
+    //  _cp_len         :   OFDM: cyclic prefix length
+    //  _taper_len      :   OFDM: taper prefix length
+    multichanneltx(unsigned int _num_channels,
+                   unsigned int _M,
+                   unsigned int _cp_len,
+                   unsigned int _taper_len);
 
     // destructor
     ~multichanneltx();
@@ -65,6 +71,11 @@ private:
     firpfbch_crcf channelizer;      // channelizer size is 2*num_channels
     std::complex<float> * X;        // channelizer input
     std::complex<float> * x;        // channelizer output
+
+    // OFDM properties
+    unsigned int M;                 // number of subcarriers
+    unsigned int cp_len;            // cyclic prefix length
+    unsigned int taper_len;         // taper length
 
     // objects
     ofdmflexframegen * framegen;    // array of frame generator objects

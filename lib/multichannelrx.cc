@@ -36,7 +36,15 @@
 
 // default constructor
 //  _num_channels   :   number of channels
+//  _M              :   OFDM: number of subcarriers
+//  _cp_len         :   OFDM: cyclic prefix length
+//  _taper_len      :   OFDM: taper prefix length
+//  _userdata       :   user-defined data structure array
+//  _callback       :   user-defined callback function
 multichannelrx::multichannelrx(unsigned int         _num_channels,
+                               unsigned int         _M,
+                               unsigned int         _cp_len,
+                               unsigned int         _taper_len,
                                void **              _userdata,
                                framesync_callback * _callback)
 {
@@ -44,16 +52,25 @@ multichannelrx::multichannelrx(unsigned int         _num_channels,
     if (_num_channels < 1) {
         fprintf(stderr,"error: multichannelrx::multichannelrx(), must have at least one channel\n");
         throw 0;
+    } else if (_M < 8) {
+        fprintf(stderr,"error: multichannelrx::multichannelrx(), number of subcarriers must be at least 8\n");
+        throw 0;
+    } else if (_cp_len < 1) {
+        fprintf(stderr,"error: multichannelrx::multichannelrx(), cyclic prefix length must be at least 1\n");
+        throw 0;
+    } else if (_taper_len > _cp_len) {
+        fprintf(stderr,"error: multichannelrx::multichannelrx(), taper length cannot exceed cyclic prefix length\n");
+        throw 0;
     }
     unsigned int i;
 
     // set internal properties
     num_channels = _num_channels;
+    M            = _M;
+    cp_len       = _cp_len;
+    taper_len    = _taper_len;
 
     // create frame generators
-    unsigned int M = 48;        // number of subcarriers
-    unsigned int cp_len = 6;    // cyclic prefix length
-    unsigned int taper_len = 4; // taper length (samples)
     unsigned char * p = NULL;   // subcarrier allocation (default)
     framesync = (ofdmflexframesync*)  malloc(num_channels * sizeof(ofdmflexframesync));
     userdata  = (void **)             malloc(num_channels * sizeof(void *));
