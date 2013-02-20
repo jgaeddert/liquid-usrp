@@ -33,19 +33,19 @@ void usage() {
     printf("\n");
     printf("  u,h   : usage/help\n");
     printf("  q/v   : quiet/verbose\n");
-    printf("  f     : center frequency [Hz], default: 462 MHz\n");
-    printf("  b     : bandwidth [Hz] (62.5kHz min, 8MHz max), default: 250 kHz\n");
-    printf("  g     : software tx gain [dB] (default: -6dB)\n");
-    printf("  G     : uhd tx gain [dB] (default: 40dB)\n");
-    printf("  N     : number of frames, default: 1000\n");
-    printf("  M     : number of subcarriers, default: 64\n");
-    printf("  C     : cyclic prefix length, default: 16\n");
-    printf("  T     : taper length, default: 0\n");
-    printf("  P     : payload length [bytes], default: 800\n");
-    printf("  m     : modulation scheme (qpsk default)\n");
+    printf("  f     : center frequency [Hz],  default:  462 MHz\n");
+    printf("  b     : bandwidth [Hz],         default:  900 kHz\n");
+    printf("  g     : software tx gain [dB],  default:  -12 dB \n");
+    printf("  G     : uhd tx gain [dB],       default:   40 dB\n");
+    printf("  N     : number of frames,       default: 2000\n");
+    printf("  M     : number of subcarriers,  default:   48\n");
+    printf("  C     : cyclic prefix length,   default:    6\n");
+    printf("  T     : taper length,           default:    4\n");
+    printf("  P     : payload length [bytes], default: 1200 bytes\n");
+    printf("  m     : modulation scheme,      default: qpsk\n");
     liquid_print_modulation_schemes();
-    printf("  c     : coding scheme (inner): h74 default\n");
-    printf("  k     : coding scheme (outer): none default\n");
+    printf("  c     : coding scheme (inner),  default: g2412\n");
+    printf("  k     : coding scheme (outer),  default: none\n");
     liquid_print_fec_schemes();
 }
 
@@ -55,8 +55,8 @@ int main (int argc, char **argv)
     bool verbose = true;
 
     double frequency = 462.0e6;         // carrier frequency
-    double bandwidth = 600e3f;          // bandwidth
-    unsigned int num_frames = 1000;     // number of frames to transmit
+    double bandwidth = 900e3f;          // bandwidth
+    unsigned int num_frames = 2000;     // number of frames to transmit
     double txgain_dB = -12.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
 
@@ -66,7 +66,7 @@ int main (int argc, char **argv)
     unsigned int taper_len = 4;         // taper length
 
     modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
-    unsigned int payload_len = 800;         // original data message length
+    unsigned int payload_len = 1200;        // original data message length
     crc_scheme check = LIQUID_CRC_32;       // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_GOLAY2412; // fec (outer)

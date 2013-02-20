@@ -83,12 +83,12 @@ void usage() {
     printf("  u,h   :   usage/help\n");
     printf("  q/v   :   quiet/verbose\n");
     printf("  f     :   center frequency [Hz], default: 462 MHz\n");
-    printf("  b     :   bandwidth [Hz], default: 250 kHz\n");
-    printf("  G     :   uhd rx gain [dB] (default: 20dB)\n");
-    printf("  M     :   number of subcarriers, default: 64\n");
-    printf("  C     :   cyclic prefix length, default: 16\n");
-    printf("  T     :   taper length, default: 0\n");
-    printf("  t     :   run time [seconds]\n");
+    printf("  b     :   bandwidth [Hz],        default: 900 kHz\n");
+    printf("  G     :   uhd rx gain [dB],      default:  20 dB)\n");
+    printf("  M     :   number of subcarriers, default:  48\n");
+    printf("  C     :   cyclic prefix length,  default:   6\n");
+    printf("  T     :   taper length,          default:   4\n");
+    printf("  t     :   run time [seconds],    default:   5\n");
     printf("  d     :   enable debugging mode\n");
 }
 
@@ -98,7 +98,7 @@ int main (int argc, char **argv)
     verbose = true;
 
     double frequency = 462.0e6;
-    double bandwidth = 600e3f;
+    double bandwidth = 900e3f;
     double num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 
