@@ -42,6 +42,11 @@ void usage() {
     printf("  n     : number of channels,     default: 1\n");
     printf("  g     : software tx gain [dB],  default: -10 dB\n");
     printf("  G     : uhd tx gain [dB],       default: 40 dB\n");
+    printf("  m     : modulation scheme,      default: qpsk\n");
+    liquid_print_modulation_schemes();
+    printf("  c     : coding scheme (inner),  default: g2412\n");
+    printf("  k     : coding scheme (outer),  default: none\n");
+    liquid_print_fec_schemes();
 }
 
 int main (int argc, char **argv)
@@ -62,16 +67,14 @@ int main (int argc, char **argv)
     unsigned int cp_len     =  6;       // cyclic prefix length
     unsigned int taper_len  =  4;       // cyclic prefix length
 
-#if 0
-    modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
-    crc_scheme check = LIQUID_CRC_32;       // data validity check
-    fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
-    fec_scheme fec1 = LIQUID_FEC_HAMMING128;// fec (outer)
-#endif
+    //crc_scheme check     = LIQUID_CRC_32;        // data validity check
+    modulation_scheme ms = LIQUID_MODEM_QPSK;    // modulation scheme
+    fec_scheme fec0      = LIQUID_FEC_NONE;      // fec (inner)
+    fec_scheme fec1      = LIQUID_FEC_HAMMING128;// fec (outer)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"hqvf:b:M:C:T:P:n:g:G:")) != EOF) {
+    while ((d = getopt(argc,argv,"hqvf:b:M:C:T:P:n:g:G:m:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -86,6 +89,9 @@ int main (int argc, char **argv)
         case 'n':   num_channels= atoi(optarg);     break;
         case 'g':   txgain_dB   = atof(optarg);     break;
         case 'G':   uhd_txgain  = atof(optarg);     break;
+        case 'm':   ms          = liquid_getopt_str2mod(optarg);    break;
+        case 'c':   fec0        = liquid_getopt_str2fec(optarg);    break;
+        case 'k':   fec1        = liquid_getopt_str2fec(optarg);    break;
         default:    usage();                        return 0;
         }
     }
@@ -184,7 +190,7 @@ int main (int argc, char **argv)
                 //mctx.UpdateData(channel_id, header, payload, rand() % payload_len);
 #else
                 // update payload data
-                mctx.UpdateData(channel_id, header, payload, payload_len);
+                mctx.UpdateData(channel_id, header, payload, payload_len, ms, fec0, fec1);
 #endif
             }
         }

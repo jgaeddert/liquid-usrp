@@ -162,10 +162,13 @@ int multichanneltx::IsChannelReadyForData(unsigned int _channel)
 
 // update payload data on a particular channel
 void multichanneltx::UpdateData(unsigned int    _channel,
-                                        unsigned char * _header,
-                                        unsigned char * _payload,
-                                        unsigned int    _payload_len)
-                                        // frame generator properties...
+                                unsigned char * _header,
+                                unsigned char * _payload,
+                                unsigned int    _payload_len,
+                                int             _mod,
+                                int             _fec0,
+                                int             _fec1)
+                                // frame generator properties...
 {
     // check to see if the channel is indeed waiting for data
     if (_channel >= num_channels) {
@@ -176,8 +179,11 @@ void multichanneltx::UpdateData(unsigned int    _channel,
         return;
     }
 
+    // set frame properties
+    ofdmflexframegenprops_s fgprops = {LIQUID_CRC_32, _fec0, _fec1, _mod};
+    ofdmflexframegen_setprops(framegen[_channel], &fgprops);
+
     // assemble frame
-    // TODO: set other properties (e.g. modulation scheme)
     ofdmflexframegen_assemble(framegen[_channel], _header, _payload, _payload_len);
 }
             

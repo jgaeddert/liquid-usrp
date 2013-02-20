@@ -54,7 +54,10 @@ public:
     void UpdateData(unsigned int    _channel,
                     unsigned char * _header,
                     unsigned char * _payload,
-                    unsigned int    _payload_len);
+                    unsigned int    _payload_len,
+                    int             _mod,
+                    int             _fec0,
+                    int             _fec1);
                     // frame generator properties...
             
     // Generate samples for transmission
