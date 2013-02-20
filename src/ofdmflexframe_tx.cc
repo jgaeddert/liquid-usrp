@@ -101,6 +101,12 @@ int main (int argc, char **argv)
     } else if (ms == LIQUID_MODEM_UNKNOWN) {
         fprintf(stderr,"error: %s, unknown/unsupported mod. scheme\n", argv[0]);
         exit(-1);
+    } else if (fec0 == LIQUID_FEC_UNKNOWN) {
+        fprintf(stderr,"error: %s, unknown/unsupported inner fec scheme\n", argv[0]);
+        exit(-1);
+    } else if (fec1 == LIQUID_FEC_UNKNOWN) {
+        fprintf(stderr,"error: %s, unknown/unsupported outer fec scheme\n", argv[0]);
+        exit(-1);
     }
 
     uhd::device_addr_t dev_addr;
