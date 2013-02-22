@@ -85,6 +85,7 @@ void usage() {
     printf("  f     :   center frequency [Hz], default: 462 MHz\n");
     printf("  b     :   bandwidth [Hz],        default: 900 kHz\n");
     printf("  G     :   uhd rx gain [dB],      default:  20 dB)\n");
+    printf("  A     :   uhd rx antenna\n");
     printf("  M     :   number of subcarriers, default:  48\n");
     printf("  C     :   cyclic prefix length,  default:   6\n");
     printf("  T     :   taper length,          default:   4\n");
@@ -101,6 +102,7 @@ int main (int argc, char **argv)
     double bandwidth = 900e3f;
     double num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
+    char uhd_rxantenna[16] = "";        // rx antenna
 
     // ofdm properties
     unsigned int M = 48;                // number of subcarriers
@@ -111,20 +113,21 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:G:M:C:T:t:d")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:G:A:M:C:T:t:d")) != EOF) {
         switch (d) {
         case 'u':
-        case 'h':   usage();                        return 0;
-        case 'q':   verbose = false;                break;
-        case 'v':   verbose = true;                 break;
-        case 'f':   frequency = atof(optarg);       break;
-        case 'b':   bandwidth = atof(optarg);       break;
-        case 'G':   uhd_rxgain = atof(optarg);      break;
-        case 'M':   M = atoi(optarg);               break;
-        case 'C':   cp_len = atoi(optarg);          break;
-        case 'T':   taper_len = atoi(optarg);       break;
-        case 't':   num_seconds = atof(optarg);     break;
-        case 'd':   debug_enabled = 1;              break;
+        case 'h':   usage();                            return 0;
+        case 'q':   verbose       = false;              break;
+        case 'v':   verbose       = true;               break;
+        case 'f':   frequency     = atof(optarg);       break;
+        case 'b':   bandwidth     = atof(optarg);       break;
+        case 'G':   uhd_rxgain    = atof(optarg);       break;
+        case 'A':   strncpy(uhd_rxantenna,optarg,15);   break;
+        case 'M':   M             = atoi(optarg);       break;
+        case 'C':   cp_len        = atoi(optarg);       break;
+        case 'T':   taper_len     = atoi(optarg);       break;
+        case 't':   num_seconds   = atof(optarg);       break;
+        case 'd':   debug_enabled = 1;                  break;
         default:
             usage();
             return 0;
@@ -154,6 +157,8 @@ int main (int argc, char **argv)
 
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(uhd_rxgain);
+    if (strncmp(uhd_rxantenna,"",15))
+        usrp->set_rx_antenna(uhd_rxantenna);
 
     printf("frequency       :   %10.4f [MHz]\n", frequency*1e-6f);
     printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
