@@ -164,7 +164,7 @@ int main (int argc, char **argv)
 
     // buffer lengths
     unsigned int num_symbols = 40;  // number of symbols per buffer
-    unsigned int resamp_buffer_len = k*num_symbols*tx_resamp_rate;
+    unsigned int resamp_buffer_len = 64 + ceilf(2.2*k*num_symbols*tx_resamp_rate);
     if (resamp_buffer_len < k*num_symbols)
         resamp_buffer_len = k*num_symbols;
 
