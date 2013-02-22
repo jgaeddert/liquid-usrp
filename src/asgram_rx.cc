@@ -41,6 +41,7 @@ void usage() {
     printf("  n     : FFT size,              default:  64\n");
     printf("  o     : offset                 default: -65 dB\n");
     printf("  s     : scale                  default:   5 dB\n");
+    printf("  r     : FFT rate [Hz],         default:   10 Hz\n");
 }
 
 int main (int argc, char **argv)
@@ -53,13 +54,13 @@ int main (int argc, char **argv)
     float num_seconds    = 30.0f;
     double uhd_rxgain    = 20.0;
     unsigned int nfft    = 64;
-    unsigned int msdelay = 100;
     float offset         = -65.0f;
     float scale          = 5.0f;
+    float fft_rate       = 10.0f;
 
     //
     int d;
-    while ((d = getopt(argc,argv,"hf:b:t:G:n:s:o:")) != EOF) {
+    while ((d = getopt(argc,argv,"hf:b:t:G:n:s:o:r:")) != EOF) {
         switch (d) {
         case 'h':   usage();                    return 0;
         case 'f':   frequency   = atof(optarg); break;
@@ -69,8 +70,15 @@ int main (int argc, char **argv)
         case 'n':   nfft        = atoi(optarg); break;
         case 'o':   offset      = atof(optarg); break;
         case 's':   scale       = atof(optarg); break;
+        case 'r':   fft_rate    = atof(optarg); break;
         default:    usage();                    return 1;
         }
+    }
+
+    // validate parameters
+    if (fft_rate <= 0.0f || fft_rate > 100.0f) {
+        fprintf(stderr,"error: %s, fft rate must be in (0, 100) Hz\n", argv[0]);
+        exit(1);
     }
 
     uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
@@ -130,6 +138,7 @@ int main (int argc, char **argv)
     footer[nfft/2 + 3] = '+';
     footer[nfft + 4] = ']';
     sprintf(&footer[nfft+6], "%8.3f MHz", frequency*1e-6f);
+    unsigned int msdelay = 1000 / fft_rate;
     
     // create/initialize Hamming window
     float w[nfft];
