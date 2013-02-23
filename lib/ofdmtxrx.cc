@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <complex>
 #include <liquid/liquid.h>
 
 #include "ofdmtxrx.h"
@@ -66,12 +67,12 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     fgprops.fec0            = LIQUID_FEC_NONE;
     fgprops.fec1            = LIQUID_FEC_HAMMING128;
     fgprops.mod_scheme      = LIQUID_MODEM_QPSK;
-    framegen = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
+    fg = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
     fgbuffer_len = M + cp_len;
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
     
     // create frame synchronizer
-    framesync = ofdmflexframesync_create(M, cp_len, taper_len, p, _callback, _userdata);
+    fs = ofdmflexframesync_create(M, cp_len, taper_len, p, _callback, _userdata);
     // TODO: create buffer
 
     // create usrp objects
@@ -108,14 +109,14 @@ ofdmtxrx::~ofdmtxrx()
     pthread_join(rx_process, &exit_status);
 
     // destroy framing objects
-    ofdmflexframegen_destroy(framegen);
-    ofdmflexframesync_destroy(framesync);
+    ofdmflexframegen_destroy(fg);
+    ofdmflexframesync_destroy(fs);
 
     // free other allocated arrays
     free(fgbuffer);
     
     // TODO: output debugging file
-    //ofdmflexframesync_debug_print(framesync, "ofdmtxrx_debug.m");
+    //ofdmflexframesync_debug_print(fs, "ofdmtxrx_debug.m");
 }
 
 
@@ -156,7 +157,7 @@ void ofdmtxrx::set_tx_antenna(char * _tx_antenna)
 // reset transmitter objects and buffers
 void ofdmtxrx::reset_tx()
 {
-    ofdmflexframegen_reset(framegen);
+    ofdmflexframegen_reset(fg);
 }
 
 // start transmitter stream
@@ -194,15 +195,39 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
                                int             _fec0,
                                int             _fec1)
 {
-#if 0
-    // send samples to the device
-    usrp_tx->get_device()->send(
-        &usrp_buffer.front(), usrp_buffer.size(),
-        metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
-#endif
+    // fector buffer to send data to device
+    std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
+
+    // set properties
+    fgprops.mod_scheme  = _mod;
+    fgprops.fec0        = _fec0;
+    fgprops.fec1        = _fec1;
+    ofdmflexframegen_setprops(fg, &fgprops);
+
+    // assemble frame
+    ofdmflexframegen_assemble(fg, _header, _payload, _payload_len);
+
+    // generate a single OFDM frame
+    int last_symbol=0;
+    while (!last_symbol) {
+
+        // generate symbol
+        last_symbol = ofdmflexframegen_writesymbol(fg, fgbuffer);
+
+        //
+        unsigned int i;
+        for (i=0; i<fgbuffer_len; i++)
+            usrp_buffer[i] = fgbuffer[i];
+
+        // send samples to the device
+        usrp_tx->get_device()->send(
+            &usrp_buffer.front(), usrp_buffer.size(),
+            metadata_tx,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
+
+    } // while loop
 }
 
 // 
@@ -242,7 +267,7 @@ void ofdmtxrx::set_rx_antenna(char * _rx_antenna)
 // reset receiver objects and buffers
 void ofdmtxrx::reset_rx()
 {
-    ofdmflexframesync_reset(framesync);
+    ofdmflexframesync_reset(fs);
 }
 
 // start receiver
@@ -282,13 +307,13 @@ bool ofdmtxrx::receive_packet(float              _timeout,
 // enable debugging
 void ofdmtxrx::debug_enable()
 {
-    ofdmflexframesync_debug_enable(framesync);
+    ofdmflexframesync_debug_enable(fs);
 }
 
 // disable debugging
 void ofdmtxrx::debug_disable()
 {
-    ofdmflexframesync_debug_disable(framesync);
+    ofdmflexframesync_debug_disable(fs);
 }
 
 //

@@ -28,6 +28,7 @@
 
 #include <uhd/usrp/multi_usrp.hpp>
  
+#include "ofdmtxrx.h"
 #include "timer.h"
 
 static bool verbose;
@@ -49,7 +50,7 @@ int callback(unsigned char *  _header,
 {
     if (verbose) {
         // compute true carrier offset
-        double samplerate = *((double*)_userdata);
+        float samplerate = *((float*)_userdata);
         float cfo = _stats.cfo * samplerate / (2*M_PI);
         printf("***** rssi=%7.2fdB evm=%7.2fdB, cfo=%7.3f kHz, ", _stats.rssi, _stats.evm, cfo*1e-3f);
 
@@ -98,10 +99,10 @@ int main (int argc, char **argv)
     // command-line options
     verbose = true;
 
-    double frequency = 462.0e6;
-    double bandwidth = 900e3f;
-    double num_seconds = 5.0f;
-    double uhd_rxgain = 20.0;
+    float frequency = 462.0e6;
+    float bandwidth = 900e3f;
+    float num_seconds = 5.0f;
+    float uhd_rxgain = 20.0;
     char uhd_rxantenna[16] = "";        // rx antenna
 
     // ofdm properties
@@ -139,67 +140,18 @@ int main (int argc, char **argv)
         exit(1);
     }
 
-    uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+    // create transceiver object
+    ofdmtxrx txcvr(M, cp_len, taper_len, callback, (void*)&bandwidth);
 
-    stream_cmd.stream_now = true;
+    // set properties
+    txcvr.set_rx_freq(frequency);
+    txcvr.set_rx_rate(bandwidth);
+    txcvr.set_rx_gain_uhd(uhd_rxgain);
 
-    uhd::device_addr_t dev_addr;
-    uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
-
-    // try to set rx rate (oversampled to compensate for CIC filter)
-    usrp->set_rx_rate(3.0f * bandwidth);
-
-    // get actual rx rate
-    double usrp_rx_rate = usrp->get_rx_rate();
-
-    // compute arbitrary resampling rate (make up the difference in software)
-    double rx_resamp_rate = bandwidth / usrp_rx_rate;
-
-    usrp->set_rx_freq(frequency);
-    usrp->set_rx_gain(uhd_rxgain);
-    if (strncmp(uhd_rxantenna,"",15))
-        usrp->set_rx_antenna(uhd_rxantenna);
-
-    printf("frequency       :   %10.4f [MHz]\n", frequency*1e-6f);
-    printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
-    printf("verbosity       :   %s\n", (verbose?"enabled":"disabled"));
-    printf("usrp sample rate:   %10.4f kHz = %10.4f kHz * %8.6f\n",
-            usrp_rx_rate * 1e-3f,
-            bandwidth    * 1e-3f,
-            1.0f / rx_resamp_rate);
-
-    // set run time appropriately
-    if (num_seconds < 0) {
-        num_seconds = 1e32; // set to really, really large number
-        printf("run time        :   (forever)\n");
-    } else {
-        printf("run time        :   %f seconds\n", num_seconds);
-    }
-
-    // add arbitrary resampling component
-    msresamp_crcf resamp = msresamp_crcf_create(rx_resamp_rate, 60.0f);
-
-    unsigned int block_len = 64;
-    assert( (block_len % 2) == 0);  // ensure block length is even
-
-    //allocate recv buffer and metatdata
-    uhd::rx_metadata_t md;
-    const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
-    std::vector<std::complex<float> > buff(max_samps_per_packet);
-
-    // create frame synchronizer (default subcarrier allocation)
-    ofdmflexframesync fs = ofdmflexframesync_create(M,cp_len,taper_len,NULL,callback,(void*)&bandwidth);
+    // enable debugging on request
     if (debug_enabled)
-        ofdmflexframesync_debug_enable(fs);
-    ofdmflexframesync_print(fs);
+        txcvr.debug_enable();
 
-    // start data transfer
-    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    printf("usrp data transfer started\n");
- 
-    // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2.0f/rx_resamp_rate) + 64];
- 
     // reset counters
     num_frames_detected=0;
     num_valid_headers_received=0;
@@ -211,54 +163,24 @@ int main (int argc, char **argv)
     timer t0 = timer_create();
     timer_tic(t0);
 
+    // start receiver
+    txcvr.start_rx();
+
     while (continue_running) {
-        // grab data from device
-        size_t num_rx_samps = usrp->get_device()->recv(
-            &buff.front(), buff.size(), md,
-            uhd::io_type_t::COMPLEX_FLOAT32,
-            uhd::device::RECV_MODE_ONE_PACKET
-        );
-
-        // 'handle' the error codes
-        switch(md.error_code){
-        case uhd::rx_metadata_t::ERROR_CODE_NONE:
-        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
-            break;
-
-        default:
-            std::cerr << "Error code: " << md.error_code << std::endl;
-            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
-            return 1;
-        }
-
-        // push data through arbitrary resampler and give to frame synchronizer
-        // TODO : apply bandwidth-dependent gain
-        unsigned int j;
-        for (j=0; j<num_rx_samps; j++) {
-            // grab sample from usrp buffer
-            std::complex<float> usrp_sample = buff[j];
-
-            // push through resampler (one at a time)
-            unsigned int nw;
-            msresamp_crcf_execute(resamp, &usrp_sample, 1, buffer_resamp, &nw);
-
-            // push resulting samples through synchronizer
-            ofdmflexframesync_execute(fs, buffer_resamp, nw);
-        }
+        // sleep for 100 ms and check state
+        usleep(100000);
 
         // check runtime
         if (timer_toc(t0) >= num_seconds)
             continue_running = 0;
     }
+
+    // stop receiver
+    txcvr.stop_rx();
  
     // compute actual run-time
     float runtime = timer_toc(t0);
 
-    // stop data transfer
-    usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-    printf("\n");
-    printf("usrp data transfer complete\n");
- 
     // print results
     float data_rate = num_valid_bytes_received * 8.0f / num_seconds;
     float percent_headers_valid = (num_frames_detected == 0) ?
@@ -274,13 +196,7 @@ int main (int argc, char **argv)
     printf("    run time            : %f s\n", runtime);
     printf("    data rate           : %8.4f kbps\n", data_rate*1e-3f);
 
-    // export debugging file
-    if (debug_enabled)
-        ofdmflexframesync_debug_print(fs, "ofdmflexframesync_debug.m");
-
     // destroy objects
-    msresamp_crcf_destroy(resamp);
-    ofdmflexframesync_destroy(fs);
     timer_destroy(t0);
 
     return 0;

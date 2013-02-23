@@ -110,7 +110,7 @@ private:
     ofdmflexframegenprops_s fgprops;// frame generator properties
 
     // transmitter objects
-    ofdmflexframegen framegen;      // frame generator object
+    ofdmflexframegen fg;            // frame generator object
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
     unsigned int fgbuffer_len;      // length of frame generator buffer
     float tx_gain;                  // soft transmit gain (linear)
@@ -120,7 +120,7 @@ private:
 #endif
 
     // receiver objects
-    ofdmflexframesync framesync;    // frame generator object
+    ofdmflexframesync fs;           // frame synchronizer object
     pthread_t rx_process;           // receive thread
     //pthread_mutex_t rx_mutex;       // receive mutex
 
