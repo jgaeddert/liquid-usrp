@@ -81,6 +81,7 @@ library_src :=				\
 	lib/iqpr.cc			\
 	lib/multichannelrx.cc		\
 	lib/multichanneltx.cc		\
+	lib/ofdmtxrx.cc			\
 	lib/timer.cc			\
 
 # library header files
@@ -88,6 +89,7 @@ library_headers :=			\
 	include/iqpr.h			\
 	include/multichannelrx.h	\
 	include/multichanneltx.h	\
+	include/ofdmtxrx.h		\
 	include/timer.h			\
 
 # example programs
