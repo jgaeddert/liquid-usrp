@@ -34,9 +34,13 @@
 //  _M              :   OFDM: number of subcarriers
 //  _cp_len         :   OFDM: cyclic prefix length
 //  _taper_len      :   OFDM: taper prefix length
-ofdmtxrx::ofdmtxrx(unsigned int _M,
-                   unsigned int _cp_len,
-                   unsigned int _taper_len)
+//  _callback       :   frame synchronizer callback function
+//  _userdata       :   user-defined data structure
+ofdmtxrx::ofdmtxrx(unsigned int       _M,
+                   unsigned int       _cp_len,
+                   unsigned int       _taper_len,
+                   framesync_callback _callback,
+                   void *             _userdata)
 {
     // validate input
     if (_M < 8) {
@@ -67,7 +71,7 @@ ofdmtxrx::ofdmtxrx(unsigned int _M,
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
     
     // create frame synchronizer
-    framesync = ofdmflexframesync_create(M, cp_len, taper_len, p, ofdmtxrx_callback, (void*)this);
+    framesync = ofdmflexframesync_create(M, cp_len, taper_len, p, _callback, _userdata);
     // TODO: create buffer
 
     // create usrp objects
@@ -92,6 +96,9 @@ ofdmtxrx::~ofdmtxrx()
 
     // free other allocated arrays
     free(fgbuffer);
+    
+    // TODO: output debugging file
+    //ofdmflexframesync_debug_print(framesync, "ofdmtxrx_debug.m");
 }
 
 
@@ -111,6 +118,10 @@ void ofdmtxrx::set_tx_gain_soft(double _tx_gain_soft)
 }
 
 void ofdmtxrx::set_tx_gain_uhd(double _tx_gain_uhd)
+{
+}
+
+void ofdmtxrx::set_tx_antenna(char * _tx_antenna)
 {
 }
 
@@ -156,6 +167,10 @@ void ofdmtxrx::set_rx_gain_uhd(double _rx_gain_uhd)
 {
 }
 
+void ofdmtxrx::set_rx_antenna(char * _rx_antenna)
+{
+}
+
 void ofdmtxrx::reset_rx()
 {
 }
@@ -191,9 +206,26 @@ bool ofdmtxrx::receive_packet(double             _timeout,
 }
 
 //
+// additional methods
+//
+
+// enable debugging
+void ofdmtxrx::debug_enable()
+{
+    ofdmflexframesync_debug_enable(framesync);
+}
+
+// disable debugging
+void ofdmtxrx::debug_disable()
+{
+    ofdmflexframesync_debug_disable(framesync);
+}
+
+//
 // private methods
 //
         
+#if 0
 // callback function
 int ofdmtxrx_callback(unsigned char *  _header,
                       int              _header_valid,
@@ -213,4 +245,4 @@ int ofdmtxrx_callback(unsigned char *  _header,
 
     return 0;
 }
-
+#endif

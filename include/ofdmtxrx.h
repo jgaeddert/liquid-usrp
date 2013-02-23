@@ -36,9 +36,13 @@ public:
     //  _M              :   OFDM: number of subcarriers
     //  _cp_len         :   OFDM: cyclic prefix length
     //  _taper_len      :   OFDM: taper prefix length
-    ofdmtxrx(unsigned int _M,
-             unsigned int _cp_len,
-             unsigned int _taper_len);
+    //  _callback       :   frame synchronizer callback function
+    //  _userdata       :   user-defined data structure
+    ofdmtxrx(unsigned int       _M,
+             unsigned int       _cp_len,
+             unsigned int       _taper_len,
+             framesync_callback _callback,
+             void *             _userdata);
 
     // destructor
     ~ofdmtxrx();
@@ -50,6 +54,7 @@ public:
     void set_tx_rate(double _tx_rate);
     void set_tx_gain_soft(double _tx_gain_soft);
     void set_tx_gain_uhd(double _tx_gain_uhd);
+    void set_tx_antenna(char * _tx_antenna);
     void reset_tx();
     void start_tx();
     void stop_tx();
@@ -70,6 +75,7 @@ public:
     void set_rx_rate(double _rx_rate);
     void set_rx_gain_soft(double _rx_gain_soft);
     void set_rx_gain_uhd(double _rx_gain_uhd);
+    void set_rx_antenna(char * _rx_antenna);
     void reset_rx();
     void start_rx();
     void stop_rx();
@@ -85,6 +91,12 @@ public:
                         unsigned int  *    _payload_len,
                         int  *             _payload_valid,
                         framesyncstats_s * _stats);
+
+    //
+    // additional methods
+    // 
+    void debug_enable();
+    void debug_disable();
             
 private:
     // generate frame samples from internal frame generator
