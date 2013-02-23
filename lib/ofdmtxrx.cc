@@ -79,7 +79,8 @@ ofdmtxrx::ofdmtxrx(unsigned int _M,
     usrp_rx->set_rx_antenna("RX2");
 
     // reset transceiver
-    Reset();
+    reset_tx();
+    reset_rx();
 }
 
 // destructor
@@ -93,85 +94,97 @@ ofdmtxrx::~ofdmtxrx()
     free(fgbuffer);
 }
 
-// reset
-void ofdmtxrx::Reset()
-{
-    // reset all objects
-    ofdmflexframegen_reset(framegen);
-    ofdmflexframesync_reset(framesync);
-}
 
-// set properties
-void ofdmtxrx::SetFrequency(double _frequency)
+// 
+// transmitter methods
+//
+void ofdmtxrx::set_tx_freq(double _tx_freq)
 {
 }
 
-void ofdmtxrx::SetSampleRate(double _sample_rate)
+void ofdmtxrx::set_tx_rate(double _tx_rate)
 {
 }
 
-void ofdmtxrx::SetHardwareGainTx(double _uhd_gain_tx)
+void ofdmtxrx::set_tx_gain_soft(double _tx_gain_soft)
 {
 }
 
-void ofdmtxrx::SetHardwareGainRx(double _uhd_gain_rx)
+void ofdmtxrx::set_tx_gain_uhd(double _tx_gain_uhd)
 {
 }
 
-void ofdmtxrx::SetSoftwareGainTx(double _gain_tx)
+void ofdmtxrx::reset_tx()
 {
 }
 
-void ofdmtxrx::SetSoftwareGainRx(double _gain_rx)
+void ofdmtxrx::start_tx()
 {
 }
 
-// start transmitter
-void ofdmtxrx::StartTransmitter()
+void ofdmtxrx::stop_tx()
 {
 }
 
-// stop transmitter
-void ofdmtxrx::StopTransmitter()
+// update payload data on a particular channel
+void ofdmtxrx::transmit_packet(unsigned char * _header,
+                               unsigned char * _payload,
+                               unsigned int    _payload_len,
+                               int             _mod,
+                               int             _fec0,
+                               int             _fec1)
+{
+}
+
+// 
+// receiver methods
+//
+
+void ofdmtxrx::set_rx_freq(double _rx_freq)
+{
+}
+
+void ofdmtxrx::set_rx_rate(double _rx_rate)
+{
+}
+
+void ofdmtxrx::set_rx_gain_soft(double _rx_gain_soft)
+{
+}
+
+void ofdmtxrx::set_rx_gain_uhd(double _rx_gain_uhd)
+{
+}
+
+void ofdmtxrx::reset_rx()
 {
 }
 
 // start receiver
-void ofdmtxrx::StartReceiver()
+void ofdmtxrx::start_rx()
 {
     usrp_rx->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp rx start\n");
 }
 
 // stop receiver
-void ofdmtxrx::StopReceiver()
+void ofdmtxrx::stop_rx()
 {
     usrp_rx->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
     printf("usrp rx stop\n");
-}
-
-// update payload data on a particular channel
-void ofdmtxrx::TransmitPacket(unsigned char * _header,
-                              unsigned char * _payload,
-                              unsigned int    _payload_len,
-                              int             _mod,
-                              int             _fec0,
-                              int             _fec1)
-                              // frame generator properties...
-{
 }
 
 // receive packet with timeout
 //  _timeout        :   timeout (seconds)
 //  _header
 //  ...
-bool ofdmtxrx::ReceivePacket(double             _timeout,
-                             unsigned char **   _header,
-                             int  *             _header_valid,
-                             unsigned char **   _payload,
-                             unsigned int  *    _payload_len,
-                             int  *             _payload_valid,
-                             framesyncstats_s * _stats)
+bool ofdmtxrx::receive_packet(double             _timeout,
+                              unsigned char **   _header,
+                              int  *             _header_valid,
+                              unsigned char **   _payload,
+                              unsigned int  *    _payload_len,
+                              int  *             _payload_valid,
+                              framesyncstats_s * _stats)
 {
     usleep( 1 + ceil(_timeout*1e6) );
     return false;

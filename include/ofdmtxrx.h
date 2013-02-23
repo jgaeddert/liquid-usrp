@@ -43,43 +43,48 @@ public:
     // destructor
     ~ofdmtxrx();
 
-    // reset transceiver
-    void Reset();
-
-    // set properties
-    void SetFrequency(double _frequency);
-    void SetSampleRate(double _sample_rate);
-    void SetHardwareGainTx(double _uhd_gain_tx);
-    void SetHardwareGainRx(double _uhd_gain_rx);
-    void SetSoftwareGainTx(double _gain_tx);
-    void SetSoftwareGainRx(double _gain_rx);
-
-    // start/stop
-    void StartTransmitter();
-    void StopTransmitter();
-    void StartReceiver();
-    void StopReceiver();
+    // 
+    // transmitter methods
+    //
+    void set_tx_freq(double _tx_freq);
+    void set_tx_rate(double _tx_rate);
+    void set_tx_gain_soft(double _tx_gain_soft);
+    void set_tx_gain_uhd(double _tx_gain_uhd);
+    void reset_tx();
+    void start_tx();
+    void stop_tx();
 
     // update payload data on a particular channel
-    void TransmitPacket(unsigned char * _header,
-                        unsigned char * _payload,
-                        unsigned int    _payload_len,
-                        int             _mod,
-                        int             _fec0,
-                        int             _fec1);
-                        // frame generator properties...
+    void transmit_packet(unsigned char * _header,
+                         unsigned char * _payload,
+                         unsigned int    _payload_len,
+                         int             _mod,
+                         int             _fec0,
+                         int             _fec1);
+                         // frame generator properties...
+
+    // 
+    // receiver methods
+    //
+    void set_rx_freq(double _rx_freq);
+    void set_rx_rate(double _rx_rate);
+    void set_rx_gain_soft(double _rx_gain_soft);
+    void set_rx_gain_uhd(double _rx_gain_uhd);
+    void reset_rx();
+    void start_rx();
+    void stop_rx();
 
     // receive packet with timeout
     //  _timeout        :   timeout (seconds)
     //  _header
     //  ...
-    bool ReceivePacket(double             _timeout,
-                       unsigned char **   _header,
-                       int  *             _header_valid,
-                       unsigned char **   _payload,
-                       unsigned int  *    _payload_len,
-                       int  *             _payload_valid,
-                       framesyncstats_s * _stats);
+    bool receive_packet(double             _timeout,
+                        unsigned char **   _header,
+                        int  *             _header_valid,
+                        unsigned char **   _payload,
+                        unsigned int  *    _payload_len,
+                        int  *             _payload_valid,
+                        framesyncstats_s * _stats);
             
 private:
     // generate frame samples from internal frame generator
