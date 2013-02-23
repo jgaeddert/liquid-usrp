@@ -27,6 +27,7 @@
 #define __OFDMTXRX_H__
 
 #include <complex>
+#include <pthread.h>
 #include <liquid/liquid.h>
 #include <uhd/usrp/multi_usrp.hpp>
 
@@ -50,10 +51,10 @@ public:
     // 
     // transmitter methods
     //
-    void set_tx_freq(double _tx_freq);
-    void set_tx_rate(double _tx_rate);
-    void set_tx_gain_soft(double _tx_gain_soft);
-    void set_tx_gain_uhd(double _tx_gain_uhd);
+    void set_tx_freq(float _tx_freq);
+    void set_tx_rate(float _tx_rate);
+    void set_tx_gain_soft(float _tx_gain_soft);
+    void set_tx_gain_uhd(float _tx_gain_uhd);
     void set_tx_antenna(char * _tx_antenna);
     void reset_tx();
     void start_tx();
@@ -71,10 +72,10 @@ public:
     // 
     // receiver methods
     //
-    void set_rx_freq(double _rx_freq);
-    void set_rx_rate(double _rx_rate);
-    void set_rx_gain_soft(double _rx_gain_soft);
-    void set_rx_gain_uhd(double _rx_gain_uhd);
+    void set_rx_freq(float _rx_freq);
+    void set_rx_rate(float _rx_rate);
+    void set_rx_gain_soft(float _rx_gain_soft);
+    void set_rx_gain_uhd(float _rx_gain_uhd);
     void set_rx_antenna(char * _rx_antenna);
     void reset_rx();
     void start_rx();
@@ -84,7 +85,7 @@ public:
     //  _timeout        :   timeout (seconds)
     //  _header
     //  ...
-    bool receive_packet(double             _timeout,
+    bool receive_packet(float              _timeout,
                         unsigned char **   _header,
                         int  *             _header_valid,
                         unsigned char **   _payload,
@@ -112,22 +113,27 @@ private:
     ofdmflexframegen framegen;      // frame generator object
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
     unsigned int fgbuffer_len;      // length of frame generator buffer
+    float tx_gain;                  // soft transmit gain (linear)
+#if 0
+    pthread_t tx_process;           // transmit thread
+    pthread_mutex_t tx_mutex;       // transmit mutex
+#endif
 
     // receiver objects
     ofdmflexframesync framesync;    // frame generator object
-#if 0
-    std::complex<float> * fsbuffer; // frame generator output buffer [size: M + cp_len x 1]
-    unsigned int fgbuffer_len;      // length of frame generator buffer
-#endif
+    pthread_t rx_process;           // receive thread
+    //pthread_mutex_t rx_mutex;       // receive mutex
 
     // RF objects and properties
-    double frequency;               // carrier frequency
-    double sample_rate;             // host sample rate
-    double usrp_sample_rate;        // usrp sample rate
     uhd::usrp::multi_usrp::sptr usrp_tx;
     uhd::usrp::multi_usrp::sptr usrp_rx;
+    uhd::tx_metadata_t          metadata_tx;
 };
 
+// receiver worker thread
+void * ofdmtxrx_rx_worker(void * _arg);
+
+#if 0
 // 
 int ofdmtxrx_callback(unsigned char *  _header,
                       int              _header_valid,
@@ -136,6 +142,7 @@ int ofdmtxrx_callback(unsigned char *  _header,
                       int              _payload_valid,
                       framesyncstats_s _stats,
                       void *           _userdata);
+#endif
 
 #endif // __OFDMTXRX_H__
 

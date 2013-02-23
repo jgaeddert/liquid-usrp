@@ -78,18 +78,35 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     uhd::device_addr_t dev_addr;
     usrp_tx = uhd::usrp::multi_usrp::make(dev_addr);
     usrp_rx = uhd::usrp::multi_usrp::make(dev_addr);
-    usrp_rx->set_rx_freq(462e6);
-    usrp_rx->set_rx_rate(400e3);
-    usrp_rx->set_rx_antenna("RX2");
+
+    // initialize default tx values
+    set_tx_freq(462.0e6f);
+    set_tx_rate(1200e3);
+    set_tx_gain_soft(-12.0f);
+    set_tx_gain_uhd(40.0f);
+
+    // initialize default rx values
+    set_rx_freq(462.0e6f);
+    set_rx_rate(1200e3);
+    set_rx_gain_uhd(20.0f);
 
     // reset transceiver
     reset_tx();
     reset_rx();
+
+    // create and start rx thread
+    pthread_create(&rx_process, NULL, ofdmtxrx_rx_worker, (void*)this);
+    
+    // create and start tx thread
 }
 
 // destructor
 ofdmtxrx::~ofdmtxrx()
 {
+    printf("waiting for process to finish...\n");
+    void * exit_status;
+    pthread_join(rx_process, &exit_status);
+
     // destroy framing objects
     ofdmflexframegen_destroy(framegen);
     ofdmflexframesync_destroy(framesync);
@@ -105,36 +122,68 @@ ofdmtxrx::~ofdmtxrx()
 // 
 // transmitter methods
 //
-void ofdmtxrx::set_tx_freq(double _tx_freq)
+
+// set transmitter frequency
+void ofdmtxrx::set_tx_freq(float _tx_freq)
 {
+    usrp_tx->set_tx_freq(_tx_freq);
 }
 
-void ofdmtxrx::set_tx_rate(double _tx_rate)
+// set transmitter sample rate
+void ofdmtxrx::set_tx_rate(float _tx_rate)
 {
+    usrp_tx->set_tx_rate(_tx_rate);
 }
 
-void ofdmtxrx::set_tx_gain_soft(double _tx_gain_soft)
+// set transmitter software gain
+void ofdmtxrx::set_tx_gain_soft(float _tx_gain_soft)
 {
+    tx_gain = powf(10.0f, _tx_gain_soft/20.0f);
 }
 
-void ofdmtxrx::set_tx_gain_uhd(double _tx_gain_uhd)
+// set transmitter hardware (UHD) gain
+void ofdmtxrx::set_tx_gain_uhd(float _tx_gain_uhd)
 {
+    usrp_tx->set_tx_gain(_tx_gain_uhd);
 }
 
+// set transmitter antenna
 void ofdmtxrx::set_tx_antenna(char * _tx_antenna)
 {
+    usrp_rx->set_tx_antenna(_tx_antenna);
 }
 
+// reset transmitter objects and buffers
 void ofdmtxrx::reset_tx()
 {
+    ofdmflexframegen_reset(framegen);
 }
 
+// start transmitter stream
 void ofdmtxrx::start_tx()
 {
+    // set up the metadta flags
+    metadata_tx.start_of_burst = false; // never SOB when continuous
+    metadata_tx.end_of_burst   = false; // 
+    metadata_tx.has_time_spec  = false; // set to false to send immediately
 }
 
+// stop transmitter stream
 void ofdmtxrx::stop_tx()
 {
+    //TODO: flush buffers
+
+    // send a mini EOB packet
+    metadata_tx.start_of_burst = false;
+    metadata_tx.end_of_burst   = true;
+
+    usrp_tx->get_device()->send("", 0, metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+
+    // reset tx objects
+    reset_tx();
 }
 
 // update payload data on a particular channel
@@ -145,34 +194,55 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
                                int             _fec0,
                                int             _fec1)
 {
+#if 0
+    // send samples to the device
+    usrp_tx->get_device()->send(
+        &usrp_buffer.front(), usrp_buffer.size(),
+        metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+#endif
 }
 
 // 
 // receiver methods
 //
 
-void ofdmtxrx::set_rx_freq(double _rx_freq)
+// set receiver frequency
+void ofdmtxrx::set_rx_freq(float _rx_freq)
 {
+    usrp_rx->set_rx_freq(_rx_freq);
 }
 
-void ofdmtxrx::set_rx_rate(double _rx_rate)
+// set receiver sample rate
+void ofdmtxrx::set_rx_rate(float _rx_rate)
 {
+    usrp_rx->set_rx_rate(_rx_rate);
 }
 
-void ofdmtxrx::set_rx_gain_soft(double _rx_gain_soft)
+// set receiver software gain
+void ofdmtxrx::set_rx_gain_soft(float _rx_gain_soft)
 {
+    // nothing to do
 }
 
-void ofdmtxrx::set_rx_gain_uhd(double _rx_gain_uhd)
+// set receiver hardware (UHD) gain
+void ofdmtxrx::set_rx_gain_uhd(float _rx_gain_uhd)
 {
+    usrp_rx->set_rx_gain(_rx_gain_uhd);
 }
 
+// set receiver antenna
 void ofdmtxrx::set_rx_antenna(char * _rx_antenna)
 {
+    usrp_rx->set_rx_antenna(_rx_antenna);
 }
 
+// reset receiver objects and buffers
 void ofdmtxrx::reset_rx()
 {
+    ofdmflexframesync_reset(framesync);
 }
 
 // start receiver
@@ -193,7 +263,7 @@ void ofdmtxrx::stop_rx()
 //  _timeout        :   timeout (seconds)
 //  _header
 //  ...
-bool ofdmtxrx::receive_packet(double             _timeout,
+bool ofdmtxrx::receive_packet(float              _timeout,
                               unsigned char **   _header,
                               int  *             _header_valid,
                               unsigned char **   _payload,
@@ -224,7 +294,22 @@ void ofdmtxrx::debug_disable()
 //
 // private methods
 //
-        
+
+// receiver worker thread
+void * ofdmtxrx_rx_worker(void * _arg)
+{
+    // type cast input argument as ofdmtxrx object
+    ofdmtxrx * txcvr = (ofdmtxrx*) _arg;
+
+    // sleep...
+    printf("rx worker sleeping for 8 seconds...\n");
+    usleep(8000000);
+    printf("rx worker waking...\n");
+
+    // return
+    pthread_exit(NULL);
+}
+
 #if 0
 // callback function
 int ofdmtxrx_callback(unsigned char *  _header,
