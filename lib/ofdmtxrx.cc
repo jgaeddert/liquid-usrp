@@ -328,10 +328,56 @@ void * ofdmtxrx_rx_worker(void * _arg)
     // type cast input argument as ofdmtxrx object
     ofdmtxrx * txcvr = (ofdmtxrx*) _arg;
 
+    // set up receive buffer
+    const size_t max_samps_per_packet = txcvr->usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    std::vector<std::complex<float> > buffer(max_samps_per_packet);
+
+    // receiver metadata object
+    uhd::rx_metadata_t md;
+
+    // receive samples
+    // TODO: wait for signal to start
+    unsigned int i;
+    for (i=0; i<24000; i++) {
+        // grab data from device
+        size_t num_rx_samps = txcvr->usrp_rx->get_device()->recv(
+            &buffer.front(), buffer.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::RECV_MODE_ONE_PACKET
+        );
+
+        // ignore error codes for now
+#if 0
+        // 'handle' the error codes
+        switch(md.error_code){
+        case uhd::rx_metadata_t::ERROR_CODE_NONE:
+        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+            break;
+
+        default:
+            std::cerr << "Error code: " << md.error_code << std::endl;
+            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+            //return 1;
+            //std::cerr << "rx_worker exiting prematurely" << std::endl;
+            //pthread_exit(NULL);
+        }
+#endif
+
+        // push data through frame synchronizer
+        // TODO : use arbitrary resampler?
+        unsigned int j;
+        for (j=0; j<num_rx_samps; j++) {
+            // grab sample from usrp buffer
+            std::complex<float> usrp_sample = buffer[j];
+
+            // push resulting samples through synchronizer
+            ofdmflexframesync_execute(txcvr->fs, &usrp_sample, 1);
+        }
+
+    }
+
     // sleep...
-    printf("rx worker sleeping for 8 seconds...\n");
-    usleep(8000000);
-    printf("rx worker waking...\n");
+    printf("rx worker finished\n");
 
     // return
     pthread_exit(NULL);

@@ -31,6 +31,9 @@
 #include <liquid/liquid.h>
 #include <uhd/usrp/multi_usrp.hpp>
 
+// receiver worker thread
+void * ofdmtxrx_rx_worker(void * _arg);
+
 class ofdmtxrx {
 public:
     // default constructor
@@ -98,6 +101,10 @@ public:
     // 
     void debug_enable();
     void debug_disable();
+
+    // specify rx worker method as friend function so that it may
+    // gain acess to private members of the class
+    friend void * ofdmtxrx_rx_worker(void * _arg);
             
 private:
     // generate frame samples from internal frame generator
@@ -129,9 +136,6 @@ private:
     uhd::usrp::multi_usrp::sptr usrp_rx;
     uhd::tx_metadata_t          metadata_tx;
 };
-
-// receiver worker thread
-void * ofdmtxrx_rx_worker(void * _arg);
 
 #if 0
 // 
