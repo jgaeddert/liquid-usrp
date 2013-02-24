@@ -31,6 +31,9 @@
 
 #include "ofdmtxrx.h"
 
+// debug print
+#define dprintf(s) printf(s)
+
 // default constructor
 //  _M              :   OFDM: number of subcarriers
 //  _cp_len         :   OFDM: cyclic prefix length
@@ -98,18 +101,37 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     reset_rx();
 
     // create and start rx thread
-    pthread_create(&rx_process, NULL, ofdmtxrx_rx_worker, (void*)this);
+    rx_running = false;                     // receiver is not running initially
+    pthread_mutex_init(&rx_mutex, NULL);    // receiver mutex
+    pthread_cond_init(&rx_cond,   NULL);    // receiver condition
+    pthread_create(&rx_process,   NULL, ofdmtxrx_rx_worker, (void*)this);
     
-    // create and start tx thread
+    // TODO: create and start tx thread
 }
 
 // destructor
 ofdmtxrx::~ofdmtxrx()
 {
-    printf("waiting for process to finish...\n");
+    dprintf("waiting for process to finish...\n");
+
+    // ensure reciever thread is not running
+    if (rx_running) stop_rx();
+
+    // signal condition (tell rx worker to continue)
+    dprintf("destructor signaling condition...\n");
+    pthread_cond_signal(&rx_cond);
+
+    dprintf("destructor joining rx thread...\n");
     void * exit_status;
     pthread_join(rx_process, &exit_status);
 
+    // destroy threading objects
+    dprintf("destructor destroying mutex...\n");
+    pthread_mutex_destroy(&rx_mutex);
+    dprintf("destructor destroying condition...\n");
+    pthread_cond_destroy(&rx_cond);
+
+    dprintf("destructor destroying other objects...\n");
     // destroy framing objects
     ofdmflexframegen_destroy(fg);
     ofdmflexframesync_destroy(fs);
@@ -119,6 +141,7 @@ ofdmtxrx::~ofdmtxrx()
     
     // TODO: output debugging file
     //ofdmflexframesync_debug_print(fs, "ofdmtxrx_debug.m");
+    dprintf("destructor finished\n");
 }
 
 
@@ -275,15 +298,26 @@ void ofdmtxrx::reset_rx()
 // start receiver
 void ofdmtxrx::start_rx()
 {
+    dprintf("usrp rx start\n");
+    // set rx running flag
+    rx_running = true;
+
+    // tell device to start
     usrp_rx->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
-    printf("usrp rx start\n");
+
+    // signal condition (tell rx worker to start)
+    pthread_cond_signal(&rx_cond);
 }
 
 // stop receiver
 void ofdmtxrx::stop_rx()
 {
+    dprintf("usrp rx stop\n");
+    // set rx running flag
+    rx_running = false;
+
+    // tell device to stop
     usrp_rx->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-    printf("usrp rx stop\n");
 }
 
 // receive packet with timeout
@@ -335,51 +369,74 @@ void * ofdmtxrx_rx_worker(void * _arg)
     // receiver metadata object
     uhd::rx_metadata_t md;
 
-    // receive samples
-    // TODO: wait for signal to start
-    unsigned int i;
-    for (i=0; i<24000; i++) {
-        // grab data from device
-        size_t num_rx_samps = txcvr->usrp_rx->get_device()->recv(
-            &buffer.front(), buffer.size(), md,
-            uhd::io_type_t::COMPLEX_FLOAT32,
-            uhd::device::RECV_MODE_ONE_PACKET
-        );
+    while (true) {
+        // wait for signal to start; lock mutex
+        pthread_mutex_lock(&(txcvr->rx_mutex));
 
-        // ignore error codes for now
-#if 0
-        // 'handle' the error codes
-        switch(md.error_code){
-        case uhd::rx_metadata_t::ERROR_CODE_NONE:
-        case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+        // this function unlocks the mutex and waits for the condition;
+        // once the condition is set, the mutex is again locked
+        dprintf("rx_worker waiting for condition...\n");
+        int status = pthread_cond_wait(&(txcvr->rx_cond), &(txcvr->rx_mutex));
+        dprintf("rx_worker received condition\n");
+
+        // unlock the mutex
+        dprintf("rx_worker unlocking mutex\n");
+        pthread_mutex_unlock(&(txcvr->rx_mutex));
+
+        // condition given; check state: run or exit
+        dprintf("rx_worker running...\n");
+        if (!txcvr->rx_running) {
+            dprintf("rx_worker finished\n");
             break;
-
-        default:
-            std::cerr << "Error code: " << md.error_code << std::endl;
-            std::cerr << "Unexpected error on recv, exit test..." << std::endl;
-            //return 1;
-            //std::cerr << "rx_worker exiting prematurely" << std::endl;
-            //pthread_exit(NULL);
         }
+
+        // run receiver
+        while (txcvr->rx_running) {
+
+            // grab data from device
+            //dprintf("rx_worker waiting for samples...\n");
+            size_t num_rx_samps = txcvr->usrp_rx->get_device()->recv(
+                &buffer.front(), buffer.size(), md,
+                uhd::io_type_t::COMPLEX_FLOAT32,
+                uhd::device::RECV_MODE_ONE_PACKET
+            );
+            //dprintf("rx_worker processing samples...\n");
+
+            // ignore error codes for now
+#if 0
+            // 'handle' the error codes
+            switch(md.error_code){
+            case uhd::rx_metadata_t::ERROR_CODE_NONE:
+            case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+                break;
+
+            default:
+                std::cerr << "Error code: " << md.error_code << std::endl;
+                std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+                //return 1;
+                //std::cerr << "rx_worker exiting prematurely" << std::endl;
+                //pthread_exit(NULL);
+            }
 #endif
 
-        // push data through frame synchronizer
-        // TODO : use arbitrary resampler?
-        unsigned int j;
-        for (j=0; j<num_rx_samps; j++) {
-            // grab sample from usrp buffer
-            std::complex<float> usrp_sample = buffer[j];
+            // push data through frame synchronizer
+            // TODO : use arbitrary resampler?
+            unsigned int j;
+            for (j=0; j<num_rx_samps; j++) {
+                // grab sample from usrp buffer
+                std::complex<float> usrp_sample = buffer[j];
 
-            // push resulting samples through synchronizer
-            ofdmflexframesync_execute(txcvr->fs, &usrp_sample, 1);
-        }
+                // push resulting samples through synchronizer
+                ofdmflexframesync_execute(txcvr->fs, &usrp_sample, 1);
+            }
 
-    }
+        } // while rx_running
+        dprintf("rx_worker finished running\n");
 
-    // sleep...
-    printf("rx worker finished\n");
-
-    // return
+    } // while true
+    
+    //
+    dprintf("rx_worker exiting thread\n");
     pthread_exit(NULL);
 }
 

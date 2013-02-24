@@ -129,7 +129,9 @@ private:
     // receiver objects
     ofdmflexframesync fs;           // frame synchronizer object
     pthread_t rx_process;           // receive thread
-    //pthread_mutex_t rx_mutex;       // receive mutex
+    pthread_mutex_t rx_mutex;       // receive mutex
+    pthread_cond_t  rx_cond;        // receive condition
+    bool rx_running;                // is receiver running?
 
     // RF objects and properties
     uhd::usrp::multi_usrp::sptr usrp_tx;

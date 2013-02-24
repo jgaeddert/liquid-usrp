@@ -176,6 +176,7 @@ int main (int argc, char **argv)
     }
 
     // stop receiver
+    printf("ofdmflexframe_rx stopping receiver...\n");
     txcvr.stop_rx();
  
     // compute actual run-time
