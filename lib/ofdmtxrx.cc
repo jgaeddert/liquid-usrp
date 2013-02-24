@@ -68,6 +68,8 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     fgprops.fec1            = LIQUID_FEC_HAMMING128;
     fgprops.mod_scheme      = LIQUID_MODEM_QPSK;
     fg = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
+
+    // allocate memory for frame generator output (single OFDM symbol)
     fgbuffer_len = M + cp_len;
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
     
@@ -214,10 +216,10 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
         // generate symbol
         last_symbol = ofdmflexframegen_writesymbol(fg, fgbuffer);
 
-        //
+        // copy symbol and apply gain
         unsigned int i;
         for (i=0; i<fgbuffer_len; i++)
-            usrp_buffer[i] = fgbuffer[i];
+            usrp_buffer[i] = fgbuffer[i] * tx_gain;
 
         // send samples to the device
         usrp_tx->get_device()->send(
