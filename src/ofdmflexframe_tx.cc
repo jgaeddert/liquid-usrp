@@ -145,7 +145,7 @@ int main (int argc, char **argv)
  
     // sleep for a small amount of time to allow USRP buffers
     // to flush
-    usleep(100000);
+    usleep(200000);
 
     //finished
     printf("usrp data transfer complete\n");
