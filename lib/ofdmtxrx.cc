@@ -87,13 +87,13 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
 
     // initialize default tx values
     set_tx_freq(462.0e6f);
-    set_tx_rate(1200e3);
+    set_tx_rate(500e3);
     set_tx_gain_soft(-12.0f);
     set_tx_gain_uhd(40.0f);
 
     // initialize default rx values
     set_rx_freq(462.0e6f);
-    set_rx_rate(1200e3);
+    set_rx_rate(500e3);
     set_rx_gain_uhd(20.0f);
 
     // reset transceiver
@@ -188,28 +188,13 @@ void ofdmtxrx::reset_tx()
 // start transmitter stream
 void ofdmtxrx::start_tx()
 {
-    // set up the metadta flags
-    metadata_tx.start_of_burst = false; // never SOB when continuous
-    metadata_tx.end_of_burst   = false; // 
-    metadata_tx.has_time_spec  = false; // set to false to send immediately
+    fprintf(stderr,"warning: ofdmtxrx::start_tx(), does nothing\n");
 }
 
 // stop transmitter stream
 void ofdmtxrx::stop_tx()
 {
-    //TODO: flush buffers
-
-    // send a mini EOB packet
-    metadata_tx.start_of_burst = false;
-    metadata_tx.end_of_burst   = true;
-
-    usrp_tx->get_device()->send("", 0, metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
-
-    // reset tx objects
-    reset_tx();
+    fprintf(stderr,"warning: ofdmtxrx::start_rx(), does nothing\n");
 }
 
 // update payload data on a particular channel
@@ -220,6 +205,12 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
                                int             _fec0,
                                int             _fec1)
 {
+    // set up the metadta flags
+    metadata_tx.start_of_burst = false; // never SOB when continuous
+    metadata_tx.end_of_burst   = false; // 
+    metadata_tx.has_time_spec  = false; // set to false to send immediately
+    //TODO: flush buffers
+
     // fector buffer to send data to device
     std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
 
@@ -253,6 +244,16 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
         );
 
     } // while loop
+    
+    // send a mini EOB packet
+    metadata_tx.start_of_burst = false;
+    metadata_tx.end_of_burst   = true;
+
+    usrp_tx->get_device()->send("", 0, metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+
 }
 
 // 

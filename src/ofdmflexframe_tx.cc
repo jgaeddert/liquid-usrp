@@ -34,7 +34,7 @@ void usage() {
     printf("  u,h   : usage/help\n");
     printf("  q/v   : quiet/verbose\n");
     printf("  f     : center frequency [Hz],  default:  462 MHz\n");
-    printf("  b     : bandwidth [Hz],         default:  900 kHz\n");
+    printf("  b     : bandwidth [Hz],         default: 1000 kHz\n");
     printf("  g     : software tx gain [dB],  default:  -12 dB \n");
     printf("  G     : uhd tx gain [dB],       default:   40 dB\n");
     printf("  N     : number of frames,       default: 2000\n");
@@ -55,7 +55,7 @@ int main (int argc, char **argv)
     bool verbose = true;
 
     double frequency = 462.0e6;         // carrier frequency
-    double bandwidth = 900e3f;          // bandwidth
+    double bandwidth = 1000e3f;         // bandwidth
     unsigned int num_frames = 2000;     // number of frames to transmit
     double txgain_dB = -12.0f;          // software tx gain [dB]
     double uhd_txgain = 40.0;           // uhd (hardware) tx gain
@@ -122,9 +122,6 @@ int main (int argc, char **argv)
     unsigned char header[8];
     unsigned char payload[payload_len];
     
-    // start transmitter
-    txcvr.start_tx();
-
     unsigned int pid;
     unsigned int i;
     for (pid=0; pid<num_frames; pid++) {
@@ -146,9 +143,6 @@ int main (int argc, char **argv)
 
     } // packet loop
  
-    // stop transmitter
-    txcvr.stop_tx();
-
     // sleep for a small amount of time to allow USRP buffers
     // to flush
     usleep(100000);

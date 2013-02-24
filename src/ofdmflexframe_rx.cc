@@ -83,14 +83,14 @@ void usage() {
     printf("ofdmflexframe_rx -- receive OFDM packets\n");
     printf("  u,h   :   usage/help\n");
     printf("  q/v   :   quiet/verbose\n");
-    printf("  f     :   center frequency [Hz], default: 462 MHz\n");
-    printf("  b     :   bandwidth [Hz],        default: 900 kHz\n");
-    printf("  G     :   uhd rx gain [dB],      default:  20 dB)\n");
+    printf("  f     :   center frequency [Hz], default:  462 MHz\n");
+    printf("  b     :   bandwidth [Hz],        default: 1000 kHz\n");
+    printf("  G     :   uhd rx gain [dB],      default:   20 dB)\n");
     printf("  A     :   uhd rx antenna\n");
-    printf("  M     :   number of subcarriers, default:  48\n");
-    printf("  C     :   cyclic prefix length,  default:   6\n");
-    printf("  T     :   taper length,          default:   4\n");
-    printf("  t     :   run time [seconds],    default:   5\n");
+    printf("  M     :   number of subcarriers, default:   48\n");
+    printf("  C     :   cyclic prefix length,  default:    6\n");
+    printf("  T     :   taper length,          default:    4\n");
+    printf("  t     :   run time [seconds],    default:    5\n");
     printf("  d     :   enable debugging mode\n");
 }
 
@@ -100,7 +100,7 @@ int main (int argc, char **argv)
     verbose = true;
 
     float frequency = 462.0e6;
-    float bandwidth = 900e3f;
+    float bandwidth = 1000e3f;
     float num_seconds = 5.0f;
     float uhd_rxgain = 20.0;
     char uhd_rxantenna[16] = "";        // rx antenna

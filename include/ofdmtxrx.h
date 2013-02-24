@@ -60,8 +60,8 @@ public:
     void set_tx_gain_uhd(float _tx_gain_uhd);
     void set_tx_antenna(char * _tx_antenna);
     void reset_tx();
-    void start_tx();
-    void stop_tx();
+    void start_tx();    // DEPRECATED
+    void stop_tx();     // DEPRECATED
 
     // update payload data on a particular channel
     void transmit_packet(unsigned char * _header,
