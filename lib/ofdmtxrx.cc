@@ -31,8 +31,14 @@
 
 #include "ofdmtxrx.h"
 
+#define DEBUG 0
+
 // debug print
-#define dprintf(s) printf(s)
+#if DEBUG == 1
+#   define dprintf(s) printf(s)
+#else
+#   define dprintf(s) /* s */
+#endif
 
 // default constructor
 //  _M              :   OFDM: number of subcarriers
