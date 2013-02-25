@@ -51,6 +51,7 @@ void usage() {
     printf("  c     : coding scheme (inner),  default: g2412\n");
     printf("  k     : coding scheme (outer),  default: none\n");
     liquid_print_fec_schemes();
+    printf("  t     : rx packet timeout [s],  default:  0.05 s\n");
 }
 
 // assemble packet
@@ -85,12 +86,12 @@ unsigned int num_valid_bytes_received;
 int main (int argc, char **argv)
 {
     // command-line options
-    double frequency = 462.0e6;         // carrier frequency
-    double bandwidth = 1000e3f;         // bandwidth
+    float frequency = 462.0e6;          // carrier frequency
+    float bandwidth = 1000e3f;          // bandwidth
     unsigned int num_frames = 2000;     // number of frames to transmit
-    double txgain_dB = -12.0f;          // software tx gain [dB]
-    double uhd_txgain = 40.0;           // uhd (hardware) tx gain
-    double uhd_rxgain = 20.0;           // uhd (hardware) rx gain
+    float txgain_dB = -12.0f;           // software tx gain [dB]
+    float uhd_txgain = 40.0;            // uhd (hardware) tx gain
+    float uhd_rxgain = 20.0;            // uhd (hardware) rx gain
 
     // ofdm properties
     unsigned int M = 48;                // number of subcarriers
@@ -102,6 +103,8 @@ int main (int argc, char **argv)
     //crc_scheme check = LIQUID_CRC_32;       // data validity check
     fec_scheme fec0 = LIQUID_FEC_NONE;      // fec (inner)
     fec_scheme fec1 = LIQUID_FEC_GOLAY2412; // fec (outer)
+
+    float timeout   = 0.050;            // timeout (s)
     
     //
     int d;
@@ -123,6 +126,7 @@ int main (int argc, char **argv)
         case 'm':   ms          = liquid_getopt_str2mod(optarg);    break;
         case 'c':   fec0        = liquid_getopt_str2fec(optarg);    break;
         case 'k':   fec1        = liquid_getopt_str2fec(optarg);    break;
+        case 't':   timeout     = atof(optarg);     break;
         default:    usage();                        return 0;
         }
     }
@@ -138,6 +142,9 @@ int main (int argc, char **argv)
         exit(-1);
     } else if (fec1 == LIQUID_FEC_UNKNOWN) {
         fprintf(stderr,"error: %s, unknown/unsupported outer fec scheme\n", argv[0]);
+        exit(-1);
+    } else if (timeout <= 0.0f) {
+        fprintf(stderr,"error: %s, ACK timeout must be greater than zero\n", argv[0]);
         exit(-1);
     }
 
@@ -187,15 +194,12 @@ int main (int argc, char **argv)
 
         // wait for response or time out; lock mutex
         pthread_mutex_lock(&rx_mutex);
-        struct timespec timeout;
-        set_timespec(&timeout, 0.500f);
+        struct timespec ts;
+        set_timespec(&ts, timeout);
         txcvr.start_rx();
-#if 0
-        int status = pthread_cond_timedwait(&rx_cond, &rx_mutex, &timeout);
-#else
-        int status = pthread_cond_wait(&rx_cond, &rx_mutex);
-#endif
-        printf("status: %d\n", status);
+        //int status = pthread_cond_wait(&rx_cond, &rx_mutex);
+        int status = pthread_cond_timedwait(&rx_cond, &rx_mutex, &ts);
+        if (status) printf("timeout\n");
         // unlock the mutex
         pthread_mutex_unlock(&rx_mutex);
         txcvr.stop_rx();
@@ -267,8 +271,8 @@ void set_timespec(struct timespec * _ts,
     gettimeofday(&tv_now, NULL);
 
     // add offset (timespec)
-    _ts->tv_sec  = tv_now.tv_sec;         // seconds
-    _ts->tv_nsec = (tv_now.tv_usec + _timeout) * 1000; // nanoseconds
+    _ts->tv_sec  = tv_now.tv_sec;                       // seconds
+    _ts->tv_nsec = tv_now.tv_usec*1000 + _timeout*1e9;  // nanoseconds
 
     // accumulate nanoseconds into seconds
     while (_ts->tv_nsec > 1000000000) {
