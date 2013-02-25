@@ -132,6 +132,7 @@ private:
     pthread_mutex_t rx_mutex;       // receive mutex
     pthread_cond_t  rx_cond;        // receive condition
     bool rx_running;                // is receiver running?
+    bool debug_enabled;             // is debugging enabled?
 
     // RF objects and properties
     uhd::usrp::multi_usrp::sptr usrp_tx;

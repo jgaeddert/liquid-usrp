@@ -68,6 +68,7 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     M            = _M;
     cp_len       = _cp_len;
     taper_len    = _taper_len;
+    debug_enabled= false;
 
     // create frame generator
     unsigned char * p = NULL;   // subcarrier allocation (default)
@@ -136,6 +137,10 @@ ofdmtxrx::~ofdmtxrx()
     pthread_mutex_destroy(&rx_mutex);
     dprintf("destructor destroying condition...\n");
     pthread_cond_destroy(&rx_cond);
+    
+    // TODO: output debugging file
+    if (debug_enabled)
+        ofdmflexframesync_debug_print(fs, "ofdmtxrx_framesync_debug.m");
 
     dprintf("destructor destroying other objects...\n");
     // destroy framing objects
@@ -145,8 +150,6 @@ ofdmtxrx::~ofdmtxrx()
     // free other allocated arrays
     free(fgbuffer);
     
-    // TODO: output debugging file
-    //ofdmflexframesync_debug_print(fs, "ofdmtxrx_debug.m");
     dprintf("destructor finished\n");
 }
 
@@ -350,12 +353,14 @@ bool ofdmtxrx::receive_packet(float              _timeout,
 // enable debugging
 void ofdmtxrx::debug_enable()
 {
+    debug_enabled = true;
     ofdmflexframesync_debug_enable(fs);
 }
 
 // disable debugging
 void ofdmtxrx::debug_disable()
 {
+    debug_enabled = false;
     ofdmflexframesync_debug_disable(fs);
 }
 
