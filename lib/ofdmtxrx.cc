@@ -233,14 +233,14 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
     ofdmflexframegen_assemble(fg, _header, _payload, _payload_len);
 
     // generate a single OFDM frame
-    int last_symbol=0;
+    bool last_symbol=false;
+    unsigned int i;
     while (!last_symbol) {
 
         // generate symbol
         last_symbol = ofdmflexframegen_writesymbol(fg, fgbuffer);
 
         // copy symbol and apply gain
-        unsigned int i;
         for (i=0; i<fgbuffer_len; i++)
             usrp_buffer[i] = fgbuffer[i] * tx_gain;
 
@@ -253,6 +253,16 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
         );
 
     } // while loop
+
+    // send a few extra samples to the device
+    // NOTE: this seems necessary to preserve last OFDM symbol in
+    //       frame from corruption
+    usrp_tx->get_device()->send(
+        &usrp_buffer.front(), usrp_buffer.size(),
+        metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
     
     // send a mini EOB packet
     metadata_tx.start_of_burst = false;
