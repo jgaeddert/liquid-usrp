@@ -194,18 +194,6 @@ void ofdmtxrx::reset_tx()
     ofdmflexframegen_reset(fg);
 }
 
-// start transmitter stream
-void ofdmtxrx::start_tx()
-{
-    fprintf(stderr,"warning: ofdmtxrx::start_tx(), does nothing\n");
-}
-
-// stop transmitter stream
-void ofdmtxrx::stop_tx()
-{
-    fprintf(stderr,"warning: ofdmtxrx::start_rx(), does nothing\n");
-}
-
 // update payload data on a particular channel
 void ofdmtxrx::transmit_packet(unsigned char * _header,
                                unsigned char * _payload,
@@ -291,12 +279,6 @@ void ofdmtxrx::set_rx_rate(float _rx_rate)
     usrp_rx->set_rx_rate(_rx_rate);
 }
 
-// set receiver software gain
-void ofdmtxrx::set_rx_gain_soft(float _rx_gain_soft)
-{
-    // nothing to do
-}
-
 // set receiver hardware (UHD) gain
 void ofdmtxrx::set_rx_gain_uhd(float _rx_gain_uhd)
 {
@@ -338,22 +320,6 @@ void ofdmtxrx::stop_rx()
 
     // tell device to stop
     usrp_rx->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-}
-
-// receive packet with timeout
-//  _timeout        :   timeout (seconds)
-//  _header
-//  ...
-bool ofdmtxrx::receive_packet(float              _timeout,
-                              unsigned char **   _header,
-                              int  *             _header_valid,
-                              unsigned char **   _payload,
-                              unsigned int  *    _payload_len,
-                              int  *             _payload_valid,
-                              framesyncstats_s * _stats)
-{
-    usleep( 1 + ceil(_timeout*1e6) );
-    return false;
 }
 
 //

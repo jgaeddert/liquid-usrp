@@ -60,8 +60,6 @@ public:
     void set_tx_gain_uhd(float _tx_gain_uhd);
     void set_tx_antenna(char * _tx_antenna);
     void reset_tx();
-    void start_tx();    // DEPRECATED
-    void stop_tx();     // DEPRECATED
 
     // update payload data on a particular channel
     void transmit_packet(unsigned char * _header,
@@ -77,24 +75,11 @@ public:
     //
     void set_rx_freq(float _rx_freq);
     void set_rx_rate(float _rx_rate);
-    void set_rx_gain_soft(float _rx_gain_soft);
     void set_rx_gain_uhd(float _rx_gain_uhd);
     void set_rx_antenna(char * _rx_antenna);
     void reset_rx();
     void start_rx();
     void stop_rx();
-
-    // receive packet with timeout
-    //  _timeout        :   timeout (seconds)
-    //  _header
-    //  ...
-    bool receive_packet(float              _timeout,
-                        unsigned char **   _header,
-                        int  *             _header_valid,
-                        unsigned char **   _payload,
-                        unsigned int  *    _payload_len,
-                        int  *             _payload_valid,
-                        framesyncstats_s * _stats);
 
     //
     // additional methods
