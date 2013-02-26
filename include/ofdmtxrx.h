@@ -92,8 +92,11 @@ public:
     friend void * ofdmtxrx_rx_worker(void * _arg);
             
 private:
-    // generate frame samples from internal frame generator
-    //void GenerateFrameSamples();
+    // set timespec for timeout
+    //  _ts         :   pointer to timespec structure
+    //  _timeout    :   time before timeout
+    void set_timespec(struct timespec * _ts,
+                      float             _timeout);
 
     // OFDM properties
     unsigned int M;                 // number of subcarriers

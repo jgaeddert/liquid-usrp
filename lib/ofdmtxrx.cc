@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 #include <complex>
 #include <liquid/liquid.h>
 
@@ -344,6 +346,27 @@ void ofdmtxrx::debug_disable()
 // private methods
 //
 
+// set timespec for timeout
+//  _ts         :   pointer to timespec structure
+//  _timeout    :   time before timeout
+void ofdmtxrx::set_timespec(struct timespec * _ts,
+                            float             _timeout)
+{
+    // get current time (timeval)
+    struct timeval tv_now;
+    gettimeofday(&tv_now, NULL);
+
+    // add offset (timespec)
+    _ts->tv_sec  = tv_now.tv_sec;                       // seconds
+    _ts->tv_nsec = tv_now.tv_usec*1000 + _timeout*1e9;  // nanoseconds
+
+    // accumulate nanoseconds into seconds
+    while (_ts->tv_nsec > 1000000000) {
+        _ts->tv_nsec -= 1000000000;
+        _ts->tv_sec++;
+    }
+}
+
 // receiver worker thread
 void * ofdmtxrx_rx_worker(void * _arg)
 {
@@ -364,7 +387,8 @@ void * ofdmtxrx_rx_worker(void * _arg)
         // this function unlocks the mutex and waits for the condition;
         // once the condition is set, the mutex is again locked
         dprintf("rx_worker waiting for condition...\n");
-        int status = pthread_cond_wait(&(txcvr->rx_cond), &(txcvr->rx_mutex));
+        //int status =
+        pthread_cond_wait(&(txcvr->rx_cond), &(txcvr->rx_mutex));
         dprintf("rx_worker received condition\n");
 
         // unlock the mutex
