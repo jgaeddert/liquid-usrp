@@ -111,6 +111,7 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
 
     // create and start rx thread
     rx_running = false;                     // receiver is not running initially
+    rx_thread_running = true;               // receiver thread IS running initially
     pthread_mutex_init(&rx_mutex, NULL);    // receiver mutex
     pthread_cond_init(&rx_cond,   NULL);    // receiver condition
     pthread_create(&rx_process,   NULL, ofdmtxrx_rx_worker, (void*)this);
@@ -128,6 +129,7 @@ ofdmtxrx::~ofdmtxrx()
 
     // signal condition (tell rx worker to continue)
     dprintf("destructor signaling condition...\n");
+    rx_thread_running = false;
     pthread_cond_signal(&rx_cond);
 
     dprintf("destructor joining rx thread...\n");
@@ -380,7 +382,7 @@ void * ofdmtxrx_rx_worker(void * _arg)
     // receiver metadata object
     uhd::rx_metadata_t md;
 
-    while (true) {
+    while (txcvr->rx_thread_running) {
         // wait for signal to start; lock mutex
         pthread_mutex_lock(&(txcvr->rx_mutex));
 

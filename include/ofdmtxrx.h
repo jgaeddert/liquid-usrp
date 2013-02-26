@@ -119,7 +119,8 @@ private:
     pthread_t rx_process;           // receive thread
     pthread_mutex_t rx_mutex;       // receive mutex
     pthread_cond_t  rx_cond;        // receive condition
-    bool rx_running;                // is receiver running?
+    bool rx_running;                // is receiver running? (physical receiver)
+    bool rx_thread_running;         // is receiver thread running?
     bool debug_enabled;             // is debugging enabled?
 
     // RF objects and properties
