@@ -243,6 +243,9 @@ int main (int argc, char **argv)
     //finished
     printf("usrp data transfer complete\n");
 
+    // destroy objects
+    msresamp_crcf_destroy(resamp);
+
     return 0;
 }
 
