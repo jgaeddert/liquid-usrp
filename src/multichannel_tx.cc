@@ -148,9 +148,6 @@ int main (int argc, char **argv)
     unsigned int mctx_buffer_len = 2*num_channels;
     std::complex<float> mctx_buffer[mctx_buffer_len];
 
-    // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2*tx_resamp_rate) + 64];
-
     // vector buffer to send data to USRP
     std::vector<std::complex<float> > usrp_buffer(256);
     unsigned int usrp_sample_counter = 0;
