@@ -155,7 +155,8 @@ int main (int argc, char **argv)
     pthread_cond_init(&rx_cond,   NULL);
 
     // create transceiver object
-    ofdmtxrx txcvr(M, cp_len, taper_len, callback, (void*)&rx_cond);
+    unsigned char * p = NULL;   // default subcarrier allocation
+    ofdmtxrx txcvr(M, cp_len, taper_len, p, callback, (void*)&rx_cond);
 
     // set transmit properties
     txcvr.set_tx_freq(frequency);

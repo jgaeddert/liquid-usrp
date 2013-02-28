@@ -110,7 +110,8 @@ int main (int argc, char **argv)
     }
 
     // create transceiver object
-    ofdmtxrx txcvr(M, cp_len, taper_len, NULL, NULL);
+    unsigned char * p = NULL;   // default subcarrier allocation
+    ofdmtxrx txcvr(M, cp_len, taper_len, p, NULL, NULL);
 
     // set properties
     txcvr.set_tx_freq(frequency);
