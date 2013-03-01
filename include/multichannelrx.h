@@ -45,7 +45,7 @@ public:
     // destructor
     ~multichannelrx();
 
-    // reset base station transmitter
+    // reset multi-channel receiver
     void Reset();
 
     // accessor methods
