@@ -16,6 +16,31 @@
  * You should have received a copy of the GNU General Public License
  * along with liquid.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+// 
+// multichannel_txrx.cc
+//
+// This program demonstrates the functionality of the multichannel
+// transceiver class (see include/multichanneltxrx.h) which allows
+// concurrent transmission of data on multiple OFDM channels, each
+// with a potentially different modulation/coding scheme, payload
+// length, etc.
+//
+// After initialization, the basic program runs as follows:
+//  1. turn on the transmitter
+//  2. transmit a burst of packets on all channels, each with a
+//     random payload length
+//  3. after a certain time, stop generating new packets, but wait
+//     for the device to finish sending packets already scheduled
+//  4. turn off the transmitter
+//  5. turn on the receiver
+//  6. wait for a specified amount of time while receiving packets
+//     (received packets will be piped through the user-defined
+//     callback function)
+//  7. turn off the receiver
+//  8. repeat this entire sequence until a certain amount of total
+//     time has elapsed.
+//
  
 #include <math.h>
 #include <iostream>
@@ -113,7 +138,7 @@ int main (int argc, char **argv)
     
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:M:C:T:P:m:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:M:C:T:n:P:m:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;

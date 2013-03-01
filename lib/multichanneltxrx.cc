@@ -213,7 +213,7 @@ void multichanneltxrx::stop_tx()
     tx_running = false;
 }
 
-// update payload data on a particular channel
+// update payload data on a particular channel (non-blocking)
 int multichanneltxrx::transmit_packet(unsigned int    _channel,
                                       unsigned char * _header,
                                       unsigned char * _payload,
@@ -239,7 +239,13 @@ int multichanneltxrx::transmit_packet(unsigned int    _channel,
     return 0;
 }
 
-// get next available channel
+// is channel available?
+bool multichanneltxrx::is_channel_available(unsigned int _channel)
+{
+    return mctx.IsChannelReadyForData(_channel);
+}
+
+// get index of next available channel (blocking)
 unsigned int multichanneltxrx::get_available_channel()
 {
     // ugly method: simply poll channels until one becomes available
@@ -260,7 +266,7 @@ unsigned int multichanneltxrx::get_available_channel()
     }
 }
 
-// wait for all tx channels to be available
+// wait for all tx channels to be available (blocking, of course)
 void multichanneltxrx::wait_for_tx_to_complete()
 {
     // ugly method: simply poll channels until all become available

@@ -73,12 +73,7 @@ public:
     void start_tx();
     void stop_tx();
 
-#if 0
-    // is channel available?
-    bool is_channel_available(unsigned int _channel);
-#endif
-
-    // update payload data on a particular channel
+    // update payload data on a particular channel (non-blocking)
     int transmit_packet(unsigned int    _channel,
                         unsigned char * _header,
                         unsigned char * _payload,
@@ -87,13 +82,13 @@ public:
                         int             _fec0,
                         int             _fec1);
 
-    // get next available channel
+    // is channel available?
+    bool is_channel_available(unsigned int _channel);
+
+    // get index of next available channel (blocking)
     unsigned int get_available_channel();
 
-    // TODO: add method:
-    // wait for a particular channel to become available
-
-    // wait for all tx channels to be available
+    // wait for all tx channels to be available (blocking, of course)
     void wait_for_tx_to_complete();
 
     // 
