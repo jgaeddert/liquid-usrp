@@ -33,12 +33,14 @@ public:
     //  _M              :   OFDM: number of subcarriers
     //  _cp_len         :   OFDM: cyclic prefix length
     //  _taper_len      :   OFDM: taper prefix length
+    //  _p              :   OFDM: subcarrier allocation
     //  _userdata       :   user-defined data structure array
     //  _callback       :   user-defined callback function
     multichannelrx(unsigned int         _num_channels,
                    unsigned int         _M,
                    unsigned int         _cp_len,
                    unsigned int         _taper_len,
+                   unsigned char*       _p,
                    void **              _userdata,
                    framesync_callback * _callback);
 

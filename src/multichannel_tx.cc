@@ -142,7 +142,8 @@ int main (int argc, char **argv)
         pid[i] = 0;
     
     // create multichannel transmitter object
-    multichanneltx mctx(num_channels, M, cp_len, taper_len);
+    unsigned char * p = NULL;   // default subcarrier allocation
+    multichanneltx mctx(num_channels, M, cp_len, taper_len, p);
     
     // allocate array to hold samples
     unsigned int mctx_buffer_len = 2*num_channels;

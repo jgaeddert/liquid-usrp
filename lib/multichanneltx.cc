@@ -37,10 +37,12 @@
 //  _M              :   OFDM: number of subcarriers
 //  _cp_len         :   OFDM: cyclic prefix length
 //  _taper_len      :   OFDM: taper prefix length
-multichanneltx::multichanneltx(unsigned int _num_channels,
-                               unsigned int _M,
-                               unsigned int _cp_len,
-                               unsigned int _taper_len)
+//  _p              :   OFDM: subcarrier allocation
+multichanneltx::multichanneltx(unsigned int    _num_channels,
+                               unsigned int    _M,
+                               unsigned int    _cp_len,
+                               unsigned int    _taper_len,
+                               unsigned char * _p)
 {
     // validate input
     if (_num_channels < 1) {
@@ -65,7 +67,6 @@ multichanneltx::multichanneltx(unsigned int _num_channels,
     taper_len    = _taper_len;
 
     // create frame generators
-    unsigned char * p = NULL;   // subcarrier allocation (default)
     ofdmflexframegenprops_s fgprops;
     ofdmflexframegenprops_init_default(&fgprops);
     fgprops.check           = LIQUID_CRC_32;
@@ -76,7 +77,7 @@ multichanneltx::multichanneltx(unsigned int _num_channels,
     fgbuffer = (std::complex<float>**) malloc(num_channels * sizeof(std::complex<float>*));
     fgbuffer_len = M + cp_len;
     for (i=0; i<num_channels; i++) {
-        framegen[i] = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
+        framegen[i] = ofdmflexframegen_create(M, cp_len, taper_len, _p, &fgprops);
         fgbuffer[i] = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
     }
     

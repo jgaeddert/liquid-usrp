@@ -169,7 +169,8 @@ int main (int argc, char **argv)
         userdata[i] = NULL;
         callbacks[i] = callback;
     }
-    multichannelrx mcrx(num_channels, M, cp_len, taper_len, userdata, callbacks);
+    unsigned char * p = NULL;   // default subcarrier allocation
+    multichannelrx mcrx(num_channels, M, cp_len, taper_len, p, userdata, callbacks);
     
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
