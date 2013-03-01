@@ -42,7 +42,6 @@ void usage() {
     printf("  b     : bandwidth [Hz],         default: 1000 kHz\n");
     printf("  g     : software tx gain [dB],  default:  -12 dB \n");
     printf("  G     : uhd tx gain [dB],       default:   40 dB\n");
-    printf("  N     : number of frames,       default: 2000\n");
     printf("  M     : number of subcarriers,  default:   48\n");
     printf("  C     : cyclic prefix length,   default:    6\n");
     printf("  T     : taper length,           default:    4\n");
@@ -90,7 +89,6 @@ int main (int argc, char **argv)
     // command-line options
     float frequency = 462.0e6;          // carrier frequency
     float bandwidth = 1000e3f;          // bandwidth
-    unsigned int num_frames = 2000;     // number of frames to transmit
     float txgain_dB = -12.0f;           // software tx gain [dB]
     float uhd_txgain = 40.0;            // uhd (hardware) tx gain
     float uhd_rxgain = 20.0;            // uhd (hardware) rx gain
@@ -109,13 +107,13 @@ int main (int argc, char **argv)
     fec_scheme fec1 = LIQUID_FEC_GOLAY2412; // fec (outer)
 
     // timers
-    float burst_time    = 0.250;        // time of 'downlink' burst
-    float ack_timeout   = 2.500;        // time out (wait for rx packets)
+    float tx_burst_time = 0.250;        // time of transmit burst
+    float rx_burst_time = 2.500;        // time of receive burst
     float runtime       = 30.00;        // total run time
     
     //
     int d;
-    while ((d = getopt(argc,argv,"uhqvf:b:g:G:N:M:C:T:P:m:c:k:")) != EOF) {
+    while ((d = getopt(argc,argv,"uhqvf:b:g:G:M:C:T:P:m:c:k:")) != EOF) {
         switch (d) {
         case 'u':
         case 'h':   usage();                        return 0;
@@ -125,7 +123,6 @@ int main (int argc, char **argv)
         case 'b':   bandwidth   = atof(optarg);     break;
         case 'g':   txgain_dB   = atof(optarg);     break;
         case 'G':   uhd_txgain  = atof(optarg);     break;
-        case 'N':   num_frames  = atoi(optarg);     break;
         case 'M':   M           = atoi(optarg);     break;
         case 'C':   cp_len      = atoi(optarg);     break;
         case 'T':   taper_len   = atoi(optarg);     break;
@@ -153,9 +150,6 @@ int main (int argc, char **argv)
         exit(-1);
     } else if (num_channels == 0) {
         fprintf(stderr,"error: %s, number of channels must be greater than zero\n", argv[0]);
-        exit(-1);
-    } else if (ack_timeout <= 0.0f) {
-        fprintf(stderr,"error: %s, ACK timeout must be greater than zero\n", argv[0]);
         exit(-1);
     }
 
@@ -192,10 +186,8 @@ int main (int argc, char **argv)
     unsigned char header[8];
     unsigned char payload[payload_len];
 
-    // packet counters
-    unsigned int pid[num_channels];
-    for (i=0; i<num_channels; i++)
-        pid[i] = 0;
+    // packet counter
+    unsigned int pid=0;
     
     // reset counters
     num_frames_detected=0;
@@ -204,34 +196,34 @@ int main (int argc, char **argv)
     num_valid_bytes_received=0;
     
     // create timers
-    timer timer_runtime    = timer_create();    timer_tic(timer_runtime);
-    timer timer_burst      = timer_create();    timer_tic(timer_burst);
-    timer timer_acktimeout = timer_create();    timer_tic(timer_acktimeout);
+    timer timer_runtime = timer_create();    timer_tic(timer_runtime);
+    timer timer_tx      = timer_create();    timer_tic(timer_tx);
+    //timer timer_rx      = timer_create();    timer_tic(timer_rx);
     while ( timer_toc(timer_runtime) < runtime ) {
         //if (verbose) printf("tx packet id: %6u\n", pid);
 
-        // reset burst timer
-        timer_tic(timer_burst);
+        // reset tx burst timer
+        timer_tic(timer_tx);
 
         // transit a burst of packets
         txcvr.start_tx();
         printf("transmitting burst...\n");
-        while ( timer_toc(timer_burst) < burst_time) {
+        while ( timer_toc(timer_tx) < tx_burst_time) {
             // get next available channel (blocking)
-            printf("waiting for channel...\n");
             unsigned int c = txcvr.get_available_channel();
             assert( c < num_channels);
-            printf("got channel %u\n", c);
 
             // assemble packet
-            assemble_packet(pid[c], header, payload, payload_len);
+            unsigned int this_packet_len = rand() % payload_len;
+            assemble_packet(pid, header, payload, this_packet_len);
             
             // transmit frame on channel 'c'
+            printf("transmitting packet %6u (%6u bytes) on channel %6u\n", pid, this_packet_len, c);
             int rc =
-            txcvr.transmit_packet(c, header, payload, payload_len, ms, fec0, fec1);
+            txcvr.transmit_packet(c, header, payload, this_packet_len, ms, fec0, fec1);
 
             // update packet counter on channel 'c'
-            pid[c]++;
+            pid++;
         }
 
         // wait for transmission to finish
@@ -242,7 +234,7 @@ int main (int argc, char **argv)
         txcvr.start_rx();
 
         // sleep for prescribed time
-        usleep(ack_timeout*1e6f);
+        usleep(rx_burst_time*1e6f);
 
         // stop receiver
         txcvr.stop_rx();
@@ -276,8 +268,8 @@ int main (int argc, char **argv)
 
     // destroy objects
     timer_destroy(timer_runtime);
-    timer_destroy(timer_burst);
-    timer_destroy(timer_acktimeout);
+    timer_destroy(timer_tx);
+    //timer_destroy(timer_rx);
     pthread_mutex_destroy(&rx_mutex);
     pthread_cond_destroy(&rx_cond);
 
@@ -335,11 +327,13 @@ int callback(unsigned char *  _header,
              void *           _userdata)
 {
     if (verbose) {
-        int pid = _header_valid? (_header[0] << 8 | _header[1]) : -1;
-        printf("***** rssi=%7.2fdB evm=%7.2fdB, header:%4s, payload[%6d]:%4s\n",
+        int pid         = _header_valid ? (_header[0] << 8 | _header[1]) : -1;
+        int payload_len = _header_valid ? _payload_len : -1;
+        printf("***** rssi=%7.2fdB evm=%7.2fdB, header:%4s, payload[%6d,%6d bytes]:%4s\n",
                 _stats.rssi, _stats.evm,
                 _header_valid  ? "pass" : "FAIL",
                 pid,
+                payload_len,
                 _payload_valid ? "pass" : "FAIL");
     }
 
