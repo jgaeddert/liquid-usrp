@@ -39,12 +39,14 @@
 //  _M              :   OFDM: number of subcarriers
 //  _cp_len         :   OFDM: cyclic prefix length
 //  _taper_len      :   OFDM: taper prefix length
+//  _p              :   OFDM: subcarrier allocation
 //  _userdata       :   user-defined data structure array
 //  _callback       :   user-defined callback function
 multichannelrx::multichannelrx(unsigned int         _num_channels,
                                unsigned int         _M,
                                unsigned int         _cp_len,
                                unsigned int         _taper_len,
+                               unsigned char *      _p,
                                void **              _userdata,
                                framesync_callback * _callback)
 {
@@ -71,14 +73,13 @@ multichannelrx::multichannelrx(unsigned int         _num_channels,
     taper_len    = _taper_len;
 
     // create frame generators
-    unsigned char * p = NULL;   // subcarrier allocation (default)
     framesync = (ofdmflexframesync*)  malloc(num_channels * sizeof(ofdmflexframesync));
     userdata  = (void **)             malloc(num_channels * sizeof(void *));
     callback  = (framesync_callback*) malloc(num_channels * sizeof(framesync_callback));
     for (i=0; i<num_channels; i++) {
         userdata[i]  = _userdata[i];
         callback[i]  = _callback[i];
-        framesync[i] = ofdmflexframesync_create(M, cp_len, taper_len, p, callback[i], userdata[i]);
+        framesync[i] = ofdmflexframesync_create(M, cp_len, taper_len, _p, callback[i], userdata[i]);
 #if BST_DEBUG
         ofdmflexframesync_debug_enable(framesync[i]);
 #endif

@@ -130,10 +130,6 @@ int main (int argc, char **argv)
     // set the IF filter bandwidth
     //usrp->set_tx_bandwidth(2.0f*tx_rate);
 
-    // add arbitrary resampling component
-    // TODO : check that resampling rate does indeed correspond to proper bandwidth
-    msresamp_crcf resamp = msresamp_crcf_create(0.5f*tx_resamp_rate, 60.0f);
-
     // transmitter gain (linear)
     float g = powf(10.0f, txgain_dB/20.0f);
     g /= (float)num_channels;
@@ -146,14 +142,12 @@ int main (int argc, char **argv)
         pid[i] = 0;
     
     // create multichannel transmitter object
-    multichanneltx mctx(num_channels, M, cp_len, taper_len);
+    unsigned char * p = NULL;   // default subcarrier allocation
+    multichanneltx mctx(num_channels, M, cp_len, taper_len, p);
     
     // allocate array to hold samples
     unsigned int mctx_buffer_len = 2*num_channels;
     std::complex<float> mctx_buffer[mctx_buffer_len];
-
-    // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2*tx_resamp_rate) + 64];
 
     // vector buffer to send data to USRP
     std::vector<std::complex<float> > usrp_buffer(256);
@@ -199,30 +193,23 @@ int main (int argc, char **argv)
         mctx.GenerateSamples(mctx_buffer);
 
 
-        // resample output and push resulting samples to USRP
+        // push resulting samples to USRP
         for (i=0; i<mctx_buffer_len; i++) {
-            // resample OFDM symbol one sample at a time
-            unsigned int nw;    // number of samples output from resampler
-            msresamp_crcf_execute(resamp, &mctx_buffer[i], 1, buffer_resamp, &nw);
 
-            // for each output sample, stuff into USRP buffer
-            unsigned int n;
-            for (n=0; n<nw; n++) {
-                // append to USRP buffer, scaling by software
-                usrp_buffer[usrp_sample_counter++] = g*buffer_resamp[n];
+            // append to USRP buffer, scaling by software
+            usrp_buffer[usrp_sample_counter++] = g*mctx_buffer[i];
 
-                // once USRP buffer is full, reset counter and send to device
-                if (usrp_sample_counter==256) {
-                    // reset counter
-                    usrp_sample_counter=0;
+            // once USRP buffer is full, reset counter and send to device
+            if (usrp_sample_counter==256) {
+                // reset counter
+                usrp_sample_counter=0;
 
-                    // send the result to the USRP
-                    usrp->get_device()->send(
-                        &usrp_buffer.front(), usrp_buffer.size(), md,
-                        uhd::io_type_t::COMPLEX_FLOAT32,
-                        uhd::device::SEND_MODE_FULL_BUFF
-                    );
-                }
+                // send the result to the USRP
+                usrp->get_device()->send(
+                    &usrp_buffer.front(), usrp_buffer.size(), md,
+                    uhd::io_type_t::COMPLEX_FLOAT32,
+                    uhd::device::SEND_MODE_FULL_BUFF
+                );
             }
         }
 

@@ -154,9 +154,6 @@ int main (int argc, char **argv)
     else
         printf("run time    :   (forever)\n");
 
-    // add arbitrary resampling component
-    msresamp_crcf resamp = msresamp_crcf_create(2.0*rx_resamp_rate, 60.0f);
-
     unsigned int block_len = 64;
     assert( (block_len % 2) == 0);  // ensure block length is even
 
@@ -172,14 +169,12 @@ int main (int argc, char **argv)
         userdata[i] = NULL;
         callbacks[i] = callback;
     }
-    multichannelrx mcrx(num_channels, M, cp_len, taper_len, userdata, callbacks);
+    unsigned char * p = NULL;   // default subcarrier allocation
+    multichannelrx mcrx(num_channels, M, cp_len, taper_len, p, userdata, callbacks);
     
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
- 
-    // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2.0f/rx_resamp_rate) + 64];
  
     // run conditions
     int continue_running = 1;
@@ -212,12 +207,8 @@ int main (int argc, char **argv)
             // grab sample from usrp buffer
             std::complex<float> usrp_sample = buff[j];
 
-            // push through resampler (one at a time)
-            unsigned int nw;
-            msresamp_crcf_execute(resamp, &usrp_sample, 1, buffer_resamp, &nw);
-
             // push resulting samples through receiver
-            mcrx.Execute(buffer_resamp, nw);
+            mcrx.Execute(&usrp_sample, 1);
         }
 
         // check runtime
@@ -231,7 +222,6 @@ int main (int argc, char **argv)
     printf("usrp data transfer complete\n");
  
     // destroy objects
-    msresamp_crcf_destroy(resamp);
     timer_destroy(t0);
 
     return 0;

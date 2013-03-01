@@ -58,8 +58,8 @@ multichanneltxrx::multichanneltxrx(unsigned int         _num_channels,
                                    framesync_callback * _callback,
                                    void **              _userdata) :
     num_channels(_num_channels),
-    mctx(_num_channels, _M, _cp_len, _taper_len),
-    mcrx(_num_channels, _M, _cp_len, _taper_len, _userdata, _callback)
+    mctx(_num_channels, _M, _cp_len, _taper_len, _p),
+    mcrx(_num_channels, _M, _cp_len, _taper_len, _p, _userdata, _callback)
 {
     // validate input
     if (_num_channels == 0) {
