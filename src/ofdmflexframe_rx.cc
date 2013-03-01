@@ -184,7 +184,7 @@ int main (int argc, char **argv)
     float runtime = timer_toc(t0);
 
     // print results
-    float data_rate = num_valid_bytes_received * 8.0f / num_seconds;
+    float data_rate = num_valid_bytes_received * 8.0f / runtime;
     float percent_headers_valid = (num_frames_detected == 0) ?
                           0.0f :
                           100.0f * (float)num_valid_headers_received / (float)num_frames_detected;

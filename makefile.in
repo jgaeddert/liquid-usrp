@@ -71,14 +71,13 @@ ARFLAGS		= r
 # 
 # liquid headers
 #
-headers_install	:= iqpr.h
+headers_install	:= ofdmtxrx.h
 headers		:= $(headers_install)
 include_headers	:= $(addprefix include/,$(headers))
 
 
 # library source files
 library_src :=				\
-	lib/iqpr.cc			\
 	lib/multichannelrx.cc		\
 	lib/multichanneltx.cc		\
 	lib/ofdmtxrx.cc			\
@@ -86,7 +85,6 @@ library_src :=				\
 
 # library header files
 library_headers :=			\
-	include/iqpr.h			\
 	include/multichannelrx.h	\
 	include/multichanneltx.h	\
 	include/ofdmtxrx.h		\
@@ -95,7 +93,6 @@ library_headers :=			\
 # example programs
 example_src :=				\
 	src/asgram_rx.cc		\
-	src/iqpr_test.cc		\
 	src/flexframe_tx.cc		\
 	src/flexframe_rx.cc		\
 	src/fullduplex_txrx.cc		\
@@ -109,7 +106,6 @@ example_src :=				\
 	src/ofdmflexframe_tx.cc		\
 	src/packet_rx.cc		\
 	src/packet_tx.cc		\
-	src/ping.cc			\
 	src/rssi.cc			\
 
 #	src/wlanframe_tx.cc
