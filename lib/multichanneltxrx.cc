@@ -246,8 +246,13 @@ unsigned int multichanneltxrx::get_available_channel()
     while (true) {
         unsigned int i;
         for (i=0; i<num_channels; i++) {
-            if (mctx.IsChannelReadyForData(i))
+            if (mctx.IsChannelReadyForData(i)) {
+                // ugly hack to avoid race condition; give internal
+                // ofdmflexframegen time to update its internal state
+                usleep(20);
+
                 return i;
+            }
         }
 
         // no channels available; sleep for a small time (0.5 ms)
@@ -426,7 +431,7 @@ void * multichanneltxrx_tx_worker(void * _arg)
 
         // reset multichannel transmitter
         txcvr->mctx.Reset();
-
+    
         // run transmitter
         while (txcvr->tx_running) {
             // generate samples
