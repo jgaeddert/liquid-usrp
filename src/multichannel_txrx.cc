@@ -53,7 +53,7 @@ void usage() {
     printf("  c     : coding scheme (inner),  default: g2412\n");
     printf("  k     : coding scheme (outer),  default: none\n");
     liquid_print_fec_schemes();
-    printf("  t     : total runtime [s],      default:   10 s\n");
+    printf("  t     : total runtime [s],      default:   30 s\n");
 }
 
 // assemble packet
@@ -110,8 +110,8 @@ int main (int argc, char **argv)
 
     // timers
     float burst_time    = 0.250;        // time of 'downlink' burst
-    float ack_timeout   = 0.500;        // time out (wait for rx packets)
-    float runtime       = 10.00;        // total run time
+    float ack_timeout   = 2.500;        // time out (wait for rx packets)
+    float runtime       = 30.00;        // total run time
     
     //
     int d;
@@ -214,10 +214,14 @@ int main (int argc, char **argv)
         timer_tic(timer_burst);
 
         // transit a burst of packets
+        txcvr.start_tx();
+        printf("transmitting burst...\n");
         while ( timer_toc(timer_burst) < burst_time) {
             // get next available channel (blocking)
+            printf("waiting for channel...\n");
             unsigned int c = txcvr.get_available_channel();
             assert( c < num_channels);
+            printf("got channel %u\n", c);
 
             // assemble packet
             assemble_packet(pid[c], header, payload, payload_len);
@@ -232,6 +236,7 @@ int main (int argc, char **argv)
 
         // wait for transmission to finish
         txcvr.wait_for_tx_to_complete();
+        txcvr.stop_tx();
 
         // start receiver
         txcvr.start_rx();

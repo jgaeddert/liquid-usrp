@@ -70,6 +70,8 @@ public:
     void set_tx_gain_uhd(float _tx_gain_uhd);
     void set_tx_antenna(char * _tx_antenna);
     void reset_tx();
+    void start_tx();
+    void stop_tx();
 
 #if 0
     // is channel available?

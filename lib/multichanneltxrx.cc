@@ -33,7 +33,7 @@
 
 #include "multichanneltxrx.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 // debug print
 #if DEBUG == 1
@@ -112,7 +112,12 @@ multichanneltxrx::multichanneltxrx(unsigned int         _num_channels,
     pthread_cond_init(&rx_cond,   NULL);    // receiver condition
     pthread_create(&rx_process,   NULL, multichanneltxrx_rx_worker, (void*)this);
     
-    // TODO: create and start tx thread
+    // create and start tx thread
+    tx_running = false;                     // receiver is not running initially
+    tx_thread_running = true;               // receiver thread IS running initially
+    pthread_mutex_init(&tx_mutex, NULL);    // receiver mutex
+    pthread_cond_init(&tx_cond,   NULL);    // receiver condition
+    pthread_create(&tx_process,   NULL, multichanneltxrx_tx_worker, (void*)this);
 }
 
 // destructor
@@ -188,6 +193,26 @@ void multichanneltxrx::reset_tx()
     mctx.Reset();
 }
 
+// start transmitter
+void multichanneltxrx::start_tx()
+{
+    dprintf("usrp tx start\n");
+    // set tx running flag
+    tx_running = true;
+
+    // signal condition (tell tx worker to start)
+    pthread_cond_signal(&tx_cond);
+}
+
+// stop transmitter
+void multichanneltxrx::stop_tx()
+{
+    dprintf("usrp tx stop\n");
+
+    // set tx running flag
+    tx_running = false;
+}
+
 // update payload data on a particular channel
 int multichanneltxrx::transmit_packet(unsigned int    _channel,
                                       unsigned char * _header,
@@ -197,6 +222,20 @@ int multichanneltxrx::transmit_packet(unsigned int    _channel,
                                       int             _fec0,
                                       int             _fec1)
 {
+    if (!tx_running) {
+        fprintf(stderr,"error: multichanneltxrx:transmit_packet(), transmitter not yet running\n");
+        throw 0;
+    } else if (_channel >= num_channels) {
+        fprintf(stderr,"error: multichanneltxrx:transmit_packet(), invalid channel %u\n", _channel);
+        throw 0;
+    } else if (!mctx.IsChannelReadyForData(_channel)) {
+        fprintf(stderr,"warning: multichanneltxrx:transmit_packet(), channel %u not ready for data\n", _channel);
+        return -1;
+    }
+
+    // update data on the channel
+    mctx.UpdateData(_channel, _header, _payload, _payload_len, _mod, _fec0, _fec1);
+
     return 0;
 }
 
@@ -343,20 +382,103 @@ void multichanneltxrx::set_timespec(struct timespec * _ts,
 void * multichanneltxrx_tx_worker(void * _arg)
 {
     // type cast input argument as multichanneltxrx object
-    //multichanneltxrx * txcvr = (multichanneltxrx*) _arg;
+    multichanneltxrx * txcvr = (multichanneltxrx*) _arg;
 
+    unsigned int i;
+
+    // buffer to hold filterbank channels
+    unsigned int tx_buffer_len = 2*txcvr->num_channels;
+    std::complex<float> tx_buffer[tx_buffer_len];
+    
+    // usrp buffer
+    std::vector<std::complex<float> > usrp_buffer(256);
+    unsigned int usrp_sample_counter = 0;
+    
+    // transmitter metadata object
+    uhd::tx_metadata_t md;
+    
+    while (txcvr->tx_thread_running) {
+        // wait for signal to start; lock mutex
+        pthread_mutex_lock(&(txcvr->tx_mutex));
+
+        // this function unlocks the mutex and waits for the condition;
+        // once the condition is set, the mutex is again locked
+        dprintf("tx_worker waiting for condition...\n");
+        //int status =
+        pthread_cond_wait(&(txcvr->tx_cond), &(txcvr->tx_mutex));
+        dprintf("tx_worker received condition\n");
+
+        // unlock the mutex
+        dprintf("tx_worker unlocking mutex\n");
+        pthread_mutex_unlock(&(txcvr->tx_mutex));
+
+        // condition given; check state: run or exit
+        dprintf("tx_worker running...\n");
+        if (!txcvr->tx_running) {
+            dprintf("tx_worker finished\n");
+            break;
+        }
+
+        // set up the metadta flags
+        md.start_of_burst = false; // never SOB when continuous
+        md.end_of_burst   = false; // 
+        md.has_time_spec  = false; // set to false to send immediately
+
+        // reset multichannel transmitter
+        txcvr->mctx.Reset();
+
+        // run transmitter
+        while (txcvr->tx_running) {
+            // generate samples
+            txcvr->mctx.GenerateSamples(tx_buffer);
+
+            // push resulting samples to USRP
+            for (i=0; i<tx_buffer_len; i++) {
+
+                // append to USRP buffer, scaling by software
+                usrp_buffer[usrp_sample_counter++] = tx_buffer[i] * txcvr->tx_gain;
+
+                // once USRP buffer is full, reset counter and send to device
+                if (usrp_sample_counter==256) {
+                    // reset counter
+                    usrp_sample_counter=0;
+
+                    // send the result to the USRP
+                    txcvr->usrp_tx->get_device()->send(
+                        &usrp_buffer.front(), usrp_buffer.size(), md,
+                        uhd::io_type_t::COMPLEX_FLOAT32,
+                        uhd::device::SEND_MODE_FULL_BUFF
+                    );
+                }
+            }
+
+        } // while tx_running
+        
+        // send a few extra samples to the device
+        // NOTE: this seems necessary to preserve last OFDM symbol in
+        //       frame from corruption
+        txcvr->usrp_tx->get_device()->send(
+            &usrp_buffer.front(), usrp_buffer.size(), md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
+        
+        // send a mini EOB packet
+        md.start_of_burst = false;
+        md.end_of_burst   = true;
+
+        txcvr->usrp_tx->get_device()->send("", 0, md,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
+        dprintf("tx_worker finished running\n");
+    }
     //
     dprintf("tx_worker exiting thread\n");
     pthread_exit(NULL);
 }
 #if 0
-    // set up the metadta flags
-    metadata_tx.start_of_burst = false; // never SOB when continuous
-    metadata_tx.end_of_burst   = false; // 
-    metadata_tx.has_time_spec  = false; // set to false to send immediately
-    //TODO: flush buffers
-
-    // fector buffer to send data to device
+    // vector buffer to send data to device
     std::vector<std::complex<float> > usrp_buffer(tx_buffer_len);
 
     // set properties
@@ -390,24 +512,6 @@ void * multichanneltxrx_tx_worker(void * _arg)
 
     } // while loop
 
-    // send a few extra samples to the device
-    // NOTE: this seems necessary to preserve last OFDM symbol in
-    //       frame from corruption
-    usrp_tx->get_device()->send(
-        &usrp_buffer.front(), usrp_buffer.size(),
-        metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
-    
-    // send a mini EOB packet
-    metadata_tx.start_of_burst = false;
-    metadata_tx.end_of_burst   = true;
-
-    usrp_tx->get_device()->send("", 0, metadata_tx,
-        uhd::io_type_t::COMPLEX_FLOAT32,
-        uhd::device::SEND_MODE_FULL_BUFF
-    );
 #endif
 
 
