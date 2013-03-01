@@ -266,6 +266,16 @@ unsigned int multichanneltxrx::get_available_channel()
     }
 }
 
+// wait for a specific channel to become available (blocking)
+void multichanneltxrx::wait_for_channel(unsigned int _channel)
+{
+    // ugly method: simply poll channels until one becomes available
+    while (!mctx.IsChannelReadyForData(_channel)) {
+        // channel unavailable; sleep for a small time (0.1 ms)
+        usleep(100);
+    }
+}
+
 // wait for all tx channels to be available (blocking, of course)
 void multichanneltxrx::wait_for_tx_to_complete()
 {
@@ -282,8 +292,8 @@ void multichanneltxrx::wait_for_tx_to_complete()
             // all available! return
             return;
         } else {
-            // not all channels available; sleep for a small time (0.5 ms)
-            usleep(500);
+            // not all channels available; sleep for a small time (0.1 ms)
+            usleep(100);
         }
     }
 }

@@ -88,6 +88,9 @@ public:
     // get index of next available channel (blocking)
     unsigned int get_available_channel();
 
+    // wait for a specific channel to become available (blocking)
+    void wait_for_channel(unsigned int _channel);
+
     // wait for all tx channels to be available (blocking, of course)
     void wait_for_tx_to_complete();
 
