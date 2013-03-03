@@ -145,9 +145,6 @@ int main (int argc, char **argv)
     for (i=0; i<nfft; i++)
         w[i] = hamming(i,nfft);
 
-    unsigned int block_len = 64;
-    assert( (block_len % 2) == 0);  // ensure block length is even
-
     //allocate recv buffer and metatdata
     uhd::rx_metadata_t md;
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();

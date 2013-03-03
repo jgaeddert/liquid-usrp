@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <sys/resource.h>
 #include <liquid/liquid.h>
+#include <assert.h>
 
 #include <uhd/usrp/multi_usrp.hpp>
 
@@ -48,10 +49,6 @@ int main (int argc, char **argv)
 {
     // command-line options
     int verbose = true;
-
-    unsigned long int ADC_RATE = 64e6;
-    float min_bandwidth = 0.25f*(ADC_RATE / 256.0);
-    float max_bandwidth = 0.25f*(ADC_RATE /   4.0);
 
     float frequency = 462.0e6;
     float bandwidth = 100e3f;
@@ -82,14 +79,6 @@ int main (int argc, char **argv)
         }
     }
 
-    if (bandwidth > max_bandwidth) {
-        printf("error: maximum bandwidth exceeded (%8.4f MHz)\n", max_bandwidth*1e-6);
-        return 0;
-    } else if (bandwidth < min_bandwidth) {
-        printf("error: minimum bandwidth exceeded (%8.4f kHz)\n", min_bandwidth*1e-3);
-        return 0;
-    }
-
     printf("frequency   :   %12.8f [MHz]\n", frequency*1e-6f);
     printf("bandwidth   :   %12.8f [kHz]\n", bandwidth*1e-3f);
     printf("verbosity   :   %s\n", (verbose?"enabled":"disabled"));
@@ -101,33 +90,29 @@ int main (int argc, char **argv)
     uhd::device_addr_t dev_addr;
     uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(dev_addr);
 
-    // set properties
-    float rx_rate = 4.0f*bandwidth;
-#if 0
-    usrp->set_rx_rate(rx_rate);
-#else
-    // NOTE : the sample rate computation MUST be in double precision so
-    //        that the UHD can compute its decimation rate properly
-    unsigned int decim_rate = (unsigned int)(ADC_RATE / rx_rate);
-    // ensure multiple of 2
-    decim_rate = (decim_rate >> 1) << 1;
-    // compute usrp sampling rate
-    double usrp_rx_rate = ADC_RATE / decim_rate;
-    // compute arbitrary resampling rate
-    double rx_resamp_rate = rx_rate / usrp_rx_rate;
-    printf("sample rate :   %12.8f kHz = %12.8f * %8.6f (decim %u)\n",
-            rx_rate * 1e-3f,
+    // try to set hardware rx rate
+    usrp->set_rx_rate(2.0f*bandwidth);
+
+    // get actual rx rate
+    double usrp_rx_rate = usrp->get_rx_rate();
+
+    // compute arbitrary resampling rate (make up the difference in software)
+    double rx_resamp_rate = bandwidth / usrp_rx_rate;
+
+    printf("frequency       :   %10.4f [MHz]\n", frequency*1e-6f);
+    printf("bandwidth       :   %10.4f [kHz]\n", bandwidth*1e-3f);
+    printf("verbosity       :   %s\n", (verbose?"enabled":"disabled"));
+    printf("bandwidth       :   %.4f kHz = %.4f kHz (usrp) * %.4f (resamp rate)\n",
+            bandwidth    * 1e-3f,
             usrp_rx_rate * 1e-3f,
-            rx_resamp_rate,
-            decim_rate);
-    usrp->set_rx_rate(ADC_RATE / decim_rate);
-#endif
+            rx_resamp_rate);
+    assert(rx_resamp_rate <= 1.0f);
+
     usrp->set_rx_freq(frequency);
     usrp->set_rx_gain(uhd_rxgain);
 
     // create and initialize arbitrary resampling component
-    resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
-    resamp_crcf_setrate(resamp, rx_resamp_rate);
+    msresamp_crcf resamp = msresamp_crcf_create(rx_resamp_rate,60.0f);
 
     // create automatic gain control object and set properties
     agc_crcf agc_rx = agc_crcf_create();
@@ -144,15 +129,14 @@ int main (int argc, char **argv)
     uhd::rx_metadata_t md;
     std::vector<std::complex<float> > buff(max_samps_per_packet);
 
-    std::complex<float> data_rx[64];        // received data straight from USRP
-    std::complex<float> data_resamp[200];   // resampled data
+    // resampled data (should only be 0 or 1)
+    std::complex<float> buffer_resamp[64];
 
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
  
-    unsigned int k;
-    unsigned int n=0;   // sample counter
+    unsigned int i;
     std::complex<float> agc_out;
 
     // run conditions
@@ -188,32 +172,22 @@ int main (int argc, char **argv)
 
         // copy vector "buff" to array of complex float, run
         // resampler, and push through AGC object
-        unsigned int j;
-        unsigned int nw=0;
-        for (j=0; j<num_rx_samps; j++) {
+        for (i=0; i<num_rx_samps; i++) {
             // push 64 samples into buffer
-            data_rx[n++] = buff[j];
+            std::complex<float> usrp_sample = buff[i];
 
-            if (n==64) {
-                // reset counter
-                n=0;
+            // push through resampler (one at a time)
+            unsigned int nw;
+            msresamp_crcf_execute(resamp, &usrp_sample, 1, buffer_resamp, &nw);
 
-                // apply resampler
-                unsigned int num_resamp=0;
-                for (k=0; k<64; k++) {
-                    resamp_crcf_execute(resamp, data_rx[k], &data_resamp[num_resamp], &nw);
-                    num_resamp += nw;
-                }
+            // push through agc object, push to log buffer
+            unsigned int k;
+            for (k=0; k<nw; k++) {
+                agc_crcf_execute(agc_rx, buffer_resamp[k], &agc_out);
 
-                // push through agc object, push to log buffer
-                for (k=0; k<num_resamp; k++) {
-                    agc_crcf_execute(agc_rx, data_resamp[k], &agc_out);
-
-                    // get linear signal level and push into buffer
-                    windowf_push(log_buffer, agc_crcf_get_signal_level(agc_rx));
-                }
+                // get linear signal level and push into buffer
+                windowf_push(log_buffer, agc_crcf_get_signal_level(agc_rx));
             }
-
         }
 
         // check runtime
@@ -234,7 +208,7 @@ int main (int argc, char **argv)
     printf("usrp data transfer complete\n");
 
     // clean object allocation
-    resamp_crcf_destroy(resamp);
+    msresamp_crcf_destroy(resamp);
     agc_crcf_destroy(agc_rx);
     timer_destroy(t0);
 
@@ -247,10 +221,9 @@ int main (int argc, char **argv)
     fprintf(fid,"%% %s : auto-generated file\n", filename);
     float * r = NULL;
     windowf_read(log_buffer,&r);
-    fprintf(fid,"Fs = %e;\n", rx_rate);
+    fprintf(fid,"Fs = %e;\n", bandwidth);
     fprintf(fid,"n = %u;\n", log_size);
     fprintf(fid,"rssi = zeros(1,n);\n");
-    unsigned int i;
     for (i=0; i<log_size; i++)
         fprintf(fid,"rssi(%u) = %12.4e;\n", i+1, r[i]);
     fprintf(fid,"\n\n");
