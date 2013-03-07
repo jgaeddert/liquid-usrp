@@ -34,15 +34,14 @@ void usage() {
     printf("Usage: rssi [OPTION]\n");
     printf("Run receiver, simply printing RSSI to screen periodically\n");
     printf("\n");
-    printf("  f     : center frequency [Hz]\n");
-    printf("  b     : bandwidth [Hz]\n");
-    printf("  t     : run time [seconds]\n");
-    printf("  G     : uhd rx gain [dB] (default: 20dB)\n");
-    printf("  q     : quiet\n");
-    printf("  v     : verbose\n");
-    printf("  L     : record length (number of samples), default: 1200\n");
-    printf("  o     : output filename\n");
-    printf("  u,h   : usage/help\n");
+    printf("  h     : help\n");
+    printf("  v/q   : verbose/quiet\n");
+    printf("  f     : center frequency [Hz],   default: 462 MHz\n");
+    printf("  b     : bandwidth [Hz],          default: 200 kHz\n");
+    printf("  t     : run time [seconds],      default:   5 s\n");
+    printf("  G     : uhd rx gain [dB],        default:  20 dB\n");
+    printf("  L     : record length [samples], default: 1200\n");
+    printf("  o     : output filename,         default: rssi_results.m\n");
 }
 
 int main (int argc, char **argv)
@@ -51,7 +50,7 @@ int main (int argc, char **argv)
     int verbose = true;
 
     float frequency = 462.0e6;
-    float bandwidth = 100e3f;
+    float bandwidth = 200e3f;
     float num_seconds = 5.0f;
     double uhd_rxgain = 20.0;
 
@@ -61,21 +60,19 @@ int main (int argc, char **argv)
 
     //
     int d;
-    while ((d = getopt(argc,argv,"f:b:t:G:qvL:o:uh")) != EOF) {
+    while ((d = getopt(argc,argv,"hvqf:b:t:G:L:o:")) != EOF) {
         switch (d) {
+        case 'h':   usage();                        break;
+        case 'v':   verbose = true;                 break;
+        case 'q':   verbose = false;                break;
         case 'f':   frequency = atof(optarg);       break;
         case 'b':   bandwidth = atof(optarg);       break;
         case 't':   num_seconds = atof(optarg);     break;
         case 'G':   uhd_rxgain = atof(optarg);      break;
-        case 'q':   verbose = false;                break;
-        case 'v':   verbose = true;                 break;
         case 'L':   log_size = atoi(optarg);        break;
         case 'o':   strncpy(filename,optarg,255);   break;
-        case 'u':
-        case 'h':
         default:
-            usage();
-            return 0;
+            return 1;
         }
     }
 
@@ -119,8 +116,9 @@ int main (int argc, char **argv)
     agc_crcf_set_bandwidth(agc_rx, 0.01f);
     agc_crcf_set_gain_limits(agc_rx, 1e-4f, 1e4f);
 
-    // create window buffer to log samples
-    windowf log_buffer = windowf_create(log_size);
+    // create window buffer to log samples/rssi
+    windowcf rx_log   = windowcf_create(log_size);
+    windowf  rssi_log = windowf_create(log_size);
 
     //
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
@@ -183,10 +181,14 @@ int main (int argc, char **argv)
             // push through agc object, push to log buffer
             unsigned int k;
             for (k=0; k<nw; k++) {
+                // save time samples
+                windowcf_push(rx_log, buffer_resamp[k]);
+
+                // apply agc and get rssi
                 agc_crcf_execute(agc_rx, buffer_resamp[k], &agc_out);
 
                 // get linear signal level and push into buffer
-                windowf_push(log_buffer, agc_crcf_get_signal_level(agc_rx));
+                windowf_push(rssi_log, agc_crcf_get_signal_level(agc_rx));
             }
         }
 
@@ -219,24 +221,34 @@ int main (int argc, char **argv)
         exit(1);
     }
     fprintf(fid,"%% %s : auto-generated file\n", filename);
-    float * r = NULL;
-    windowf_read(log_buffer,&r);
+    std::complex<float> * rc = NULL;    // complex buffer read pointer
+    float * r = NULL;                   // real buffer read pointer
+    windowcf_read(rx_log, &rc);
+    windowf_read(rssi_log,&r);
     fprintf(fid,"Fs = %e;\n", bandwidth);
     fprintf(fid,"n = %u;\n", log_size);
     fprintf(fid,"rssi = zeros(1,n);\n");
-    for (i=0; i<log_size; i++)
-        fprintf(fid,"rssi(%u) = %12.4e;\n", i+1, r[i]);
+    for (i=0; i<log_size; i++) {
+        fprintf(fid,"rssi(%4u) = %12.4e; x(%4u) = %12.4e + %12.4ej;\n",
+                i+1, r[i],
+                i+1, rc[i].real(), rc[i].imag());
+    }
     fprintf(fid,"\n\n");
-    fprintf(fid,"t = [0:(n-1)]/Fs;\n");
+    fprintf(fid,"t = [0:(n-1)]/Fs*1e3; %% time (ms)\n");
     fprintf(fid,"figure;\n");
-    fprintf(fid,"plot(t*1e3,20*log10(rssi));\n");
-    fprintf(fid,"xlabel('time [ms]');\n");
-    fprintf(fid,"ylabel('RSSI [dB]');\n");
+    fprintf(fid,"subplot(2,1,1);\n");
+    fprintf(fid,"  plot(t,real(x),t,imag(x));\n");
+    fprintf(fid,"  ylabel('r(t) [dB]');\n");
+    fprintf(fid,"subplot(2,1,2);\n");
+    fprintf(fid,"  plot(t,20*log10(rssi));\n");
+    fprintf(fid,"  ylabel('RSSI [dB]');\n");
+    fprintf(fid,"  xlabel('time [ms]');\n");
     fprintf(fid,"grid on\n");
     fclose(fid);
     printf("output written to '%s'\n", filename);
 
-    windowf_destroy(log_buffer);
+    windowf_destroy(rssi_log);
+    windowcf_destroy(rx_log);
 
     return 0;
 }
