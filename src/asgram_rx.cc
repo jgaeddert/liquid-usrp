@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/resource.h>
 #include <liquid/liquid.h>
 
@@ -36,14 +37,28 @@ void usage() {
     printf("  h     : help\n");
     printf("  f     : center frequency [Hz], default: 462 MHz\n");
     printf("  b     : bandwidth [Hz],        default: 800 kHz\n");
-    printf("  t     : run time [seconds],    default:  30 s\n");
     printf("  G     : uhd rx gain [dB],      default:  20 dB\n");
     printf("  n     : FFT size,              default:  64\n");
     printf("  o     : offset                 default: -65 dB\n");
     printf("  s     : scale                  default:   5 dB\n");
     printf("  r     : FFT rate [Hz],         default:   10 Hz\n");
+    printf("  L     : output file log size,  default: 4096 samples\n");
+    printf("  F     : output filename,       default: 'asgram_rx.dat'\n");
 }
 
+// global running flag
+bool continue_running = true;
+
+// signal handler function
+void signal_handler(int _signal)
+{
+    if (_signal == SIGINT) {
+        printf("user interrupt\n");
+        continue_running = false;
+    }
+}
+
+// main program
 int main (int argc, char **argv)
 {
     // command-line options
@@ -51,26 +66,28 @@ int main (int argc, char **argv)
 
     float frequency      = 462.0e6;
     float bandwidth      = 800e3f;
-    float num_seconds    = 30.0f;
     double uhd_rxgain    = 20.0;
     unsigned int nfft    = 64;
     float offset         = -65.0f;
     float scale          = 5.0f;
     float fft_rate       = 10.0f;
+    unsigned int logsize = 4096;
+    char filename[256]   = "asgram_rx.dat";
 
     //
     int d;
-    while ((d = getopt(argc,argv,"hf:b:t:G:n:s:o:r:")) != EOF) {
+    while ((d = getopt(argc,argv,"hf:b:G:n:s:o:r:L:F:")) != EOF) {
         switch (d) {
         case 'h':   usage();                    return 0;
         case 'f':   frequency   = atof(optarg); break;
         case 'b':   bandwidth   = atof(optarg); break;
-        case 't':   num_seconds = atof(optarg); break;
         case 'G':   uhd_rxgain  = atof(optarg); break;
         case 'n':   nfft        = atoi(optarg); break;
         case 'o':   offset      = atof(optarg); break;
         case 's':   scale       = atof(optarg); break;
         case 'r':   fft_rate    = atof(optarg); break;
+        case 'L':   logsize     = atoi(optarg); break;
+        case 'F':   strncpy(filename,optarg,255); break;
         default:    usage();                    return 1;
         }
     }
@@ -110,16 +127,11 @@ int main (int argc, char **argv)
 
     unsigned int i;
 
-    // set run time appropriately
-    if (num_seconds < 0) {
-        num_seconds = 1e32; // set to really, really large number
-        printf("run time        :   (forever)\n");
-    } else {
-        printf("run time        :   %f seconds\n", num_seconds);
-    }
-
     // add arbitrary resampling component
     msresamp_crcf resamp = msresamp_crcf_create(rx_resamp_rate, 60.0f);
+
+    // create buffer for sample logging
+    windowcf log = windowcf_create(logsize);
 
     // create ASCII spectrogram object
     float maxval;
@@ -153,18 +165,18 @@ int main (int argc, char **argv)
     // create buffer for arbitrary resamper output
     std::complex<float> buffer_resamp[(int)(2.0f/rx_resamp_rate) + 64];
  
-    // run conditions
-    int continue_running = 1;
-    timer t0 = timer_create();
-    timer_tic(t0);
-
+    // timer to control asgram output
     timer t1 = timer_create();
     timer_tic(t1);
 
     // start data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     printf("usrp data transfer started\n");
- 
+
+    // catch signal interrupt from user
+    if (signal(SIGINT, signal_handler) == SIG_ERR)
+        fprintf(stderr,"warning: %s, cannot catch SIGINT\n", argv[0]);
+
     while (continue_running) {
         // grab data from device
         size_t num_rx_samps = usrp->get_device()->recv(
@@ -197,6 +209,9 @@ int main (int argc, char **argv)
 
             // push resulting samples into asgram object
             asgram_push(q, buffer_resamp, nw);
+
+            // write samples to log
+            windowcf_write(log, buffer_resamp, nw);
         }
 
         if (timer_toc(t1) > msdelay*1e-3f) {
@@ -211,21 +226,40 @@ int main (int argc, char **argv)
             printf("%s\r", footer);
             fflush(stdout);
         }
-
-        // check runtime
-        if (timer_toc(t0) >= num_seconds)
-            continue_running = 0;
     }
  
     // stop data transfer
     usrp->issue_stream_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
     printf("\n");
     printf("usrp data transfer complete\n");
+
+    // try to write samples to file
+    FILE * fid = fopen(filename,"w");
+    if (fid != NULL) {
+        // write header
+        fprintf(fid, "# %s : auto-generated file\n", filename);
+        fprintf(fid, "#\n");
+        fprintf(fid, "# num_samples :   %u\n", logsize);
+        fprintf(fid, "# frequency   :   %12.8f MHz\n", frequency*1e-6f);
+        fprintf(fid, "# bandwidth   :   %12.8f kHz\n", bandwidth*1e-3f);
+
+        // save results to file
+        std::complex<float> * rc;   // read pointer
+        windowcf_read(log, &rc);
+        for (i=0; i<logsize; i++)
+            fprintf(fid, "%12.4e %12.4e\n", rc[i].real(), rc[i].imag());
+
+        // close it up
+        fclose(fid);
+        printf("results written to '%s'\n", filename);
+    } else {
+        fprintf(stderr,"error: %s, could not open '%s' for writing\n", argv[0], filename);
+    }
  
     // destroy objects
     msresamp_crcf_destroy(resamp);
+    windowcf_destroy(log);
     asgram_destroy(q);
-    timer_destroy(t0);
     timer_destroy(t1);
 
     return 0;
