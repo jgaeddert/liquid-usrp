@@ -36,11 +36,11 @@ void usage() {
     printf("\n");
     printf("  h     : help\n");
     printf("  v/q   : verbose/quiet\n");
-    printf("  f     : center frequency [Hz],   default: 462 MHz\n");
-    printf("  b     : bandwidth [Hz],          default: 200 kHz\n");
-    printf("  t     : run time [seconds],      default:   5 s\n");
-    printf("  G     : uhd rx gain [dB],        default:  20 dB\n");
-    printf("  L     : record length [samples], default: 1200\n");
+    printf("  f     : center frequency [Hz],   default:  462 MHz\n");
+    printf("  b     : bandwidth [Hz],          default:  200 kHz\n");
+    printf("  t     : run time [seconds],      default:    5 s\n");
+    printf("  G     : uhd rx gain [dB],        default:   20 dB\n");
+    printf("  L     : record length [samples], default: 1200 samples\n");
     printf("  o     : output filename,         default: rssi_results.m\n");
 }
 
@@ -62,7 +62,7 @@ int main (int argc, char **argv)
     int d;
     while ((d = getopt(argc,argv,"hvqf:b:t:G:L:o:")) != EOF) {
         switch (d) {
-        case 'h':   usage();                        break;
+        case 'h':   usage();                        return 0;
         case 'v':   verbose = true;                 break;
         case 'q':   verbose = false;                break;
         case 'f':   frequency = atof(optarg);       break;
