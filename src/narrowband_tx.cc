@@ -154,7 +154,7 @@ int main (int argc, char **argv)
     unsigned int M = 1 << modem_get_bps(mod);
 
     // create matched filter interpolator
-    interp_crcf mfinterp = interp_crcf_create_rnyquist(ftype, k, m, beta, 0);
+    firinterp_crcf mfinterp = firinterp_crcf_create_rnyquist(ftype, k, m, beta, 0);
 
     // create arbitrary resampler
     msresamp_crcf resamp = msresamp_crcf_create(tx_resamp_rate,60.0f);
@@ -194,7 +194,7 @@ int main (int argc, char **argv)
 
         // interpolate by k
         for (j=0; j<num_symbols; j++)
-            interp_crcf_execute(mfinterp, buffer[j], &buffer_interp[k*j]);
+            firinterp_crcf_execute(mfinterp, buffer[j], &buffer_interp[k*j]);
         
         // resample
         unsigned int nw;
@@ -247,7 +247,7 @@ int main (int argc, char **argv)
     msresamp_crcf_destroy(resamp);
 #endif
     modem_destroy(mod);
-    interp_crcf_destroy(mfinterp);
+    firinterp_crcf_destroy(mfinterp);
     timer_destroy(t0);
 
     return 0;
