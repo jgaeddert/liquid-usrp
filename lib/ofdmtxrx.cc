@@ -86,7 +86,7 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     // allocate memory for frame generator output (single OFDM symbol)
     fgbuffer_len = M + cp_len;
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
-    
+
     // create frame synchronizer
     fs = ofdmflexframesync_create(M, cp_len, taper_len, p, _callback, _userdata);
     // TODO: create buffer
@@ -208,13 +208,13 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
                                int             _fec0,
                                int             _fec1)
 {
-    // set up the metadta flags
+    // set up the metadata flags
     metadata_tx.start_of_burst = false; // never SOB when continuous
     metadata_tx.end_of_burst   = false; // 
     metadata_tx.has_time_spec  = false; // set to false to send immediately
     //TODO: flush buffers
 
-    // fector buffer to send data to device
+    // vector buffer to send data to device
     std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
 
     // set properties
@@ -247,6 +247,92 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
         );
 
     } // while loop
+
+    // send a few extra samples to the device
+    // NOTE: this seems necessary to preserve last OFDM symbol in
+    //       frame from corruption
+    usrp_tx->get_device()->send(
+        &usrp_buffer.front(), usrp_buffer.size(),
+        metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+    
+    // send a mini EOB packet
+    metadata_tx.start_of_burst = false;
+    metadata_tx.end_of_burst   = true;
+
+    usrp_tx->get_device()->send("", 0, metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+
+}
+
+// Assemble the frame so it is ready to be written as samples
+void ofdmtxrx::assemble_frame(unsigned char * _header,
+                            unsigned char * _payload,
+                            unsigned int    _payload_len,
+                            int             _mod,
+                            int             _fec0,
+                            int             _fec1)
+{
+    // set properties
+    fgprops.mod_scheme  = _mod;
+    fgprops.fec0        = _fec0;
+    fgprops.fec1        = _fec1;
+    ofdmflexframegen_setprops(fg, &fgprops);
+
+    // assemble frame
+    ofdmflexframegen_assemble(fg, _header, _payload, _payload_len);
+}
+
+// Write one symbol from the assembled frame.
+// Returns true if last symbol.
+bool ofdmtxrx::write_symbol()
+{
+    return ofdmflexframegen_writesymbol(fg, fgbuffer);
+}
+
+// update payload data on a particular channel
+void ofdmtxrx::transmit_symbol()
+{
+    // vector buffer to send data to device
+    std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
+
+    // generate a single OFDM frame
+    //bool last_symbol=false;
+    unsigned int i;
+    //while (!last_symbol) {
+
+        // generate symbol
+        //last_symbol = ofdmflexframegen_writesymbol(fg, fgbuffer);
+
+        // copy symbol and apply gain
+        for (i=0; i<fgbuffer_len; i++)
+            usrp_buffer[i] = fgbuffer[i] * tx_gain;
+
+        // send samples to the device
+        usrp_tx->get_device()->send(
+            &usrp_buffer.front(), usrp_buffer.size(),
+            metadata_tx,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
+
+    //} // while loop
+
+}
+
+void ofdmtxrx::end_transmit_frame()
+{
+    // vector buffer to send data to device
+    std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
+
+    unsigned int i;
+    // copy symbol and apply gain
+    for (i=0; i<fgbuffer_len; i++)
+        usrp_buffer[i] = fgbuffer[i] * tx_gain;
 
     // send a few extra samples to the device
     // NOTE: this seems necessary to preserve last OFDM symbol in

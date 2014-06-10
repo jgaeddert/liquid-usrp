@@ -72,6 +72,20 @@ public:
                          int             _fec1);
                          // frame generator properties...
 
+    // Together these methods
+    // are equivalent to transmit_packet() but allow
+    // the baseband samples to be modified before 
+    // sending them to the USRP.
+    void transmit_symbol();
+    void assemble_frame(unsigned char * _header,
+                        unsigned char * _payload,
+                        unsigned int    _payload_len,
+                        int             _mod,
+                        int             _fec0,
+                        int             _fec1);
+    bool write_symbol();
+    void end_transmit_frame();
+
     // 
     // receiver methods
     //
@@ -93,6 +107,10 @@ public:
     // gain acess to private members of the class
     friend void * ofdmtxrx_rx_worker(void * _arg);
             
+    // transmitter objects
+    unsigned int fgbuffer_len;      // length of frame generator buffer
+    std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
+
 private:
     // set timespec for timeout
     //  _ts         :   pointer to timespec structure
@@ -108,8 +126,6 @@ private:
 
     // transmitter objects
     ofdmflexframegen fg;            // frame generator object
-    std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
-    unsigned int fgbuffer_len;      // length of frame generator buffer
     float tx_gain;                  // soft transmit gain (linear)
 #if 0
     pthread_t tx_process;           // transmit thread
