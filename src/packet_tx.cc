@@ -144,7 +144,7 @@ int main (int argc, char **argv)
     framegen64_print(fg);
 
     // allocate array to hold frame generator samples
-    unsigned int frame_len = FRAME64_LEN;   // length of frame64 (defined in liquid.h)
+    unsigned int frame_len = LIQUID_FRAME64_LEN;   // length of frame64 (defined in liquid.h)
     std::complex<float> frame_samples[frame_len];
 
     // create buffer for arbitrary resamper output
