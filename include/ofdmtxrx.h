@@ -108,6 +108,7 @@ public:
     friend void * ofdmtxrx_rx_worker(void * _arg);
             
     // transmitter objects
+    ofdmflexframegen fg;            // frame generator object
     unsigned int fgbuffer_len;      // length of frame generator buffer
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
 
@@ -125,7 +126,6 @@ private:
     ofdmflexframegenprops_s fgprops;// frame generator properties
 
     // transmitter objects
-    ofdmflexframegen fg;            // frame generator object
     float tx_gain;                  // soft transmit gain (linear)
 #if 0
     pthread_t tx_process;           // transmit thread
