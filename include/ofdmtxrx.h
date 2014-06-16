@@ -112,6 +112,9 @@ public:
     unsigned int fgbuffer_len;      // length of frame generator buffer
     std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
 
+    // receiver objects
+    std::vector<std::complex<float> > * rx_buffer;
+
 private:
     // set timespec for timeout
     //  _ts         :   pointer to timespec structure

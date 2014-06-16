@@ -465,7 +465,9 @@ void * ofdmtxrx_rx_worker(void * _arg)
 
     // set up receive buffer
     const size_t max_samps_per_packet = txcvr->usrp_rx->get_device()->get_max_recv_samps_per_packet();
-    std::vector<std::complex<float> > buffer(max_samps_per_packet);
+    std::vector<std::complex<float> > _buffer(max_samps_per_packet);
+    //std::vector<std::complex<float> > * rx_buffer = &_buffer;
+    txcvr->rx_buffer = &_buffer;
 
     // receiver metadata object
     uhd::rx_metadata_t md;
@@ -498,7 +500,8 @@ void * ofdmtxrx_rx_worker(void * _arg)
             // grab data from device
             //dprintf("rx_worker waiting for samples...\n");
             size_t num_rx_samps = txcvr->usrp_rx->get_device()->recv(
-                &buffer.front(), buffer.size(), md,
+                &(txcvr->rx_buffer->front()), txcvr->rx_buffer->size(), md,
+                //&rx_buffer.front(), rx_buffer.size(), md,
                 uhd::io_type_t::COMPLEX_FLOAT32,
                 uhd::device::RECV_MODE_ONE_PACKET
             );
@@ -526,7 +529,7 @@ void * ofdmtxrx_rx_worker(void * _arg)
             unsigned int j;
             for (j=0; j<num_rx_samps; j++) {
                 // grab sample from usrp buffer
-                std::complex<float> usrp_sample = buffer[j];
+                std::complex<float> usrp_sample = (*txcvr->rx_buffer)[j];
 
                 // push resulting samples through synchronizer
                 ofdmflexframesync_execute(txcvr->fs, &usrp_sample, 1);
