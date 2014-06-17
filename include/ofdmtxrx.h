@@ -34,6 +34,13 @@
 // receiver worker thread
 void * ofdmtxrx_rx_worker(void * _arg);
 
+// receiver worker thread
+// Special version of receiver worker thread that waits for
+// a pthread_cond_signal() before sending samples to synchronizer.
+// Allows the samples to be modified by another thread before being
+// sent to the synchronizer.    
+void * ofdmtxrx_rx_worker_blocking(void * _arg);
+
 class ofdmtxrx {
 public:
     // default constructor
@@ -49,6 +56,16 @@ public:
              unsigned char *    _p,
              framesync_callback _callback,
              void *             _userdata);
+
+    // custom constructor that allows selection between 
+    // original ofdmtxrx_rx_worker() and ofdmtxrx_rx_worker_blocking()
+    ofdmtxrx(unsigned int       _M,
+             unsigned int       _cp_len,
+             unsigned int       _taper_len,
+             unsigned char *    _p,
+             framesync_callback _callback,
+             void *             _userdata,
+             bool               _blocking_rx_worker);
 
     // destructor
     ~ofdmtxrx();
@@ -106,6 +123,7 @@ public:
     // specify rx worker method as friend function so that it may
     // gain acess to private members of the class
     friend void * ofdmtxrx_rx_worker(void * _arg);
+    friend void * ofdmtxrx_rx_worker_blocking(void * _arg);
             
     // transmitter objects
     ofdmflexframegen fg;            // frame generator object
@@ -114,6 +132,9 @@ public:
 
     // receiver objects
     std::vector<std::complex<float> > * rx_buffer;
+    pthread_mutex_t rx_buffer_mutex;       // receive buffer mutex
+    pthread_cond_t  rx_buffer_filled_cond;        // receive buffer filled condition
+    pthread_cond_t  rx_buffer_modified_cond;        // receive buffer modified condition
 
 private:
     // set timespec for timeout
