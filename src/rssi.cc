@@ -114,7 +114,7 @@ int main (int argc, char **argv)
     // create automatic gain control object and set properties
     agc_crcf agc_rx = agc_crcf_create();
     agc_crcf_set_bandwidth(agc_rx, 0.01f);
-    agc_crcf_set_gain_limits(agc_rx, 1e-4f, 1e4f);
+    //agc_crcf_set_gain_limits(agc_rx, 1e-4f, 1e4f);
 
     // create window buffer to log samples/rssi
     windowcf rx_log   = windowcf_create(log_size);
