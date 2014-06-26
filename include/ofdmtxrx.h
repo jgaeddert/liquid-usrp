@@ -135,7 +135,9 @@ public:
     pthread_mutex_t rx_buffer_mutex;       // receive buffer mutex
     pthread_cond_t  rx_buffer_filled_cond;        // receive buffer filled condition
     pthread_cond_t  rx_buffer_modified_cond;        // receive buffer modified condition
-
+    pthread_cond_t  esbrs_ready;
+    //int * esbrs_ready_ptr;
+    //pthread_mutex_t * esbrs_ready_mutex_ptr;
 private:
     // set timespec for timeout
     //  _ts         :   pointer to timespec structure

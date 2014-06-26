@@ -130,7 +130,7 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
                    unsigned char *    _p,
                    framesync_callback _callback,
                    void *             _userdata,
-                   bool               _blocking_rx_worker)
+                   bool		      _blocking_rx_worker)
 {
     // validate input
     if (_M < 8) {
@@ -195,6 +195,8 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     pthread_cond_init(&rx_cond,   NULL);    // receiver condition
     pthread_cond_init(&rx_buffer_filled_cond,   NULL);    // receiver buffer filled condition
     pthread_cond_init(&rx_buffer_modified_cond,   NULL);    // receiver buffer modified condition
+    pthread_cond_init(&esbrs_ready, NULL);
+
     if (_blocking_rx_worker)
     {
         pthread_create(&rx_process,   NULL, ofdmtxrx_rx_worker_blocking, (void*)this);
@@ -686,10 +688,8 @@ void * ofdmtxrx_rx_worker_blocking(void * _arg)
                 uhd::io_type_t::COMPLEX_FLOAT32,
                 uhd::device::RECV_MODE_ONE_PACKET
             );
-            dprintf("rx_worker signalling buffer filled cond\n");
+	    dprintf("rx_worker signalling buffer filled cond");
             pthread_cond_signal(&(txcvr->rx_buffer_filled_cond));
-            dprintf("rx_worker unlocking buffer mutex\n");
-            pthread_mutex_unlock(&(txcvr->rx_buffer_mutex));
             //dprintf("rx_worker processing samples...\n");
 
 
@@ -712,8 +712,6 @@ void * ofdmtxrx_rx_worker_blocking(void * _arg)
             }
 #endif
 
-            dprintf("rx_worker locking buffer mutex\n");
-            pthread_mutex_lock(&txcvr->rx_buffer_mutex);
             dprintf("rx_worker waiting for buffer modified cond\n");
             pthread_cond_wait(&txcvr->rx_buffer_modified_cond, &txcvr->rx_buffer_mutex);
             // push data through frame synchronizer
@@ -730,6 +728,7 @@ void * ofdmtxrx_rx_worker_blocking(void * _arg)
             pthread_mutex_unlock(&(txcvr->rx_buffer_mutex));
 
         } // while rx_running
+	pthread_mutex_unlock(&(txcvr->rx_buffer_mutex));
         dprintf("rx_worker finished running\n");
 
     } // while true
