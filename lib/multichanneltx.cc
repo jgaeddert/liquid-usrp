@@ -130,7 +130,7 @@ void multichanneltx::Reset()
     for (i=0; i<num_channels; i++)
         ofdmflexframegen_reset(framegen[i]);
 
-    firpfbch_crcf_clear(channelizer);
+    firpfbch_crcf_destroy(channelizer);
 
     //nco_crcf_reset(nco);
     
