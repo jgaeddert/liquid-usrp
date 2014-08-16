@@ -138,8 +138,8 @@ int main (int argc, char **argv)
     float maxfreq;
     char ascii[nfft+1];
     ascii[nfft] = '\0'; // append null character to end of string
-    asgram q = asgram_create(nfft);
-    asgram_set_scale(q, offset, scale);
+    asgramcf q = asgramcf_create(nfft);
+    asgramcf_set_scale(q, offset, scale);
 
     // assemble footer
     unsigned int footer_len = nfft + 16;
@@ -153,10 +153,6 @@ int main (int argc, char **argv)
     unsigned int msdelay = 1000 / fft_rate;
     
     // create/initialize Hamming window
-    float w[nfft];
-    for (i=0; i<nfft; i++)
-        w[i] = hamming(i,nfft);
-
     //allocate recv buffer and metatdata
     uhd::rx_metadata_t md;
     const size_t max_samps_per_packet = usrp->get_device()->get_max_recv_samps_per_packet();
@@ -208,7 +204,7 @@ int main (int argc, char **argv)
             msresamp_crcf_execute(resamp, &usrp_sample, 1, buffer_resamp, &nw);
 
             // push resulting samples into asgram object
-            asgram_push(q, buffer_resamp, nw);
+            asgramcf_write(q, buffer_resamp, nw);
 
             // write samples to log
             windowcf_write(log, buffer_resamp, nw);
@@ -219,7 +215,7 @@ int main (int argc, char **argv)
             timer_tic(t1);
 
             // run the spectrogram
-            asgram_execute(q, ascii, &maxval, &maxfreq);
+            asgramcf_execute(q, ascii, &maxval, &maxfreq);
             
             // print the spectrogram
             printf(" > %s < pk%5.1fdB [%5.2f]\n", ascii, maxval, maxfreq);
@@ -259,7 +255,7 @@ int main (int argc, char **argv)
     // destroy objects
     msresamp_crcf_destroy(resamp);
     windowcf_destroy(log);
-    asgram_destroy(q);
+    asgramcf_destroy(q);
     timer_destroy(t1);
 
     return 0;

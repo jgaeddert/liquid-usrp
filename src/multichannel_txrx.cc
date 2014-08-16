@@ -244,7 +244,7 @@ int main (int argc, char **argv)
             
             // transmit frame on channel 'c'
             printf("transmitting packet %6u (%6u bytes) on channel %6u\n", pid, this_packet_len, c);
-            int rc =
+            //int rc =
             txcvr.transmit_packet(c, header, payload, this_packet_len, ms, fec0, fec1);
 
             // update packet counter on channel 'c'
