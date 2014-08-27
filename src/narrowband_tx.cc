@@ -62,7 +62,7 @@ int main (int argc, char **argv)
     modulation_scheme ms = LIQUID_MODEM_QPSK;// modulation scheme
     
     // transmit filter properties
-    liquid_rnyquist_type ftype = LIQUID_RNYQUIST_RRC;
+    liquid_firfilt_type ftype = LIQUID_FIRFILT_RRC;
     unsigned int k = 2;         // matched-filter samples/symbol
     unsigned int m = 9;         // matched-filter semi-length
     float beta     = 0.2f;      // excess bandwidth factor
@@ -87,14 +87,14 @@ int main (int argc, char **argv)
             }
             break;
         case 'F':
-            if (strcmp(optarg,"rrcos")==0)          ftype = LIQUID_RNYQUIST_RRC;
-            else if (strcmp(optarg,"rkaiser")==0)   ftype = LIQUID_RNYQUIST_RKAISER;
-            else if (strcmp(optarg,"arkaiser")==0)  ftype = LIQUID_RNYQUIST_ARKAISER;
-            else if (strcmp(optarg,"hM3")==0)       ftype = LIQUID_RNYQUIST_hM3;
-            else if (strcmp(optarg,"gmsk")==0)      ftype = LIQUID_RNYQUIST_GMSKTX;
-            else if (strcmp(optarg,"fexp")==0)      ftype = LIQUID_RNYQUIST_FEXP;
-            else if (strcmp(optarg,"fsech")==0)     ftype = LIQUID_RNYQUIST_FSECH;
-            else if (strcmp(optarg,"farcsech")==0)  ftype = LIQUID_RNYQUIST_FARCSECH;
+            if (strcmp(optarg,"rrcos")==0)          ftype = LIQUID_FIRFILT_RRC;
+            else if (strcmp(optarg,"rkaiser")==0)   ftype = LIQUID_FIRFILT_RKAISER;
+            else if (strcmp(optarg,"arkaiser")==0)  ftype = LIQUID_FIRFILT_ARKAISER;
+            else if (strcmp(optarg,"hM3")==0)       ftype = LIQUID_FIRFILT_hM3;
+            else if (strcmp(optarg,"gmsk")==0)      ftype = LIQUID_FIRFILT_GMSKTX;
+            else if (strcmp(optarg,"fexp")==0)      ftype = LIQUID_FIRFILT_FEXP;
+            else if (strcmp(optarg,"fsech")==0)     ftype = LIQUID_FIRFILT_FSECH;
+            else if (strcmp(optarg,"farcsech")==0)  ftype = LIQUID_FIRFILT_FARCSECH;
             else {
                 fprintf(stderr,"error: %s, unknown filter type '%s'\n", argv[0], optarg);
                 exit(1);
