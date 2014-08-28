@@ -24,12 +24,14 @@ octave-core
 src/asgram_rx
 src/flexframe_rx
 src/flexframe_tx
+src/fullduplex_txrx
 src/gmskframe_rx
 src/gmskframe_tx
 src/halfduplex_txrx
 src/iqpr_test
 src/multichannel_rx
 src/multichannel_tx
+src/multichannel_txrx
 src/narrowband_tx
 src/ofdmflexframe_rx
 src/ofdmflexframe_tx
