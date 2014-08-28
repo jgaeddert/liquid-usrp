@@ -51,27 +51,23 @@ AC_FUNC_ERROR_AT_LINE
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 # AC_CHECK_LIB (library, function, [action-if-found], [action-if-not-found], [other-libraries])
-AC_CHECK_LIB([c], [malloc, realloc, free, memset, memmove], [],
-             [AC_MSG_ERROR(Need standard c library!)],
-             [])
-AC_CHECK_LIB([m], [sinf, cosf, expf, cargf, cexpf, crealf, cimagf, sqrtf], [],
-             [AC_MSG_ERROR(Need standard math library!)],
-             [])
-AC_CHECK_LIB([liquid], [modem_create], [],
-             [AC_MSG_ERROR(Need liquid-dsp library!)],
-             [])
-#AC_CHECK_LIB([liquid-wlan], [wlanframegen_create], [],
-#             [AC_MSG_ERROR(Need liquid-wlan library!)],
-#             [])
-AC_CHECK_LIB([uhd], [main], [],
-             [AC_MSG_ERROR(Need uhd library!)],
-             [])
+AC_CHECK_LIB([c],     [main],             [],[AC_MSG_ERROR(Could not use standard C library)],   [])
+AC_CHECK_LIB([m],     [main],             [],[AC_MSG_ERROR(Could not use standard math library)],[])
+AC_CHECK_LIB([liquid],[liquid_libversion],[],[AC_MSG_ERROR(Need liquid-dsp library!)],           [])
+AC_CHECK_LIB([uhd],   [main],             [],[AC_MSG_ERROR(Need uhd library!)],                  [])
+
+# AC_CHECK_FUNC(function, [action-if-found], [action-if-not-found])
+AC_CHECK_FUNC([malloc],  [],[AC_MSG_ERROR(Could not use malloc())])
+AC_CHECK_FUNC([realloc], [],[AC_MSG_ERROR(Could not use realloc())],)
+AC_CHECK_FUNC([free],    [],[AC_MSG_ERROR(Could not use free())],)
+AC_CHECK_FUNC([memset],  [],[AC_MSG_ERROR(Could not use memset())],)
+AC_CHECK_FUNC([memmove], [],[AC_MSG_ERROR(Could not use memove())],)
 
 # Check for necessary header files
 AC_LANG_PUSH([C++])
 AC_CHECK_HEADERS([uhd/usrp/multi_usrp.hpp],
-                  [],
-                  [AC_MSG_ERROR(missing headers)])
+                 [],
+                 [AC_MSG_ERROR(missing headers)])
 if test -z "$HAVE_stdio.h"
 then
     AC_MSG_ERROR([Need stdio.h!])
