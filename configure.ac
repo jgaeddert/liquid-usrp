@@ -51,10 +51,11 @@ AC_FUNC_ERROR_AT_LINE
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 # AC_CHECK_LIB (library, function, [action-if-found], [action-if-not-found], [other-libraries])
-AC_CHECK_LIB([c],     [main],             [],[AC_MSG_ERROR(Could not use standard C library)],   [])
-AC_CHECK_LIB([m],     [main],             [],[AC_MSG_ERROR(Could not use standard math library)],[])
-AC_CHECK_LIB([liquid],[liquid_libversion],[],[AC_MSG_ERROR(Need liquid-dsp library!)],           [])
-AC_CHECK_LIB([uhd],   [main],             [],[AC_MSG_ERROR(Need uhd library!)],                  [])
+AC_CHECK_LIB([c],      [main],             [],[AC_MSG_ERROR(Could not use standard C library)],   [])
+AC_CHECK_LIB([m],      [main],             [],[AC_MSG_ERROR(Could not use standard math library)],[])
+AC_CHECK_LIB([liquid], [liquid_libversion],[],[AC_MSG_ERROR(Need liquid-dsp library!)],           [])
+AC_CHECK_LIB([uhd],    [main],             [],[AC_MSG_ERROR(Need uhd library!)],                  [])
+AC_CHECK_LIB([pthread],[main],             [],[AC_MSG_ERROR(Need pthread library!)],              [])
 
 # AC_CHECK_FUNC(function, [action-if-found], [action-if-not-found])
 AC_CHECK_FUNC([malloc],  [],[AC_MSG_ERROR(Could not use malloc())])
