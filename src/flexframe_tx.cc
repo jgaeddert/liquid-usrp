@@ -187,10 +187,11 @@ int main (int argc, char **argv)
     flexframegen_print(fg);
 
     // allocate array to hold frame generator samples
-    std::complex<float> framegen_samples[2]; // output time series of each symbol
+    unsigned int buf_len = 64;
+    std::complex<float> buf_frame[buf_len]; // frame buffer
 
     // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2*tx_resamp_rate) + 64];
+    std::complex<float> buf_resamp[(int)(buf_len*tx_resamp_rate) + 64];
 
     // vector buffer to send data to USRP
     std::vector<std::complex<float> > usrp_buffer(256);
@@ -225,44 +226,33 @@ int main (int argc, char **argv)
         flexframegen_assemble(fg, header, payload, payload_len);
 
         // generate the frame two samples at a time
-        int last_symbol=0;
-        unsigned int zero_pad=1;
-        while (!last_symbol || zero_pad > 0) {
+        int frame_complete = 0;
+        while (!frame_complete) {
 
-            // generate some samples
-            if (!last_symbol) {
-                // generate symbol
-                last_symbol = flexframegen_write_samples(fg, framegen_samples);
-            } else {
-                zero_pad--;
-                for (j=0; j<2; j++)
-                    framegen_samples[j] = 0.0f;
-            }
+            // write samples to buffer
+            frame_complete = flexframegen_write_samples(fg, buf_frame, buf_len);
 
-            // resample the two frame samples and push resulting samples to USRP
-            for (j=0; j<2; j++) {
-                // resample one sample at a time
-                unsigned int nw;    // number of samples output from resampler
-                msresamp_crcf_execute(resamp, &framegen_samples[j], 1, buffer_resamp, &nw);
+            // run frame samples through resampler
+            unsigned int nw;    // number of samples output from resampler
+            msresamp_crcf_execute(resamp, buf_frame, buf_len, buf_resamp, &nw);
 
-                // for each output sample, stuff into USRP buffer
-                unsigned int n;
-                for (n=0; n<nw; n++) {
-                    // append to USRP buffer, scaling by software
-                    usrp_buffer[usrp_sample_counter++] = g*buffer_resamp[n];
+            // for each output sample, stuff into USRP buffer
+            unsigned int n;
+            for (n=0; n<nw; n++) {
+                // append to USRP buffer, scaling by software
+                usrp_buffer[usrp_sample_counter++] = g*buf_resamp[n];
 
-                    // once USRP buffer is full, reset counter and send to device
-                    if (usrp_sample_counter==256) {
-                        // reset counter
-                        usrp_sample_counter=0;
+                // once USRP buffer is full, reset counter and send to device
+                if (usrp_sample_counter==256) {
+                    // reset counter
+                    usrp_sample_counter=0;
 
-                        // send the result to the USRP
-                        usrp->get_device()->send(
-                            &usrp_buffer.front(), usrp_buffer.size(), md,
-                            uhd::io_type_t::COMPLEX_FLOAT32,
-                            uhd::device::SEND_MODE_FULL_BUFF
-                        );
-                    }
+                    // send the result to the USRP
+                    usrp->get_device()->send(
+                        &usrp_buffer.front(), usrp_buffer.size(), md,
+                        uhd::io_type_t::COMPLEX_FLOAT32,
+                        uhd::device::SEND_MODE_FULL_BUFF
+                    );
                 }
             }
 
