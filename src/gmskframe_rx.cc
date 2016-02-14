@@ -170,7 +170,7 @@ int main (int argc, char **argv)
 
     // add arbitrary resampling component
     resamp_crcf resamp = resamp_crcf_create(rx_resamp_rate,7,0.4f,60.0f,64);
-    resamp_crcf_setrate(resamp, rx_resamp_rate);
+    resamp_crcf_set_rate(resamp, rx_resamp_rate);
 
     // half-band resampler
     resamp2_crcf decim = resamp2_crcf_create(7,0.0f,40.0f);
