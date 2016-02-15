@@ -154,7 +154,7 @@ int main (int argc, char **argv)
     unsigned int M = 1 << modem_get_bps(mod);
 
     // create matched filter interpolator
-    firinterp_crcf mfinterp = firinterp_crcf_create_rnyquist(ftype, k, m, beta, 0);
+    firinterp_crcf mfinterp = firinterp_crcf_create_prototype(ftype, k, m, beta, 0);
 
     // create arbitrary resampler
     msresamp_crcf resamp = msresamp_crcf_create(tx_resamp_rate,60.0f);
