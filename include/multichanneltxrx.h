@@ -139,8 +139,10 @@ private:
 
     // receiver objects
     multichannelrx mcrx;            // mutlichannel receiver
+#if 0
     std::complex<float> * rx_buffer;// frame generator output buffer [size: M + cp_len x 1]
     unsigned int rx_buffer_len;     // length of frame generator buffer
+#endif
     pthread_t rx_process;           // receive thread
     pthread_mutex_t rx_mutex;       // receive mutex
     pthread_cond_t  rx_cond;        // receive condition
