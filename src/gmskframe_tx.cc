@@ -154,7 +154,7 @@ int main (int argc, char **argv)
 
     // add arbitrary resampling component
     resamp_crcf resamp = resamp_crcf_create(tx_resamp_rate,7,0.4f,60.0f,64);
-    resamp_crcf_setrate(resamp, tx_resamp_rate);
+    resamp_crcf_set_rate(resamp, tx_resamp_rate);
 
     // half-band resampler
     resamp2_crcf interp = resamp2_crcf_create(7,0.0f,40.0f);
@@ -171,9 +171,9 @@ int main (int argc, char **argv)
 
     // framing buffers
     unsigned int k = 2;
-    std::complex<float> buffer[k];
-    std::complex<float> buffer_interp[2*k];
-    std::complex<float> buffer_resamp[8*k]; // resampler
+    std::complex<float> * buffer        = new std::complex<float>[k];
+    std::complex<float> * buffer_interp = new std::complex<float>[2*k];
+    std::complex<float> * buffer_resamp = new std::complex<float>[8*k]; // resampler
     std::vector<std::complex<float> > buff(256);
     unsigned int tx_buffer_samples = 0;
 
@@ -276,6 +276,9 @@ int main (int argc, char **argv)
     resamp2_crcf_destroy(interp);
     resamp_crcf_destroy(resamp);
     timer_destroy(t0);
+    delete [] buffer;
+    delete [] buffer_interp;
+    delete [] buffer_resamp;
 
     return 0;
 }

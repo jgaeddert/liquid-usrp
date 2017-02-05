@@ -232,7 +232,7 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
     while (!last_symbol) {
 
         // generate symbol
-        last_symbol = ofdmflexframegen_writesymbol(fg, fgbuffer);
+        last_symbol = ofdmflexframegen_write(fg, fgbuffer, fgbuffer_len);
 
         // copy symbol and apply gain
         for (i=0; i<fgbuffer_len; i++)

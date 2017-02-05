@@ -145,10 +145,10 @@ int main (int argc, char **argv)
 
     // allocate array to hold frame generator samples
     unsigned int frame_len = LIQUID_FRAME64_LEN;   // length of frame64 (defined in liquid.h)
-    std::complex<float> frame_samples[frame_len];
+    std::complex<float> * frame_samples = new std::complex<float>[frame_len];
 
     // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2*tx_resamp_rate) + 64];
+    std::complex<float> * buffer_resamp = new std::complex<float>[(int)(2*tx_resamp_rate) + 64];
 
     // vector buffer to send data to USRP
     std::vector<std::complex<float> > usrp_buffer(256);
@@ -229,6 +229,8 @@ int main (int argc, char **argv)
     framegen64_destroy(fg);
     msresamp_crcf_destroy(resamp);
 
+    delete [] frame_samples;
+    delete [] buffer_resamp;
     return 0;
 }
 

@@ -188,10 +188,10 @@ int main (int argc, char **argv)
 
     // allocate array to hold frame generator samples
     unsigned int buf_len = 64;
-    std::complex<float> buf_frame[buf_len]; // frame buffer
+    std::complex<float> * buf_frame = new std::complex<float>[buf_len]; // frame buffer
 
     // create buffer for arbitrary resamper output
-    std::complex<float> buf_resamp[(int)(buf_len*tx_resamp_rate) + 64];
+    std::complex<float> * buf_resamp = new std::complex<float>[(int)(buf_len*tx_resamp_rate) + 64];
 
     // vector buffer to send data to USRP
     std::vector<std::complex<float> > usrp_buffer(256);
@@ -279,6 +279,8 @@ int main (int argc, char **argv)
     // delete allocated objects
     flexframegen_destroy(fg);
     msresamp_crcf_destroy(resamp);
+    delete [] buf_frame;
+    delete [] buf_resamp;
 
     return 0;
 }

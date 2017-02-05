@@ -159,7 +159,7 @@ int main (int argc, char **argv)
     std::vector<std::complex<float> > buff(max_samps_per_packet);
 
     // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2.0f/rx_resamp_rate) + 64];
+    std::complex<float> * buffer_resamp = new std::complex<float>[(int)(2.0f/rx_resamp_rate) + 64];
  
     // timer to control asgram output
     timer t1 = timer_create();
@@ -257,6 +257,7 @@ int main (int argc, char **argv)
     windowcf_destroy(log);
     asgramcf_destroy(q);
     timer_destroy(t1);
+    delete [] buffer_resamp;
 
     return 0;
 }

@@ -147,7 +147,7 @@ int main (int argc, char **argv)
     
     // allocate array to hold samples
     unsigned int mctx_buffer_len = 2*num_channels;
-    std::complex<float> mctx_buffer[mctx_buffer_len];
+    std::complex<float> * mctx_buffer = new std::complex<float>[mctx_buffer_len];
 
     // vector buffer to send data to USRP
     std::vector<std::complex<float> > usrp_buffer(256);
@@ -229,6 +229,7 @@ int main (int argc, char **argv)
 
     //finished
     printf("usrp data transfer complete\n");
+    delete [] mctx_buffer;
 
     return 0;
 }

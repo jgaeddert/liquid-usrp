@@ -64,15 +64,12 @@ AC_CHECK_FUNC([free],    [],[AC_MSG_ERROR(Could not use free())],)
 AC_CHECK_FUNC([memset],  [],[AC_MSG_ERROR(Could not use memset())],)
 AC_CHECK_FUNC([memmove], [],[AC_MSG_ERROR(Could not use memove())],)
 
-# Check for necessary header files
+# Check for necessary C++ libraries and header files
 AC_LANG_PUSH([C++])
+AC_CHECK_LIB([boost_system],[main],[],[AC_MSG_ERROR(Need boost_system library!)],              [])
 AC_CHECK_HEADERS([uhd/usrp/multi_usrp.hpp],
                  [],
                  [AC_MSG_ERROR(missing headers)])
-if test -z "$HAVE_stdio.h"
-then
-    AC_MSG_ERROR([Need stdio.h!])
-fi
 AC_LANG_POP
 
 # Check for optional header files, libraries

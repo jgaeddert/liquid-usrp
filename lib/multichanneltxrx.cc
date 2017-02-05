@@ -409,7 +409,7 @@ void * multichanneltxrx_tx_worker(void * _arg)
 
     // buffer to hold filterbank channels
     unsigned int tx_buffer_len = 2*txcvr->num_channels;
-    std::complex<float> tx_buffer[tx_buffer_len];
+    std::complex<float> * tx_buffer = new std::complex<float>[tx_buffer_len];
     
     // usrp buffer
     std::vector<std::complex<float> > usrp_buffer(256);
@@ -494,6 +494,7 @@ void * multichanneltxrx_tx_worker(void * _arg)
         );
         dprintf("tx_worker finished running\n");
     }
+    delete [] tx_buffer;
     //
     dprintf("tx_worker exiting thread\n");
     pthread_exit(NULL);

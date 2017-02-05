@@ -154,7 +154,7 @@ int main (int argc, char **argv)
     unsigned int M = 1 << modem_get_bps(mod);
 
     // create matched filter interpolator
-    firinterp_crcf mfinterp = firinterp_crcf_create_rnyquist(ftype, k, m, beta, 0);
+    firinterp_crcf mfinterp = firinterp_crcf_create_prototype(ftype, k, m, beta, 0);
 
     // create arbitrary resampler
     msresamp_crcf resamp = msresamp_crcf_create(tx_resamp_rate,60.0f);
@@ -169,9 +169,9 @@ int main (int argc, char **argv)
         resamp_buffer_len = k*num_symbols;
 
     // buffers
-    std::complex<float> buffer[num_symbols];
-    std::complex<float> buffer_interp[k*num_symbols];
-    std::complex<float> buffer_resamp[resamp_buffer_len];
+    std::complex<float> * buffer        = new std::complex<float>[num_symbols];
+    std::complex<float> * buffer_interp = new std::complex<float>[k*num_symbols];
+    std::complex<float> * buffer_resamp = new std::complex<float>[resamp_buffer_len];
 
     // set up the metadata flags
     std::vector<std::complex<float> > buff(256);
@@ -249,6 +249,9 @@ int main (int argc, char **argv)
     modem_destroy(mod);
     firinterp_crcf_destroy(mfinterp);
     timer_destroy(t0);
+    delete [] buffer;
+    delete [] buffer_interp;
+    delete [] buffer_resamp;
 
     return 0;
 }

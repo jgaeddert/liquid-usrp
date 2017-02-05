@@ -233,7 +233,7 @@ void multichanneltx::GenerateFrameSamples()
     for (i=0; i<num_channels; i++) {
         if ( ofdmflexframegen_is_assembled(framegen[i]) ) {
             // write OFDM frame symbol (ignore return value)
-            ofdmflexframegen_writesymbol(framegen[i], fgbuffer[i]);
+            ofdmflexframegen_write(framegen[i], fgbuffer[i], fgbuffer_len);
         } else {
             // not assembled; just produce zeros
             memset(fgbuffer[i], 0x00, fgbuffer_len*sizeof(std::complex<float>));

@@ -195,7 +195,7 @@ int main (int argc, char **argv)
     printf("usrp data transfer started\n");
  
     // create buffer for arbitrary resamper output
-    std::complex<float> buffer_resamp[(int)(2*rx_resamp_rate) + 64];
+    std::complex<float> * buffer_resamp = new std::complex<float>[(int)(2*rx_resamp_rate) + 64];
  
     // reset counters
     num_frames_detected=0;
@@ -275,6 +275,7 @@ int main (int argc, char **argv)
     msresamp_crcf_destroy(resamp);
     flexframesync_destroy(fs);
     timer_destroy(t0);
+    delete [] buffer_resamp;
 
     return 0;
 }
