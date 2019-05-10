@@ -34,6 +34,13 @@
 // receiver worker thread
 void * ofdmtxrx_rx_worker(void * _arg);
 
+// receiver worker thread
+// Special version of receiver worker thread that waits for
+// a pthread_cond_signal() before sending samples to synchronizer.
+// Allows the samples to be modified by another thread before being
+// sent to the synchronizer.    
+void * ofdmtxrx_rx_worker_blocking(void * _arg);
+
 class ofdmtxrx {
 public:
     // default constructor
@@ -49,6 +56,16 @@ public:
              unsigned char *    _p,
              framesync_callback _callback,
              void *             _userdata);
+
+    // custom constructor that allows selection between 
+    // original ofdmtxrx_rx_worker() and ofdmtxrx_rx_worker_blocking()
+    ofdmtxrx(unsigned int       _M,
+             unsigned int       _cp_len,
+             unsigned int       _taper_len,
+             unsigned char *    _p,
+             framesync_callback _callback,
+             void *             _userdata,
+             bool               _blocking_rx_worker);
 
     // destructor
     ~ofdmtxrx();
@@ -72,6 +89,20 @@ public:
                          int             _fec1);
                          // frame generator properties...
 
+    // Together these methods
+    // are equivalent to transmit_packet() but allow
+    // the baseband samples to be modified before 
+    // sending them to the USRP.
+    void transmit_symbol();
+    void assemble_frame(unsigned char * _header,
+                        unsigned char * _payload,
+                        unsigned int    _payload_len,
+                        int             _mod,
+                        int             _fec0,
+                        int             _fec1);
+    bool write_symbol();
+    void end_transmit_frame();
+
     // 
     // receiver methods
     //
@@ -92,7 +123,21 @@ public:
     // specify rx worker method as friend function so that it may
     // gain acess to private members of the class
     friend void * ofdmtxrx_rx_worker(void * _arg);
+    friend void * ofdmtxrx_rx_worker_blocking(void * _arg);
             
+    // transmitter objects
+    ofdmflexframegen fg;            // frame generator object
+    unsigned int fgbuffer_len;      // length of frame generator buffer
+    std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
+
+    // receiver objects
+    std::vector<std::complex<float> > * rx_buffer;
+    pthread_mutex_t rx_buffer_mutex;       // receive buffer mutex
+    pthread_cond_t  rx_buffer_filled_cond;        // receive buffer filled condition
+    pthread_cond_t  rx_buffer_modified_cond;        // receive buffer modified condition
+    pthread_cond_t  esbrs_ready;
+    //int * esbrs_ready_ptr;
+    //pthread_mutex_t * esbrs_ready_mutex_ptr;
 private:
     // set timespec for timeout
     //  _ts         :   pointer to timespec structure
@@ -107,9 +152,6 @@ private:
     ofdmflexframegenprops_s fgprops;// frame generator properties
 
     // transmitter objects
-    ofdmflexframegen fg;            // frame generator object
-    std::complex<float> * fgbuffer; // frame generator output buffer [size: M + cp_len x 1]
-    unsigned int fgbuffer_len;      // length of frame generator buffer
     float tx_gain;                  // soft transmit gain (linear)
 #if 0
     pthread_t tx_process;           // transmit thread

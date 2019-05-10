@@ -86,7 +86,7 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     // allocate memory for frame generator output (single OFDM symbol)
     fgbuffer_len = M + cp_len;
     fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
-    
+
     // create frame synchronizer
     fs = ofdmflexframesync_create(M, cp_len, taper_len, p, _callback, _userdata);
     // TODO: create buffer
@@ -115,12 +115,99 @@ ofdmtxrx::ofdmtxrx(unsigned int       _M,
     rx_running = false;                     // receiver is not running initially
     rx_thread_running = true;               // receiver thread IS running initially
     pthread_mutex_init(&rx_mutex, NULL);    // receiver mutex
+    pthread_mutex_init(&rx_buffer_mutex, NULL);    // receiver buffer mutex
     pthread_cond_init(&rx_cond,   NULL);    // receiver condition
     pthread_create(&rx_process,   NULL, ofdmtxrx_rx_worker, (void*)this);
     
     // TODO: create and start tx thread
 }
 
+// custom constructor that allows selection between original ofdmtxrx_rx_worker()
+// and ofdmtxrx_rx_worker_blocking().
+ofdmtxrx::ofdmtxrx(unsigned int       _M,
+                   unsigned int       _cp_len,
+                   unsigned int       _taper_len,
+                   unsigned char *    _p,
+                   framesync_callback _callback,
+                   void *             _userdata,
+                   bool		      _blocking_rx_worker)
+{
+    // validate input
+    if (_M < 8) {
+        fprintf(stderr,"error: ofdmtxrx::ofdmtxrx(), number of subcarriers must be at least 8\n");
+        throw 0;
+    } else if (_cp_len < 1) {
+        fprintf(stderr,"error: ofdmtxrx::ofdmtxrx(), cyclic prefix length must be at least 1\n");
+        throw 0;
+    } else if (_taper_len > _cp_len) {
+        fprintf(stderr,"error: ofdmtxrx::ofdmtxrx(), taper length cannot exceed cyclic prefix length\n");
+        throw 0;
+    }
+
+    // set internal properties
+    M            = _M;
+    cp_len       = _cp_len;
+    taper_len    = _taper_len;
+    debug_enabled= false;
+
+    // create frame generator
+    unsigned char * p = NULL;   // subcarrier allocation (default)
+    ofdmflexframegenprops_init_default(&fgprops);
+    fgprops.check           = LIQUID_CRC_32;
+    fgprops.fec0            = LIQUID_FEC_NONE;
+    fgprops.fec1            = LIQUID_FEC_HAMMING128;
+    fgprops.mod_scheme      = LIQUID_MODEM_QPSK;
+    fg = ofdmflexframegen_create(M, cp_len, taper_len, p, &fgprops);
+
+    // allocate memory for frame generator output (single OFDM symbol)
+    fgbuffer_len = M + cp_len;
+    fgbuffer = (std::complex<float>*) malloc(fgbuffer_len * sizeof(std::complex<float>));
+
+    // create frame synchronizer
+    fs = ofdmflexframesync_create(M, cp_len, taper_len, p, _callback, _userdata);
+    // TODO: create buffer
+
+    // create usrp objects
+    uhd::device_addr_t dev_addr;
+    usrp_tx = uhd::usrp::multi_usrp::make(dev_addr);
+    usrp_rx = uhd::usrp::multi_usrp::make(dev_addr);
+
+    // initialize default tx values
+    set_tx_freq(462.0e6f);
+    set_tx_rate(500e3);
+    set_tx_gain_soft(-12.0f);
+    set_tx_gain_uhd(40.0f);
+
+    // initialize default rx values
+    set_rx_freq(462.0e6f);
+    set_rx_rate(500e3);
+    set_rx_gain_uhd(20.0f);
+
+    // reset transceiver
+    reset_tx();
+    reset_rx();
+
+    // create and start rx thread
+    rx_running = false;                     // receiver is not running initially
+    rx_thread_running = true;               // receiver thread IS running initially
+    pthread_mutex_init(&rx_mutex, NULL);    // receiver mutex
+    pthread_mutex_init(&rx_buffer_mutex, NULL);    // receiver buffer mutex
+    pthread_cond_init(&rx_cond,   NULL);    // receiver condition
+    pthread_cond_init(&rx_buffer_filled_cond,   NULL);    // receiver buffer filled condition
+    pthread_cond_init(&rx_buffer_modified_cond,   NULL);    // receiver buffer modified condition
+    pthread_cond_init(&esbrs_ready, NULL);
+
+    if (_blocking_rx_worker)
+    {
+        pthread_create(&rx_process,   NULL, ofdmtxrx_rx_worker_blocking, (void*)this);
+    }
+    else
+    {
+        pthread_create(&rx_process,   NULL, ofdmtxrx_rx_worker, (void*)this);
+    }
+    
+    // TODO: create and start tx thread
+}
 // destructor
 ofdmtxrx::~ofdmtxrx()
 {
@@ -139,10 +226,16 @@ ofdmtxrx::~ofdmtxrx()
     pthread_join(rx_process, &exit_status);
 
     // destroy threading objects
-    dprintf("destructor destroying mutex...\n");
+    dprintf("destructor destroying rx mutex...\n");
     pthread_mutex_destroy(&rx_mutex);
-    dprintf("destructor destroying condition...\n");
+    dprintf("destructor destroying rx condition...\n");
     pthread_cond_destroy(&rx_cond);
+    dprintf("destructor destroying rx buffer mutex...\n");
+    pthread_mutex_destroy(&rx_buffer_mutex);
+    dprintf("destructor destroying rx buffer filled condition...\n");
+    pthread_cond_destroy(&rx_buffer_filled_cond);
+    dprintf("destructor destroying rx buffer modified condition...\n");
+    pthread_cond_destroy(&rx_buffer_modified_cond);
     
     // TODO: output debugging file
     if (debug_enabled)
@@ -208,13 +301,13 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
                                int             _fec0,
                                int             _fec1)
 {
-    // set up the metadta flags
+    // set up the metadata flags
     metadata_tx.start_of_burst = false; // never SOB when continuous
     metadata_tx.end_of_burst   = false; // 
     metadata_tx.has_time_spec  = false; // set to false to send immediately
     //TODO: flush buffers
 
-    // fector buffer to send data to device
+    // vector buffer to send data to device
     std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
 
     // set properties
@@ -247,6 +340,92 @@ void ofdmtxrx::transmit_packet(unsigned char * _header,
         );
 
     } // while loop
+
+    // send a few extra samples to the device
+    // NOTE: this seems necessary to preserve last OFDM symbol in
+    //       frame from corruption
+    usrp_tx->get_device()->send(
+        &usrp_buffer.front(), usrp_buffer.size(),
+        metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+    
+    // send a mini EOB packet
+    metadata_tx.start_of_burst = false;
+    metadata_tx.end_of_burst   = true;
+
+    usrp_tx->get_device()->send("", 0, metadata_tx,
+        uhd::io_type_t::COMPLEX_FLOAT32,
+        uhd::device::SEND_MODE_FULL_BUFF
+    );
+
+}
+
+// Assemble the frame so it is ready to be written as samples
+void ofdmtxrx::assemble_frame(unsigned char * _header,
+                            unsigned char * _payload,
+                            unsigned int    _payload_len,
+                            int             _mod,
+                            int             _fec0,
+                            int             _fec1)
+{
+    // set properties
+    fgprops.mod_scheme  = _mod;
+    fgprops.fec0        = _fec0;
+    fgprops.fec1        = _fec1;
+    ofdmflexframegen_setprops(fg, &fgprops);
+
+    // assemble frame
+    ofdmflexframegen_assemble(fg, _header, _payload, _payload_len);
+}
+
+// Write one symbol from the assembled frame.
+// Returns true if last symbol.
+bool ofdmtxrx::write_symbol()
+{
+    return ofdmflexframegen_writesymbol(fg, fgbuffer);
+}
+
+// update payload data on a particular channel
+void ofdmtxrx::transmit_symbol()
+{
+    // vector buffer to send data to device
+    std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
+
+    // generate a single OFDM frame
+    //bool last_symbol=false;
+    unsigned int i;
+    //while (!last_symbol) {
+
+        // generate symbol
+        //last_symbol = ofdmflexframegen_writesymbol(fg, fgbuffer);
+
+        // copy symbol and apply gain
+        for (i=0; i<fgbuffer_len; i++)
+            usrp_buffer[i] = fgbuffer[i] * tx_gain;
+
+        // send samples to the device
+        usrp_tx->get_device()->send(
+            &usrp_buffer.front(), usrp_buffer.size(),
+            metadata_tx,
+            uhd::io_type_t::COMPLEX_FLOAT32,
+            uhd::device::SEND_MODE_FULL_BUFF
+        );
+
+    //} // while loop
+
+}
+
+void ofdmtxrx::end_transmit_frame()
+{
+    // vector buffer to send data to device
+    std::vector<std::complex<float> > usrp_buffer(fgbuffer_len);
+
+    unsigned int i;
+    // copy symbol and apply gain
+    for (i=0; i<fgbuffer_len; i++)
+        usrp_buffer[i] = fgbuffer[i] * tx_gain;
 
     // send a few extra samples to the device
     // NOTE: this seems necessary to preserve last OFDM symbol in
@@ -420,6 +599,104 @@ void * ofdmtxrx_rx_worker(void * _arg)
 
             // ignore error codes for now
 #if 0
+// 'handle' the error codes
+switch(md.error_code){
+case uhd::rx_metadata_t::ERROR_CODE_NONE:
+case uhd::rx_metadata_t::ERROR_CODE_OVERFLOW:
+break;
+
+default:
+std::cerr << "Error code: " << md.error_code << std::endl;
+std::cerr << "Unexpected error on recv, exit test..." << std::endl;
+//return 1;
+//std::cerr << "rx_worker exiting prematurely" << std::endl;
+//pthread_exit(NULL);
+}
+#endif
+
+            // push data through frame synchronizer
+            // TODO : use arbitrary resampler?
+            unsigned int j;
+            for (j=0; j<num_rx_samps; j++) {
+                // grab sample from usrp buffer
+                std::complex<float> usrp_sample = buffer[j];
+
+                // push resulting samples through synchronizer
+                ofdmflexframesync_execute(txcvr->fs, &usrp_sample, 1);
+            }
+
+        } // while rx_running
+        dprintf("rx_worker finished running\n");
+
+    } // while true
+    
+    //
+    dprintf("rx_worker exiting thread\n");
+    pthread_exit(NULL);
+}
+
+// Special version of receiver worker thread that waits for 
+// a pthread_cond_signal() before sending samples to synchronizer.
+// Allows the samples to be modified by another thread before being
+// sent to the synchronizer.
+void * ofdmtxrx_rx_worker_blocking(void * _arg)
+{
+    // type cast input argument as ofdmtxrx object
+    ofdmtxrx * txcvr = (ofdmtxrx*) _arg;
+
+    // set up receive buffer
+    const size_t max_samps_per_packet = txcvr->usrp_rx->get_device()->get_max_recv_samps_per_packet();
+    std::vector<std::complex<float> > _buffer(max_samps_per_packet);
+    //std::vector<std::complex<float> > * rx_buffer = &_buffer;
+    txcvr->rx_buffer = &_buffer;
+
+    // receiver metadata object
+    uhd::rx_metadata_t md;
+
+    while (txcvr->rx_thread_running) {
+        // wait for signal to start; lock mutex
+        pthread_mutex_lock(&(txcvr->rx_mutex));
+
+        // this function unlocks the mutex and waits for the condition;
+        // once the condition is set, the mutex is again locked
+        dprintf("rx_worker waiting for condition...\n");
+        //int status =
+        pthread_cond_wait(&(txcvr->rx_cond), &(txcvr->rx_mutex));
+        dprintf("rx_worker received condition\n");
+
+        // unlock the mutex
+        dprintf("rx_worker unlocking mutex\n");
+        pthread_mutex_unlock(&(txcvr->rx_mutex));
+
+        // condition given; check state: run or exit
+        dprintf("rx_worker running...\n");
+        if (!txcvr->rx_running) {
+            dprintf("rx_worker finished\n");
+            break;
+        }
+
+        // run receiver
+        while (txcvr->rx_running) {
+
+            // grab data from device
+            //dprintf("rx_worker waiting for samples...\n");
+            dprintf("rx_worker locking buffer mutex\n");
+            pthread_mutex_lock(&(txcvr->rx_buffer_mutex));
+            size_t num_rx_samps = txcvr->usrp_rx->get_device()->recv(
+                &(txcvr->rx_buffer->front()), txcvr->rx_buffer->size(), md,
+                //&rx_buffer.front(), rx_buffer.size(), md,
+                uhd::io_type_t::COMPLEX_FLOAT32,
+                uhd::device::RECV_MODE_ONE_PACKET
+            );
+	    dprintf("rx_worker signalling buffer filled cond");
+            pthread_cond_signal(&(txcvr->rx_buffer_filled_cond));
+            //dprintf("rx_worker processing samples...\n");
+
+
+
+
+            // ignore error codes for now
+#if 0
             // 'handle' the error codes
             switch(md.error_code){
             case uhd::rx_metadata_t::ERROR_CODE_NONE:
@@ -435,18 +712,23 @@ void * ofdmtxrx_rx_worker(void * _arg)
             }
 #endif
 
+            dprintf("rx_worker waiting for buffer modified cond\n");
+            pthread_cond_wait(&txcvr->rx_buffer_modified_cond, &txcvr->rx_buffer_mutex);
             // push data through frame synchronizer
             // TODO : use arbitrary resampler?
             unsigned int j;
             for (j=0; j<num_rx_samps; j++) {
                 // grab sample from usrp buffer
-                std::complex<float> usrp_sample = buffer[j];
+                std::complex<float> usrp_sample = (*txcvr->rx_buffer)[j];
 
                 // push resulting samples through synchronizer
                 ofdmflexframesync_execute(txcvr->fs, &usrp_sample, 1);
             }
+            dprintf("rx_worker unlocking buffer mutex\n");
+            pthread_mutex_unlock(&(txcvr->rx_buffer_mutex));
 
         } // while rx_running
+	pthread_mutex_unlock(&(txcvr->rx_buffer_mutex));
         dprintf("rx_worker finished running\n");
 
     } // while true
